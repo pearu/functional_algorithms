@@ -1,8 +1,8 @@
 # Functional algorithms
 
 Implementing a math function in a software is a non-trival task when
-requiring that the function must return correct or very close to
-correct results for all possible inputs including complex infinities
+requiring that the function must return correct (or very close to
+correct) results for all possible inputs including complex infinities,
 and extremely small or extremely large values of floating point
 numbers. Such algorithms typically use different approximations of the
 function depending on the inputs locations in the real line or complex
@@ -11,39 +11,39 @@ plane.
 This project provides a tool for defining functional algorithms for
 math functions and generating implementations of the algorithms to
 various programming languages and math libraries. The aim is to
-provide algorithms that guarantee the correctness of the function
-evaluation on the whole complex plane or real line.
+provide algorithms that are guaranteed to produce correct values on the
+whole complex plane or real line.
 
 The motivation for this project raises from the need to implement
-sophisticated algorithms for various math libraries that can be a
-tedious and errorprone task. For instance, the definition of the
-algorithm for computing arcus sine for Python or NumPy target has LOC
-about 45 but for the StableHLO target the LOC is 186. Implementing
-such an algorithm for StableHLO by hand would be just unhuman.
+sophisticated algorithms for various math libraries that otherwise can
+be a tedious and errorprone task when done manually using LISP-like
+languages. For instance, the definition of the algorithm for computing
+arcus sine for Python or NumPy target has LOC about 45 but for the
+StableHLO target the LOC is 186. Implementing such an algorithm for
+StableHLO by hand would be just unhuman.
 
 
 ## Supported algorithms
 
-Currently, algorithms are provided for the following math functions
-that are correct on the whole complex plane or real line:
+Currently, algorithms are provided for the following math functions:
 
-- square, complex and float inputs
-- hypot, float inputs
-- asin, complex inputs, using modified [Hull et al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm. 
+- `square(z: complex | float)`
+- `hypot(x: float, y: float)`
+- `asin(z: complex)`, using modified [Hull et al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm.
 
 ## Supported targets
 
 Currently, the implementations of supported algorithms are provided
 for the following target libraries and languages:
 
-- Python, using math functions on real inputs
-- NumPy, using numpy functions on real inputs
-- StableHLO, using its existing decompositions and operations
+- [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs
+- [NumPy](https://numpy.org/), using numpy functions on real inputs
+- [StableHLO](https://github.com/openxla/stablehlo), using existing decompositions and operations.
 
-## Testing algorithms and its implementations
+## Testing algorithms and generated implementations
 
 To ensure the correctness as well as accuracy of provided algorithms,
-we'll use [MPMath](https://github.com/mpmath/mpmath/) as a reference
+we'll use [MPMath](https://mpmath.org/) as a reference
 library of math functions. We assume that mpmath implementations
 produce correct results to math functions with arbitrary precision -
 this is the prerequisity for ensuring accuracy. To ensure correctness,
@@ -52,11 +52,11 @@ eliminate the possibility of false-positives due to possible bugs in
 MPMath.
 
 The algorithms are typically validated with 32 and 64-bit floating
-point numbers and their complex compositions using
-[NumPy](https://github.com/numpy/numpy/). The evaluation of the numpy
-target implementation is performed on logarithmic-uniform samples that
-represent the whole complex plane or real line including complex
-infinities, and extremly small and large values.
+point numbers and their complex compositions using NumPy. The
+evaluation of the numpy target implementation is performed on
+logarithmic-uniform samples that represent the whole complex plane or
+real line including complex infinities, and extremly small and large
+values.
 
 ## A case study: square
 
