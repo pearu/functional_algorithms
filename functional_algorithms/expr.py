@@ -62,6 +62,59 @@ def make_ref(expr):
     return '_'.join(lst)
 
 
+class Printer:
+
+    def tostring(self, expr, tab=''):
+        if expr.kind == 'symbol':
+            return f'{tab}{expr.operands[0]}'
+        if expr.kind == 'apply':
+            name = expr.operands[0]
+            args = expr.operands[1:-1]
+            body = expr.operands[-1]
+
+            sname = self.tostring(name)
+            lst = []
+            for a in args:
+                lst.append(f'{a.operands[0]}: {a.operands[1]}')
+            sargs = ', '.join(lst)
+
+            lines = []
+            lines.append(f'{tab}(def {sname}, ({sargs}),')
+            for line in self.tostring(body, tab=tab + '  ').splitlines():
+                sline = line.lstrip()
+                if sline.startswith(')'):
+                    lines[-1] += sline
+                else:
+                    lines.append(line)
+            lines[-1] += ')'
+            return '\n'.join(lines)
+
+        all_symbols = not [operand for operand in expr.operands if isinstance(operand, Expr) and operand.kind != 'symbol']
+        if all_symbols:
+            return f'{tab}({expr.kind} {", ".join(map(self.tostring, expr.operands))})'
+
+        lines = []
+        if expr.kind == 'constant':
+            lines.append(f'{tab}({expr.kind} {expr.operands[0]},')
+            operands = expr.operands[1:]
+        else:
+            lines.append(f'{tab}({expr.kind}')
+            operands = expr.operands
+        operand_lines = []
+        for operand in operands:
+            op_lines = self.tostring(operand, tab=tab + '  ').splitlines()
+            operand_lines.extend(op_lines)
+            operand_lines[-1] += ','
+        if operand_lines:
+            operand_lines[-1] = operand_lines[-1][:-1]  # deletes last comma
+        if len(operand_lines) == 1:
+            lines[-1] += " " + operand_lines[0].lstrip() + ")"
+        else:
+            lines.extend(operand_lines)
+            lines.append(f'{tab})')
+        return '\n'.join(lines)
+
+
 class Expr:
 
     def __new__(cls, context, kind, operands, props):
@@ -232,41 +285,8 @@ class Expr:
             assert ref not in self.context._ref_values, ref
         return ref
 
-    def is_same(self, other):  # NOT USED, remove?
-        if self is other:
-            return True
-        if self.kind == other.kind and len(self.operands) == len(other.operands):
-            for x, y in zip(self.operands, other.operands):
-                if isinstance(x, Expr):
-                    if not x.is_same(y):
-                        break
-                elif x != y:
-                    break
-            else:
-                return True
-        return False
-
-    def tostr(self):
-        if self.kind == 'symbol':
-            return self.operands[0]
-        if self.kind == 'constant':
-            return str(self.operands[0])
-        if self.ref:
-            return self.ref
-        return f'{self.kind}(' + ', '.join([operand.tostr() for operand in self.operands]) + ')'
-
     def __str__(self):
-        if self.kind == 'symbol':
-            return f'{self.operands[0]}: {self.operands[1]}'
-        if self.kind == 'constant':
-            return str(self.operands[0])
-        if self.kind == 'apply':
-            name = str(self.operands[0])
-            args = ', '.join(map(str, self.operands[1:-1]))
-            result = str(self.operands[-1])
-            return f'{self.kind}({name}, ({args}), {result})'
-        args = ', '.join(map(str, self.operands))
-        return f'{self.kind}({args})'
+        return Printer().tostring(self)
 
     def __repr__(self):
         return f'{type(self).__name__}({self.kind}, {self.operands}, {self.props})'

@@ -65,8 +65,6 @@ class Context:
 
         """
         sig = inspect.signature(func)
-        print(f'{sig.parameters=}')
-
         default_typ = UNSPECIFIED
         new_args = []
         for i, (name, param) in enumerate(sig.parameters.items()):

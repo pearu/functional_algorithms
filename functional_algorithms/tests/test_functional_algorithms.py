@@ -144,6 +144,8 @@ def test_readme_square_python():
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
 
+    print(graph)
+
     graph1 = graph.implement_missing(targets.python)
     py = graph1.tostring(targets.python, tab = '')
 

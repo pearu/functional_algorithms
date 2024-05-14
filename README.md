@@ -120,7 +120,25 @@ Let us look into some of the details of the above example. First,
 function using a pure functional form:
 ```python
 >>> print(square_graph)
-apply(square: float, (z: complex), complex(select(eq(abs(real(z: complex)), abs(imag(z: complex))), 0, multiply(subtract(real(z: complex), imag(z: complex)), add(real(z: complex), imag(z: complex)))), multiply(2, multiply(real(z: complex), imag(z: complex)))))
+(def square, (z: complex),
+  (complex
+    (select
+      (eq
+        (abs (real z)),
+        (abs (imag z))),
+      (constant 0, (real z)),
+      (multiply
+        (subtract
+          (real z),
+          (imag z)),
+        (add
+          (real z),
+          (imag z)))),
+    (multiply
+      (constant 2, (real z)),
+      (multiply
+        (real z),
+        (imag z)))))
 ```
 
 The module object `fa.targets.python` defines the so-called Python target
