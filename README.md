@@ -10,23 +10,26 @@ plane.
 
 This project provides a tool for defining functional algorithms for
 math functions and generating implementations of the algorithms to
-various programming languages or dialects. The aim is to provide
-algorithms that guarantee the correctness of the function evaluation
-on the whole complex plane or real line. For that, we'll use mpmath as
-the reference library of math functions that we assume to produce
-correct results to math functions with arbitrary precision. This
-assumption is verified for each function case separately due to
-possible bugs and deviations from complex floating point standards in
-mpmath.
+various programming languages and math libraries. The aim is to
+provide algorithms that guarantee the correctness of the function
+evaluation on the whole complex plane or real line.
+
+The motivation for this project raises from the need to implement
+sophisticated algorithms for various math libraries that can be a
+tedious and errorprone task. For instance, the definition of the
+algorithm for computing arcus sine for Python or NumPy target has LOC
+about 45 but for the StableHLO target the LOC is 186. Implementing
+such an algorithm for StableHLO by hand would be just unhuman.
+
 
 ## Supported algorithms
 
 Currently, algorithms are provided for the following math functions
-that are stable on the whole complex plane or real line:
+that are correct on the whole complex plane or real line:
 
 - square, complex and float inputs
 - hypot, float inputs
-- asin, complex inputs
+- asin, complex inputs, using modified [Hull et al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm. 
 
 ## Supported targets
 
@@ -37,6 +40,23 @@ for the following target libraries and languages:
 - NumPy, using numpy functions on real inputs
 - StableHLO, using its existing decompositions and operations
 
+## Testing algorithms and its implementations
+
+To ensure the correctness as well as accuracy of provided algorithms,
+we'll use [MPMath](https://github.com/mpmath/mpmath/) as a reference
+library of math functions. We assume that mpmath implementations
+produce correct results to math functions with arbitrary precision -
+this is the prerequisity for ensuring accuracy. To ensure correctness,
+we'll verify this assumption for each function case separately to
+eliminate the possibility of false-positives due to possible bugs in
+MPMath.
+
+The algorithms are typically validated with 32 and 64-bit floating
+point numbers and their complex compositions using
+[NumPy](https://github.com/numpy/numpy/). The evaluation of the numpy
+target implementation is performed on logarithmic-uniform samples that
+represent the whole complex plane or real line including complex
+infinities, and extremly small and large values.
 
 ## A case study: square
 
@@ -84,9 +104,9 @@ languages can be generated. For example, to generate a square function
 for Python, we'll use
 ```python
 >>> import functional_algorithms as fa
->>> ctx = Context()
->>> square_graph = ctx.function(square, 'z: complex')        # trace square(ctx, z) using complex argument z
->>> py_square = fa.targets.python.as_function(square_graph)  # implement Python function square from the traced graph
+>>> ctx = fa.Context()
+>>> square_graph = ctx.trace(square, complex)
+>>> py_square = fa.targets.python.as_function(square_graph)
 >>> py_square(z)
 infj
 ```
@@ -145,7 +165,7 @@ def : Pat<(CHLO_Square $z),
 In the case of the NumPy target, the arguments types must include
 bit-width information:
 ```python
->>> np_square_graph = ctx.function(square, 'z: complex64')
+>>> np_square_graph = ctx.trace(square, numpy.complex64)
 >>> print(np_square_graph.tostring(fa.targets.numpy))
 def square(z: numpy.complex64) -> numpy.complex64:
   with warnings.catch_warnings(action="ignore"):
@@ -180,7 +200,7 @@ def square(z: numpy.complex64) -> numpy.complex64:
 ```
 When `debug=2`, the values of all variables are printed out when
 calling the function:
-```
+```python
 >>> fa.targets.numpy.as_function(np_square_graph, debug=2)(3 + 4j)
 def square(z: numpy.complex64) -> numpy.complex64:
   with warnings.catch_warnings(action="ignore"):
@@ -225,6 +245,7 @@ def square(ctx, z):
 ```
 The generated implementation for the Python targer of the above definition is
 ```python
+>>> square_graph = ctx.trace(square, complex)
 >>> print(square_graph.tostring(fa.targets.python))
 def square(z: complex) -> complex:
   real_z: float = (z).real
