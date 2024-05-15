@@ -3,19 +3,24 @@ import mpmath
 import warnings
 from collections import defaultdict
 
+
 class UNSPECIFIED:
 
-    def __str__(self): return type(self).__name__
+    def __str__(self):
+        return type(self).__name__
+
     __repr__ = __str__
+
 
 UNSPECIFIED = UNSPECIFIED()
 
 
 class vectorize_with_mpmath(numpy.vectorize):
-    """Same as numpy.vectorize but using mpmath backend for function evaluation.
-    """
+    """Same as numpy.vectorize but using mpmath backend for function evaluation."""
 
-    map_float_to_complex = dict(float16='complex32', float32='complex64', float64='complex128', float128='complex256', longdouble='clongdouble')
+    map_float_to_complex = dict(
+        float16="complex32", float32="complex64", float64="complex128", float128="complex256", longdouble="clongdouble"
+    )
     map_complex_to_float = {v: k for k, v in map_float_to_complex.items()}
 
     float_prec = dict(
@@ -26,12 +31,7 @@ class vectorize_with_mpmath(numpy.vectorize):
         # longdouble=113
     )
 
-    float_minexp = dict(
-        float16=-14,
-        float32=-126,
-        float64=-1022,
-        float128=-16382
-    )
+    float_minexp = dict(float16=-14, float32=-126, float64=-1022, float128=-16382)
 
     float_maxexp = dict(
         float16=16,
@@ -41,8 +41,8 @@ class vectorize_with_mpmath(numpy.vectorize):
     )
 
     def __init__(self, *args, **kwargs):
-        self.extra_prec_multiplier = kwargs.pop('extra_prec_multiplier', 0)
-        self.extra_prec = kwargs.pop('extra_prec', 0)
+        self.extra_prec_multiplier = kwargs.pop("extra_prec_multiplier", 0)
+        self.extra_prec = kwargs.pop("extra_prec", 0)
         self.contexts = dict()
         self.contexts_inv = dict()
         for fp_format, prec in self.float_prec.items():
@@ -58,11 +58,10 @@ class vectorize_with_mpmath(numpy.vectorize):
             fp_format = str(x.dtype)
             fp_format = self.map_complex_to_float.get(fp_format, fp_format)
             return self.contexts[fp_format]
-        raise NotImplementedError(f'get mpmath context from {type(x).__name__} instance')
+        raise NotImplementedError(f"get mpmath context from {type(x).__name__} instance")
 
     def nptomp(self, x):
-        """Convert numpy array/scalar to an array/instance of mpmath number type.
-        """
+        """Convert numpy array/scalar to an array/instance of mpmath number type."""
         if isinstance(x, numpy.ndarray):
             return numpy.fromiter(map(self.nptomp, x.flatten()), dtype=object).reshape(x.shape)
         elif isinstance(x, numpy.floating):
@@ -84,12 +83,11 @@ class vectorize_with_mpmath(numpy.vectorize):
         elif isinstance(x, numpy.complexfloating):
             re, im = self.nptomp(x.real), self.nptomp(x.imag)
             return re.context.make_mpc((re._mpf_, im._mpf_))
-        raise NotImplementedError(f'convert {type(x).__name__} instance to mpmath number type')
+        raise NotImplementedError(f"convert {type(x).__name__} instance to mpmath number type")
 
     def mptonp(self, x):
-        """Convert mpmath instance to numpy array/scalar type.
-        """
-        if isinstance(x, numpy.ndarray) and x.dtype.kind == 'O':
+        """Convert mpmath instance to numpy array/scalar type."""
+        if isinstance(x, numpy.ndarray) and x.dtype.kind == "O":
             x_flat = x.flatten()
             item = x_flat[0]
             ctx = item.context
@@ -129,7 +127,7 @@ class vectorize_with_mpmath(numpy.vectorize):
                     return dtype(numpy.nan)
                 elif ctx.isinf(x):
                     return dtype(-numpy.inf if x._mpf_[0] else numpy.inf)
-        raise NotImplementedError(f'convert {type(x)} instance to numpy floating point type')
+        raise NotImplementedError(f"convert {type(x)} instance to numpy floating point type")
 
     def __call__(self, *args, **kwargs):
         mp_args = []
@@ -151,14 +149,12 @@ class vectorize_with_mpmath(numpy.vectorize):
         if isinstance(result, tuple):
             lst = []
             for r in result:
-                if ((isinstance(r, numpy.ndarray) and r.dtype.kind == 'O')
-                    or isinstance(r, mpmath.ctx_mp.mpnumeric)):
+                if (isinstance(r, numpy.ndarray) and r.dtype.kind == "O") or isinstance(r, mpmath.ctx_mp.mpnumeric):
                     r = self.mptonp(r)
                 lst.append(r)
             return tuple(lst)
 
-        if ((isinstance(result, numpy.ndarray) and result.dtype.kind == 'O')
-            or isinstance(result, mpmath.ctx_mp.mpnumeric)):
+        if (isinstance(result, numpy.ndarray) and result.dtype.kind == "O") or isinstance(result, mpmath.ctx_mp.mpnumeric):
             return self.mptonp(result)
 
         return result
@@ -170,33 +166,63 @@ class numpy_with_mpmath:
     """
 
     _provides = [
-        'abs', 'absolute', 'sqrt', 'exp', 'expm1', 'exp2',
-        'log', 'log1p', 'log10', 'log2',
-        'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan',
-        'sinh', 'cosh', 'tanh', 'arcsinh', 'arccosh', 'arctanh',
-        'square', 'positive', 'negative', 'conjugate', 'sign', 'sinc',
-        'normalize', 'hypot',
+        "abs",
+        "absolute",
+        "sqrt",
+        "exp",
+        "expm1",
+        "exp2",
+        "log",
+        "log1p",
+        "log10",
+        "log2",
+        "sin",
+        "cos",
+        "tan",
+        "arcsin",
+        "arccos",
+        "arctan",
+        "sinh",
+        "cosh",
+        "tanh",
+        "arcsinh",
+        "arccosh",
+        "arctanh",
+        "square",
+        "positive",
+        "negative",
+        "conjugate",
+        "sign",
+        "sinc",
+        "normalize",
+        "hypot",
     ]
 
     _mpmath_names = dict(
-        abs='absmin', absolute='absmin',
-        log='ln',
-        arcsin='asin', arccos='acos', arctan='atan',
-        arcsinh='asinh', arccosh='acosh', arctanh='atanh',
+        abs="absmin",
+        absolute="absmin",
+        log="ln",
+        arcsin="asin",
+        arccos="acos",
+        arctan="atan",
+        arcsinh="asinh",
+        arccosh="acosh",
+        arctanh="atanh",
     )
 
     def __init__(self, extra_prec_multiplier=0, extra_prec=0):
 
         for name in self._provides:
             mp_name = self._mpmath_names.get(name, name)
-        
+
             if hasattr(self, name):
                 op = getattr(self, name)
             else:
-                if name in {'hypot'}:
+                if name in {"hypot"}:
                     # binary ops
                     def op(x, y, mp_name=mp_name):
                         return getattr(x.context, mp_name)(x, y)
+
                 else:
                     # unary ops
                     def op(x, mp_name=mp_name):
@@ -215,6 +241,7 @@ class numpy_with_mpmath:
         """Normalize reference and value using precision defined by the
         difference of exact and reference.
         """
+
         def worker(ctx, s, e, r, v):
             ss, sm, se, sbc = s._mpf_
             es, em, ee, ebc = e._mpf_
@@ -233,14 +260,14 @@ class numpy_with_mpmath:
             vm_e = vm << (ve - me)
 
             # find matching higher and non-matching lower bits of e and r
-            sm_b = bin(sm_e)[2:] if sm_e else ''
-            em_b = bin(em_e)[2:] if em_e else ''
-            rm_b = bin(rm_e)[2:] if rm_e else ''
-            vm_b = bin(vm_e)[2:] if vm_e else ''
+            sm_b = bin(sm_e)[2:] if sm_e else ""
+            em_b = bin(em_e)[2:] if em_e else ""
+            rm_b = bin(rm_e)[2:] if rm_e else ""
+            vm_b = bin(vm_e)[2:] if vm_e else ""
 
             m = max(len(sm_b), len(em_b), len(rm_b), len(vm_b))
-            em_b = '0' * (m - len(em_b)) + em_b
-            rm_b = '0' * (m - len(rm_b)) + rm_b
+            em_b = "0" * (m - len(em_b)) + em_b
+            rm_b = "0" * (m - len(rm_b)) + rm_b
 
             c1 = 0
             for b0, b1 in zip(em_b, rm_b):
@@ -252,11 +279,11 @@ class numpy_with_mpmath:
             # truncate r and v mantissa
             rm_m = rm_e >> c0
             vm_m = vm_e >> c0
-            
+
             # normalized r and v
             nr = ctx.make_mpf((rs, rm_m, -c1, len(bin(rm_m)) - 2)) if rm_m else (-ctx.zero if rs else ctx.zero)
             nv = ctx.make_mpf((vs, vm_m, -c1, len(bin(vm_m)) - 2)) if vm_m else (-ctx.zero if vs else ctx.zero)
-            
+
             return nr, nv
 
         ctx = exact.context
@@ -393,12 +420,16 @@ class numpy_with_mpmath:
         return ctx.asinh(x)
 
 
-def real_samples(size=10, dtype=numpy.float32,
-                 include_infinity=True, include_zero=True, include_subnormal=False,
-                 include_nan=False,
-                 nonnegative=False,
-                 include_huge=True,
-                 ):
+def real_samples(
+    size=10,
+    dtype=numpy.float32,
+    include_infinity=True,
+    include_zero=True,
+    include_subnormal=False,
+    include_nan=False,
+    nonnegative=False,
+    include_huge=True,
+):
     """Return a 1-D array of real line samples.
 
     Parameters
@@ -443,7 +474,17 @@ def real_samples(size=10, dtype=numpy.float32,
         parts.append(numpy.array([numpy.nan], dtype=dtype))
     return numpy.concatenate(parts)
 
-def complex_samples(size=(10, 10), dtype=numpy.float32, include_infinity=True, include_zero=True, include_subnormal=False, include_nan=False, include_huge=True, nonnegative=False):
+
+def complex_samples(
+    size=(10, 10),
+    dtype=numpy.float32,
+    include_infinity=True,
+    include_zero=True,
+    include_subnormal=False,
+    include_nan=False,
+    include_huge=True,
+    nonnegative=False,
+):
     """Return a 2-D array of complex plane samples.
 
     Parameters
@@ -462,18 +503,33 @@ def complex_samples(size=(10, 10), dtype=numpy.float32, include_infinity=True, i
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
     dtype = {numpy.complex64: numpy.float32, numpy.complex128: numpy.float64}.get(dtype, dtype)
-    re = real_samples(size[0], dtype=dtype, include_infinity=include_infinity, include_zero=include_zero,
-                      include_subnormal=include_subnormal, include_nan=include_nan, include_huge=include_huge,
-                      nonnegative=nonnegative)
-    im = real_samples(size[1], dtype=dtype, include_infinity=include_infinity, include_zero=include_zero,
-                      include_subnormal=include_subnormal, include_nan=include_nan, include_huge=include_huge,
-                      nonnegative=nonnegative)
+    re = real_samples(
+        size[0],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        include_huge=include_huge,
+        nonnegative=nonnegative,
+    )
+    im = real_samples(
+        size[1],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        include_huge=include_huge,
+        nonnegative=nonnegative,
+    )
     complex_dtype = {numpy.float32: numpy.complex64, numpy.float64: numpy.complex128}[dtype]
     real_part = re.reshape((-1, re.size)).repeat(im.size, 0).astype(complex_dtype)
     imag_part = im.repeat(2).view(complex_dtype)
     imag_part.real[:] = 0
     imag_part = imag_part.reshape((im.size, -1)).repeat(re.size, 1)
     return real_part + imag_part  # TODO: avoid arithmetic operations
+
 
 def iscomplex(value):
     return isinstance(value, (complex, numpy.complexfloating))
@@ -501,8 +557,8 @@ def isclose(x, y, atol, rtol):
         return isclose(x.real, y.real, atol, rtol) and isclose(x.imag, y.imag, atol, rtol)
     if numpy.isnan(x) and numpy.isnan(y):
         return True
-    #atol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
-    #rtol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
+    # atol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
+    # rtol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
     return numpy.isclose(x, y, atol=atol, rtol=rtol, equal_nan=True)
 
 
@@ -512,7 +568,7 @@ def make_complex(r, i):
     elif i.dtype == numpy.float64 and i.dtype == numpy.float64:
         return numpy.array([r, i]).view(numpy.complex128)[0]
     raise NotImplementedError((r.dtype, i.dtype))
-    
+
 
 def mul(x, y):
     # safe multiplication of complex and float numbers where complex
@@ -542,7 +598,7 @@ def validate_function(func, reference, samples, dtype):
         v2 = v2[()]
         scale = get_scale(v2)
         if isequal(v1, v2):
-            stats['exact'] += 1
+            stats["exact"] += 1
             continue
         if numpy.isfinite(v1) and numpy.isfinite(v2):
             s = rtol
@@ -554,13 +610,13 @@ def validate_function(func, reference, samples, dtype):
             if isclose(v1, v2, atol / scale, rtol):
                 continue
         # note that also reference function may give wrong results
-        print(f'{func.__name__}({sample}) -> {v1}, reference -> {v2}')
-        stats['mismatch'] += 1
+        print(f"{func.__name__}({sample}) -> {v1}, reference -> {v2}")
+        stats["mismatch"] += 1
 
     lst = [f'exact: {stats["exact"]}']
     for k in sorted([k for k in stats if isinstance(k, int)]):
-        lst.append(f'{k}: {stats[k]}')
+        lst.append(f"{k}: {stats[k]}")
     lst.append(f'mismatch: {stats["mismatch"]}')
-    print(f'{func.__name__} validation statistics:', ', '.join(lst))
+    print(f"{func.__name__} validation statistics:", ", ".join(lst))
 
-    return stats['mismatch'] == 0
+    return stats["mismatch"] == 0

@@ -1,3 +1,5 @@
+[![Python package](https://github.com/pearu/functional_algorithms/actions/workflows/python-package.yml/badge.svg)](https://github.com/pearu/functional_algorithms/actions/workflows/python-package.yml) [![Conda Version](https://img.shields.io/conda/vn/conda-forge/functional_algorithms.svg)](https://anaconda.org/conda-forge/functional_algorithms)
+
 # Functional algorithms
 
 Implementing a math function in a software is a non-trival task when
@@ -25,7 +27,9 @@ StableHLO by hand would be just unhuman.
 
 ## Supported algorithms
 
-Currently, algorithms are provided for the following math functions:
+Currently, [the definitions of
+algorithms](functional_algorithms/algorithms.py) are provided for the
+following math functions:
 
 - `square(z: complex | float)`
 - `hypot(x: float, y: float)`
@@ -34,11 +38,13 @@ Currently, algorithms are provided for the following math functions:
 ## Supported targets
 
 Currently, the implementations of supported algorithms are provided
-for the following target libraries and languages:
+for the following [target libraries and languages](functional_algorithms/targets/):
 
 - [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs
 - [NumPy](https://numpy.org/), using numpy functions on real inputs
 - [StableHLO](https://github.com/openxla/stablehlo), using existing decompositions and operations.
+
+
 
 ## Testing algorithms and generated implementations
 
@@ -216,8 +222,9 @@ def square(z: numpy.complex64) -> numpy.complex64:
     assert result.dtype == numpy.complex64, (result.dtype,)
     return result
 ```
-When `debug=2`, the values of all variables are printed out when
-calling the function:
+
+When `debug=2`, the function implementation source code and the values
+of all variables are printed out when calling the function:
 ```python
 >>> fa.targets.numpy.as_function(np_square_graph, debug=2)(3 + 4j)
 def square(z: numpy.complex64) -> numpy.complex64:
@@ -254,13 +261,17 @@ def square(ctx, z):
     if z.is_complex:
         x = abs(z.real)
         y = abs(z.imag)
-        real = ctx.select(x == y, 0, ((x - y) * (y + y)).props_(force_ref=True, ref="real_part"))
+        real = ctx.select(x == y, 0, ((x - y) * (y + y)).reference("real_part"))
         imag = 2 * (x * y)
-        r = ctx.complex(real.props_(force_ref=True), imag.props_(force_ref=True))
-        ctx.update_refs()
-        return r
+        r = ctx.complex(real.reference(), imag.reference())
+        return ctx(r)
     return z * z
 ```
+Notice the usage of `reference` method that forces the expression to
+be defined as a variable. Also, notice wrapping the return value with
+`ctx(...)` call that will assing variable names in the function as
+reference values of expressions.
+
 The generated implementation for the Python targer of the above definition is
 ```python
 >>> square_graph = ctx.trace(square, complex)

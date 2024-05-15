@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "functional_algorithms"
+requires-python = ">=3.9"
+authors = [{name = "Pearu Peterson", email = "pearu.peterson@gmail.com"}]
+description = "Functional algorithms and implementations"
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    'Programming Language :: Python :: 3',
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development",
+]
+dynamic = ["version"]
+
+dependencies = []
+
+[project.optional-dependencies]
+
+test = [
+    "pytest",
+    "coverage",
+    "pytest-mock",
+    "mpmath",
+    "numpy",
+]
+
+dev = [
+    "pre-commit",
+]
+
+[project.urls]
+Home = "https://github.com/pearu/functional_algorithms"
+Source = "https://github.com/pearu/functional_algorithms"
+
+[tool.setuptools.packages.find]
+include = ["functional_algorithms", "functional_algorithms.targets", "functional_algorithms.tests"]  # package names should match these glob patterns (["*"] by default)
+exclude = [".*", "*~", "*/*~", "*/*/*~", "*/__pycache__", "*/*/__pycache__"]
+
+[tool.black]
+line-length = 127
+target-version = ["py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-rsx -v"
+testpaths = [
+    "functional_algorithms/tests",
+]
+
+[tool.setuptools_scm]
+version_file = "functional_algorithms/_version.py"

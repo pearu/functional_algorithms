@@ -3,15 +3,15 @@ import pytest
 
 from functional_algorithms import utils
 
+
 @pytest.fixture(scope="function", params=[numpy.float32, numpy.float64])
 def dtype(request):
     return request.param
 
 
-def _check_real_samples(r,
-                        include_infinity=None, include_zero=None,
-                        include_subnormal=None, include_nan=None,
-                        nonnegative=None, include_huge=None):
+def _check_real_samples(
+    r, include_infinity=None, include_zero=None, include_subnormal=None, include_nan=None, nonnegative=None, include_huge=None
+):
     fi = numpy.finfo(r.dtype)
     if nonnegative:
         if include_zero:
@@ -103,14 +103,27 @@ def test_real_samples(dtype):
                     for include_zero in [False, True]:
                         for include_nan in [False, True]:
                             for nonnegative in [False, True]:
-                                r = utils.real_samples(size=size, dtype=dtype,
-                                                       include_infinity=include_infinity, include_zero=include_zero,
-                                                       include_subnormal=include_subnormal, include_nan=include_nan,
-                                                       nonnegative=nonnegative, include_huge=include_huge)
+                                r = utils.real_samples(
+                                    size=size,
+                                    dtype=dtype,
+                                    include_infinity=include_infinity,
+                                    include_zero=include_zero,
+                                    include_subnormal=include_subnormal,
+                                    include_nan=include_nan,
+                                    nonnegative=nonnegative,
+                                    include_huge=include_huge,
+                                )
                                 assert r.dtype == dtype
-                                _check_real_samples(r, include_infinity=include_infinity, include_zero=include_zero,
-                                                    include_subnormal=include_subnormal, include_nan=include_nan,
-                                                    nonnegative=nonnegative, include_huge=include_huge)
+                                _check_real_samples(
+                                    r,
+                                    include_infinity=include_infinity,
+                                    include_zero=include_zero,
+                                    include_subnormal=include_subnormal,
+                                    include_nan=include_nan,
+                                    nonnegative=nonnegative,
+                                    include_huge=include_huge,
+                                )
+
 
 def test_complex_samples(dtype):
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
@@ -120,22 +133,40 @@ def test_complex_samples(dtype):
                     for include_zero in [False, True]:
                         for include_nan in [False, True]:
                             for nonnegative in [False, True]:
-                                r = utils.complex_samples(size=size, dtype=dtype,
-                                                          include_infinity=include_infinity, include_zero=include_zero,
-                                                          include_subnormal=include_subnormal, include_nan=include_nan,
-                                                          nonnegative=nonnegative, include_huge=include_huge)
+                                r = utils.complex_samples(
+                                    size=size,
+                                    dtype=dtype,
+                                    include_infinity=include_infinity,
+                                    include_zero=include_zero,
+                                    include_subnormal=include_subnormal,
+                                    include_nan=include_nan,
+                                    nonnegative=nonnegative,
+                                    include_huge=include_huge,
+                                )
                                 re = r.real
                                 im = r.imag
                                 assert re.dtype == dtype
                                 assert im.dtype == dtype
                                 for i in range(r.shape[0]):
-                                    _check_real_samples(re[i], include_infinity=include_infinity, include_zero=include_zero,
-                                                        include_subnormal=include_subnormal, include_nan=include_nan,
-                                                        nonnegative=nonnegative, include_huge=include_huge)
+                                    _check_real_samples(
+                                        re[i],
+                                        include_infinity=include_infinity,
+                                        include_zero=include_zero,
+                                        include_subnormal=include_subnormal,
+                                        include_nan=include_nan,
+                                        nonnegative=nonnegative,
+                                        include_huge=include_huge,
+                                    )
                                 for j in range(r.shape[1]):
-                                    _check_real_samples(im[:, j], include_infinity=include_infinity, include_zero=include_zero,
-                                                        include_subnormal=include_subnormal, include_nan=include_nan,
-                                                        nonnegative=nonnegative, include_huge=include_huge)
+                                    _check_real_samples(
+                                        im[:, j],
+                                        include_infinity=include_infinity,
+                                        include_zero=include_zero,
+                                        include_subnormal=include_subnormal,
+                                        include_nan=include_nan,
+                                        nonnegative=nonnegative,
+                                        include_huge=include_huge,
+                                    )
 
 
 def test_isclose(dtype):
@@ -145,7 +176,7 @@ def test_isclose(dtype):
 
     safe_min = numpy.sqrt(fi.tiny) * 4
     safe_max = numpy.sqrt(fi.max) / 8
-    
+
     if dtype == numpy.float32:
         x1, y1 = dtype(1.234567), dtype(1.2345671)
         x2, y2 = dtype(1.23457), dtype(1.234571)
@@ -159,7 +190,7 @@ def test_isclose(dtype):
         x4, y4 = dtype(1.12345678923457), dtype(1.123456789234573)
         x5, y5 = dtype(1.12345678923457), dtype(1.123456789234575)
     else:
-        assert 0   # unreachable
+        assert 0  # unreachable
 
     for s in [1.0, 1e10, 1e-10, safe_min, safe_max, fi.tiny, fi.max * 1e-1]:
         x, y = x1 * s, y1 * s

@@ -5,26 +5,28 @@ import cmath
 from functional_algorithms import Context, targets, algorithms, utils
 import pytest
 
-@pytest.fixture(scope="function", params=['python', 'numpy', 'stablehlo'])
+
+@pytest.fixture(scope="function", params=["python", "numpy", "stablehlo"])
 def target_name(request):
     return request.param
 
-@pytest.fixture(scope="function", params=['complex64', 'complex128', 'float32', 'float64'])
+
+@pytest.fixture(scope="function", params=["complex64", "complex128", "float32", "float64"])
 def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=['asin', 'square', 'hypot'])
+@pytest.fixture(scope="function", params=["asin", "square", "hypot"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=['asin', 'square'])
+@pytest.fixture(scope="function", params=["asin", "square"])
 def unary_func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=['hypot'])
+@pytest.fixture(scope="function", params=["hypot"])
 def binary_func_name(request):
     return request.param
 
@@ -48,8 +50,8 @@ def test_unary(dtype_name, unary_func_name):
 
 
 def test_binary(dtype_name, binary_func_name):
-    if dtype_name.startswith('complex') and binary_func_name in {'hypot'}:
-        pytest.skip(reason=f'{binary_func_name} does not support {dtype_name} inputs')
+    if dtype_name.startswith("complex") and binary_func_name in {"hypot"}:
+        pytest.skip(reason=f"{binary_func_name} does not support {dtype_name} inputs")
 
     dtype = getattr(numpy, dtype_name)
     ctx = Context(paths=[algorithms])
