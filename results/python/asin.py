@@ -1,7 +1,13 @@
 
 # This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
 #   https://github.com/pearu/functional_algorithms
-def asin(z: complex) -> complex:
+# for more information.
+
+
+import math
+import sys
+
+def asin_0(z: complex) -> complex:
   signed_x: float = (z).real
   x: float = abs(signed_x)
   signed_y: float = (z).imag

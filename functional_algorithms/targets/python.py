@@ -3,6 +3,19 @@ import sys
 import math
 from . import python as this_module
 
+source_file_header = """
+import math
+import sys
+"""
+
+
+trace_arguments = dict(
+    asin=[(":complex",)],
+    hypot=[(":float", ":float")],
+    square=[(":float",), (":complex",)],
+)
+
+
 source_file_extension = ".py"
 
 

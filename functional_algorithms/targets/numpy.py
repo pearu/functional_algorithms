@@ -5,6 +5,29 @@ import warnings
 from .. import utils
 from . import numpy as this_module
 
+source_file_header = """
+import numpy
+import warnings
+
+finfo_float32=numpy.finfo(numpy.float32)
+finfo_float64=numpy.finfo(numpy.float64)
+
+def make_complex(r, i):
+    if r.dtype == numpy.float32 and i.dtype == numpy.float32:
+        return numpy.array([r, i]).view(numpy.complex64)[0]
+    elif i.dtype == numpy.float64 and i.dtype == numpy.float64:
+        return numpy.array([r, i]).view(numpy.complex128)[0]
+    raise NotImplementedError((r.dtype, i.dtype))
+"""
+
+
+trace_arguments = dict(
+    asin=[(":complex128",), (":complex64",)],
+    hypot=[(":float32", ":float32"), (":float64", ":float64")],
+    square=[(":complex128",), (":complex64",), (":float32",), (":float64",)],
+)
+
+
 source_file_extension = ".py"
 
 

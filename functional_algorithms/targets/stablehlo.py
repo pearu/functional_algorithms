@@ -1,3 +1,14 @@
+source_file_header = """
+"""
+
+
+trace_arguments = dict(
+    asin=[(":complex",)],
+    hypot=[(":float", ":float")],
+    square=[(":float",), (":complex",)],
+)
+
+
 source_file_extension = ".td"
 
 

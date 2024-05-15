@@ -21,15 +21,20 @@ for target_name in dir(fa.targets):
             f"""
 This file is generated using functional_algorithms tool ({fa.__version__}), see
   https://github.com/pearu/functional_algorithms
+for more information.
 """
         )
 
-        ctx = fa.Context(paths=[fa.algorithms])
-        graph = ctx.trace(func).implement_missing(target).simplify()
-        src = graph.tostring(target)
+        sources = []
+        for i, atypes in enumerate(target.trace_arguments[func_name]):
+            ctx = fa.Context(paths=[fa.algorithms])
+            graph = ctx.trace(func, *atypes).implement_missing(target).simplify()._props(name=f"{func_name}_{i}")
+            src = graph.tostring(target)
+            sources.append(src)
 
         f = open(fn, "w")
-        f.write(comment)
-        f.write(src)
+        f.write(comment + "\n")
+        f.write(target.source_file_header + "\n")
+        f.write("\n\n".join(sources))
         f.close()
         print(f"Created {fn}")

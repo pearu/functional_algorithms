@@ -1,7 +1,11 @@
 
 // This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
 //   https://github.com/pearu/functional_algorithms
-def : Pat<(CHLO_Asin $z),
+// for more information.
+
+
+
+def : Pat<(asin_0 $z),
   (StableHLO_ComplexOp
     (StableHLO_Atan2Op:$real
       (StableHLO_RealOp:$signed_x $z),

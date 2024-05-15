@@ -1,7 +1,14 @@
 
 // This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
 //   https://github.com/pearu/functional_algorithms
-def : Pat<(CHLO_Square $z),
+// for more information.
+
+
+
+def : Pat<(square_0 $z),
+  (StableHLO_MulOp $z, $z)>;
+
+def : Pat<(square_1 $z),
   (StableHLO_ComplexOp
     (StableHLO_SelectOp
       (StableHLO_CompareOp

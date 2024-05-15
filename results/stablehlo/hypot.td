@@ -1,7 +1,11 @@
 
 // This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
 //   https://github.com/pearu/functional_algorithms
-def : Pat<(CHLO_Hypot $x, $y),
+// for more information.
+
+
+
+def : Pat<(hypot_0 $x, $y),
   (StableHLO_SelectOp
     (StableHLO_CompareOp
      (StableHLO_MaxOp:$mx

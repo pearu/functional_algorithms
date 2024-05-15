@@ -1,7 +1,13 @@
 
 # This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
 #   https://github.com/pearu/functional_algorithms
-def hypot(x: float, y: float) -> float:
+# for more information.
+
+
+import math
+import sys
+
+def hypot_0(x: float, y: float) -> float:
   abs_x: float = abs(x)
   abs_y: float = abs(y)
   mx: float = max(abs_x, abs_y)
