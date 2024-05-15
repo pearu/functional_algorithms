@@ -620,3 +620,11 @@ def validate_function(func, reference, samples, dtype):
     print(f"{func.__name__} validation statistics:", ", ".join(lst))
 
     return stats["mismatch"] == 0
+
+
+def format_python(code):
+    try:
+        import black
+    except ImportError:
+        return code
+    return black.format_str(code, mode=black.FileMode(line_length=127))

@@ -13,7 +13,7 @@ source_file_extension = ".td"
 
 
 def make_comment(message):
-    return "\n// ".join(message.splitlines()) + "\n"
+    return "// " + "\n// ".join(message.splitlines()) + "\n"
 
 
 kind_to_target = dict(

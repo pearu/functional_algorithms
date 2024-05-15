@@ -2,11 +2,14 @@ import warnings
 import sys
 import math
 from . import python as this_module
+from .. import utils
 
-source_file_header = """
+source_file_header = utils.format_python(
+    """
 import math
 import sys
 """
+)
 
 
 trace_arguments = dict(
@@ -20,7 +23,7 @@ source_file_extension = ".py"
 
 
 def make_comment(message):
-    return "\n# ".join(message.splitlines()) + "\n"
+    return "# " + "\n# ".join(message.splitlines()) + "\n"
 
 
 kind_to_target = dict(
@@ -145,7 +148,7 @@ class Printer:
             for a in self.assignments:
                 lines.append(f"{tab}  {a}")
             lines.append(f"{tab}  return {body}")
-            return "\n".join(lines)
+            return utils.format_python("\n".join(lines))
         elif expr.ref in self.defined_refs:
             assert self.need_ref.get(expr.ref), expr.ref
             return expr.ref

@@ -1,4 +1,4 @@
-from functional_algorithms import Context, targets, algorithms
+from functional_algorithms import Context, targets, algorithms, utils
 
 
 class TestImplementations:
@@ -71,9 +71,8 @@ def test_myhypot_python():
 
     print(py)
 
-    assert (
-        py
-        == """\
+    assert py == utils.format_python(
+        """\
 def myhypot(x: float, y: float) -> float:
   abs_x: float = abs(x)
   abs_y: float = abs(y)
@@ -94,9 +93,8 @@ def test_square_python():
 
     print(py)
 
-    assert (
-        py
-        == """\
+    assert py == utils.format_python(
+        """\
 def square(x: float) -> float:
   return (x) * (x)"""
     )
@@ -113,9 +111,8 @@ def test_complex_square_python():
 
     print(py)
 
-    assert (
-        py
-        == """\
+    assert py == utils.format_python(
+        """\
 def square(x: complex) -> complex:
   _square_1_x: float = (x).real
   x_real_square: float = (_square_1_x) * (_square_1_x)
@@ -168,9 +165,8 @@ def test_readme_square_python():
 
     print(py)
 
-    assert (
-        py
-        == """\
+    assert py == utils.format_python(
+        """\
 def readme_square(z: complex) -> complex:
   real_z: float = (z).real
   x: float = abs(real_z)

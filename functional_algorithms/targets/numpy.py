@@ -1,3 +1,4 @@
+import black
 import numpy
 import sys
 import warnings
@@ -5,20 +6,22 @@ import warnings
 from .. import utils
 from . import numpy as this_module
 
-source_file_header = """
+source_file_header = utils.format_python(
+    """
 import numpy
 import warnings
 
-finfo_float32=numpy.finfo(numpy.float32)
-finfo_float64=numpy.finfo(numpy.float64)
+finfo_float32 = numpy.finfo(numpy.float32)
+finfo_float64 = numpy.finfo(numpy.float64)
 
 def make_complex(r, i):
-    if r.dtype == numpy.float32 and i.dtype == numpy.float32:
-        return numpy.array([r, i]).view(numpy.complex64)[0]
-    elif i.dtype == numpy.float64 and i.dtype == numpy.float64:
-        return numpy.array([r, i]).view(numpy.complex128)[0]
-    raise NotImplementedError((r.dtype, i.dtype))
+  if r.dtype == numpy.float32 and i.dtype == numpy.float32:
+    return numpy.array([r, i]).view(numpy.complex64)[0]
+  elif i.dtype == numpy.float64 and i.dtype == numpy.float64:
+    return numpy.array([r, i]).view(numpy.complex128)[0]
+  raise NotImplementedError((r.dtype, i.dtype))
 """
+)
 
 
 trace_arguments = dict(
@@ -32,7 +35,7 @@ source_file_extension = ".py"
 
 
 def make_comment(message):
-    return "\n# ".join(message.splitlines()) + "\n"
+    return "# " + "\n# ".join(message.splitlines()) + "\n"
 
 
 kind_to_target = dict(
@@ -199,7 +202,7 @@ class Printer:
             if self.debug >= 1:
                 lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
             lines.append(f"{tab}    return result")
-            return "\n".join(lines)
+            return utils.format_python("\n".join(lines))
         elif expr.ref in self.defined_refs:
             assert self.need_ref.get(expr.ref), expr.ref
             return expr.ref
