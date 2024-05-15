@@ -1,3 +1,10 @@
+source_file_extension = ".td"
+
+
+def make_comment(message):
+    return "\n// ".join(message.splitlines()) + "\n"
+
+
 kind_to_target = dict(
     abs="StableHLO_AbsOp",
     negative="StableHLO_NegOp",

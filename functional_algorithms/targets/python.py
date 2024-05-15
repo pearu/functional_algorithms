@@ -3,6 +3,13 @@ import sys
 import math
 from . import python as this_module
 
+source_file_extension = ".py"
+
+
+def make_comment(message):
+    return "\n# ".join(message.splitlines()) + "\n"
+
+
 kind_to_target = dict(
     abs="abs({0})",
     negative="-({0})",

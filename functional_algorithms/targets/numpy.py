@@ -5,6 +5,13 @@ import warnings
 from .. import utils
 from . import numpy as this_module
 
+source_file_extension = ".py"
+
+
+def make_comment(message):
+    return "\n# ".join(message.splitlines()) + "\n"
+
+
 kind_to_target = dict(
     abs="numpy.abs({0})",
     negative="-({0})",
