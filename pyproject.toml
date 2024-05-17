@@ -19,7 +19,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 
-dependencies = ["black"]
+dependencies = ["black", "numpy", "mpmath"]
 
 [project.optional-dependencies]
 
@@ -27,8 +27,6 @@ test = [
     "pytest",
     "coverage",
     "pytest-mock",
-    "mpmath",
-    "numpy",
 ]
 
 dev = [
