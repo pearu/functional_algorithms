@@ -1,15 +1,15 @@
 """Definitions of functional algorithms for math functions with
 complex and float inputs. The aim is to provide algorithms that are
-stable on the whole complex plane or real line.
+accurate on the whole complex plane or real line.
 """
 
 # This module provides only the definitions of algorithms. As such, it
-# should not import any other Python modules or packages except the
-# ones that provide definitions of algorithms to be used here.
+# should not import any other Python module or package except the ones
+# that provide definitions of algorithms to be used here.
 #
 # Each math function should provide wrapper functions starting with
-# `complex_` and `real_` prefix so that domain specific doc-strings
-# could be provided.
+# `complex_` and `real_` prefix so that input-domain specific
+# doc-strings could be provided.
 
 
 def real_square(ctx, x: float):

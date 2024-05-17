@@ -164,10 +164,12 @@ To visualize the implementation for the given target, say,
 ```python
 >>> print(square_graph.tostring(fa.targets.python))
 def square(z: complex) -> complex:
-  real_z: float = (z).real
-  imag_z: float = (z).imag
-  eq_abs_real_z_abs_imag_z: bool = (abs(real_z)) == (abs(imag_z))
-  return complex((0) if (eq_abs_real_z_abs_imag_z) else (((real_z) - (imag_z)) * ((real_z) + (imag_z))), (2) * ((real_z) * (imag_z)))
+    real_z: float = (z).real
+    imag_z: float = (z).imag
+    return complex(
+        (0) if ((abs(real_z)) == (abs(imag_z))) else (((real_z) - (imag_z)) * ((real_z) + (imag_z))),
+        (2) * ((real_z) * (imag_z)),
+    )
 ```
 which is actually the definition of the Python function used above
 when evaluating `py_square(z)`.
@@ -175,7 +177,7 @@ when evaluating `py_square(z)`.
 Similarly, we can generate implementations for other targets, for instance:
 ```python
 >>> print(square_graph.tostring(fa.targets.stablehlo))
-def : Pat<(CHLO_Square $z),
+def : Pat<(CHLO_Square ComplexElementType:$z),
   (StableHLO_ComplexOp
     (StableHLO_SelectOp
       (StableHLO_CompareOp
@@ -200,12 +202,20 @@ bit-width information:
 >>> np_square_graph = ctx.trace(square, numpy.complex64)
 >>> print(np_square_graph.tostring(fa.targets.numpy))
 def square(z: numpy.complex64) -> numpy.complex64:
-  with warnings.catch_warnings(action="ignore"):
-    z = numpy.complex64(z)
-    real_z: numpy.float32 = (z).real
-    imag_z: numpy.float32 = (z).imag
-    result = make_complex((numpy.float32(0)) if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_)) else (((real_z) - (imag_z)) * ((real_z) + (imag_z))), (numpy.float32(2)) * ((real_z) * (imag_z)))
-    return result
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex64(z)
+        real_z: numpy.float32 = (z).real
+        imag_z: numpy.float32 = (z).imag
+        result = make_complex(
+            (
+                (numpy.float32(0))
+                if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_))
+                else (((real_z) - (imag_z)) * ((real_z) + (imag_z)))
+            ),
+            (numpy.float32(2)) * ((real_z) * (imag_z)),
+        )
+        return result
+
 >>> fa.targets.numpy.as_function(np_square_graph)(z)
 infj
 ```
@@ -220,15 +230,22 @@ inserted into the function implementation:
 ```python
 >>> print(np_square_graph.tostring(fa.targets.numpy, debug=1))
 def square(z: numpy.complex64) -> numpy.complex64:
-  with warnings.catch_warnings(action="ignore"):
-    z = numpy.complex64(z)
-    real_z: numpy.float32 = (z).real
-    assert real_z.dtype == numpy.float32, (real_z.dtype, numpy.float32)
-    imag_z: numpy.float32 = (z).imag
-    assert imag_z.dtype == numpy.float32, (imag_z.dtype, numpy.float32)
-    result = make_complex((numpy.float32(0)) if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_)) else (((real_z) - (imag_z)) * ((real_z) + (imag_z))), (numpy.float32(2)) * ((real_z) * (imag_z)))
-    assert result.dtype == numpy.complex64, (result.dtype,)
-    return result
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex64(z)
+        real_z: numpy.float32 = (z).real
+        assert real_z.dtype == numpy.float32, (real_z.dtype, numpy.float32)
+        imag_z: numpy.float32 = (z).imag
+        assert imag_z.dtype == numpy.float32, (imag_z.dtype, numpy.float32)
+        result = make_complex(
+            (
+                (numpy.float32(0))
+                if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_))
+                else (((real_z) - (imag_z)) * ((real_z) + (imag_z)))
+            ),
+            (numpy.float32(2)) * ((real_z) * (imag_z)),
+        )
+        assert result.dtype == numpy.complex64, (result.dtype,)
+        return result
 ```
 
 When `debug=2`, the function implementation source code and the values
@@ -236,19 +253,27 @@ of all variables are printed out when calling the function:
 ```python
 >>> fa.targets.numpy.as_function(np_square_graph, debug=2)(3 + 4j)
 def square(z: numpy.complex64) -> numpy.complex64:
-  with warnings.catch_warnings(action="ignore"):
-    z = numpy.complex64(z)
-    print("z=", z)
-    real_z: numpy.float32 = (z).real
-    print("real_z=",  real_z)
-    assert real_z.dtype == numpy.float32, (real_z.dtype, numpy.float32)
-    imag_z: numpy.float32 = (z).imag
-    print("imag_z=",  imag_z)
-    assert imag_z.dtype == numpy.float32, (imag_z.dtype, numpy.float32)
-    result = make_complex((numpy.float32(0)) if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_)) else (((real_z) - (imag_z)) * ((real_z) + (imag_z))), (numpy.float32(2)) * ((real_z) * (imag_z)))
-    print("result=", result)
-    assert result.dtype == numpy.complex64, (result.dtype,)
-    return result
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex64(z)
+        print("z=", z)
+        real_z: numpy.float32 = (z).real
+        print("real_z=", real_z)
+        assert real_z.dtype == numpy.float32, (real_z.dtype, numpy.float32)
+        imag_z: numpy.float32 = (z).imag
+        print("imag_z=", imag_z)
+        assert imag_z.dtype == numpy.float32, (imag_z.dtype, numpy.float32)
+        result = make_complex(
+            (
+                (numpy.float32(0))
+                if (numpy.equal(numpy.abs(real_z), numpy.abs(imag_z), dtype=numpy.bool_))
+                else (((real_z) - (imag_z)) * ((real_z) + (imag_z)))
+            ),
+            (numpy.float32(2)) * ((real_z) * (imag_z)),
+        )
+        print("result=", result)
+        assert result.dtype == numpy.complex64, (result.dtype,)
+        return result
+
 z= (3+4j)
 real_z= 3.0
 imag_z= 4.0
@@ -285,12 +310,12 @@ The generated implementation for the Python targer of the above definition is
 >>> square_graph = ctx.trace(square, complex)
 >>> print(square_graph.tostring(fa.targets.python))
 def square(z: complex) -> complex:
-  real_z: float = (z).real
-  x: float = abs(real_z)
-  y: float = abs((z).imag)
-  real_part: float = ((x) - (y)) * ((y) + (y))
-  real: float = (0) if ((x) == (y)) else (real_part)
-  imag: float = (2) * ((x) * (y))
-  return complex(real, imag)
+    real_z: float = (z).real
+    x: float = abs(real_z)
+    y: float = abs((z).imag)
+    real_part: float = ((x) - (y)) * ((y) + (y))
+    real: float = (0) if ((x) == (y)) else (real_part)
+    imag: float = (2) * ((x) * (y))
+    return complex(real, imag)
 ```
 which is more expressive than the one shown above.
