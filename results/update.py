@@ -13,6 +13,12 @@ for target_name in dir(fa.targets):
     for func_name in dir(fa.algorithms):
         if func_name.startswith("_"):
             continue
+        if func_name.startswith("complex_") or func_name.startswith("real_"):
+            continue
+        if func_name not in target.trace_arguments:
+            print(f"Please update {target.__module__}.trace_arguments for function `{func_name}`")
+
+    for func_name in target.trace_arguments:
         func = getattr(fa.algorithms, func_name)
 
         fn = os.path.join(target_dir, f"{func_name}{target.source_file_extension}")
@@ -21,8 +27,7 @@ for target_name in dir(fa.targets):
             f"""\
 This file is generated using functional_algorithms tool ({fa.__version__}), see
   https://github.com/pearu/functional_algorithms
-for more information.
-"""
+for more information."""
         )
 
         sources = []

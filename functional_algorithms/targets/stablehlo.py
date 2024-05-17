@@ -1,5 +1,8 @@
-source_file_header = """
-"""
+import warnings
+
+from . import stablehlo as this_module
+
+source_file_header = ""
 
 
 trace_arguments = dict(
@@ -83,10 +86,10 @@ kind_to_target = dict(
 
 
 constant_to_target = dict(
-    largest=NotImplemented,
-    smallest=NotImplemented,
-    posinf=NotImplemented,
-    neginf=NotImplemented,
+    largest="StableHLO_ConstantLikeMaxFiniteValue",
+    smallest="StableHLO_ConstantLikeSmallestNormalizedValue",
+    posinf="StableHLO_ConstantLikePosInfValue",
+    neginf="StableHLO_ConstantLikeNegInfValue",
 )
 
 
@@ -108,8 +111,8 @@ class Printer:
             sargs = []
             for a in args:
                 self.defined_refs.add(a.ref)
-                typ = ""
-                sargs.append(f"{typ}${a.ref}")
+                typ = "ComplexElementType" if a.is_complex else "NonComplexElementType"
+                sargs.append(f"{typ}:${a.ref}")
             sargs = ", ".join(sargs)
 
             lines = []
@@ -142,6 +145,12 @@ class Printer:
                 raise RuntimeError(
                     f"undefined reference {like} in {expr} (when a constant is used as left operand, its ref value must be specified explicitly)"
                 )
+            if isinstance(value, str):
+                v = constant_to_target.get(value, NotImplemented)
+                if v is not NotImplemented:
+                    return f"{tab}({v} ${like.ref})"
+                else:
+                    warnings.warn(f"Constant `{value}` is not implemented in {this_module.__name__}.constant_to_target")
             return f'{tab}(StableHLO_ConstantLike<"{value}">{ref} ${like.ref})'
 
         elif expr.kind in {"lt", "le", "gt", "ge", "eq", "ne"}:

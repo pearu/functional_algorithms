@@ -50,15 +50,15 @@ def square_1(z: numpy.complex64) -> numpy.complex64:
         return result
 
 
-def square_2(z: numpy.float32) -> numpy.float32:
+def square_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
-        z = numpy.float32(z)
+        z = numpy.float64(z)
         result = (z) * (z)
         return result
 
 
-def square_3(z: numpy.float64) -> numpy.float64:
+def square_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
-        z = numpy.float64(z)
+        z = numpy.float32(z)
         result = (z) * (z)
         return result

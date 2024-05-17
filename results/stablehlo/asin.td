@@ -5,8 +5,7 @@
 
 
 
-
-def : Pat<(asin_0 $z),
+def : Pat<(asin_0 ComplexElementType:$z),
   (StableHLO_ComplexOp
     (StableHLO_Atan2Op:$real
       (StableHLO_RealOp:$signed_x $z),
@@ -18,7 +17,7 @@ def : Pat<(asin_0 $z),
              (StableHLO_ImagOp:$signed_y $z))),
          (StableHLO_DivOp:$safe_max
            (StableHLO_SqrtOp
-             (StableHLO_ConstantLike<"largest"> $signed_x)),
+             (StableHLO_ConstantLikeMaxFiniteValue $signed_x)),
            (StableHLO_ConstantLike<"8"> $signed_x)),
           StableHLO_ComparisonDirectionValue<"GE">,
           (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
@@ -137,7 +136,7 @@ def : Pat<(asin_0 $z),
                       (StableHLO_NotOp
                         (StableHLO_CompareOp
                          $y,
-                         (StableHLO_ConstantLike<"posinf"> $signed_y),
+                         (StableHLO_ConstantLikePosInfValue $signed_y),
                           StableHLO_ComparisonDirectionValue<"EQ">,
                           (STABLEHLO_DEFAULT_COMPARISON_TYPE)))),
                     (StableHLO_DivOp $x, $y),
@@ -149,7 +148,7 @@ def : Pat<(asin_0 $z),
                $y,
                (StableHLO_MulOp
                  (StableHLO_SqrtOp
-                   (StableHLO_ConstantLike<"smallest"> $signed_x)),
+                   (StableHLO_ConstantLikeSmallestNormalizedValue $signed_x)),
                  (StableHLO_ConstantLike<"4"> $signed_x)),
                 StableHLO_ComparisonDirectionValue<"LT">,
                 (STABLEHLO_DEFAULT_COMPARISON_TYPE)),

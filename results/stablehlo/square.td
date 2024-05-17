@@ -6,10 +6,10 @@
 
 
 
-def : Pat<(square_0 $z),
+def : Pat<(square_0 NonComplexElementType:$z),
   (StableHLO_MulOp $z, $z)>;
 
-def : Pat<(square_1 $z),
+def : Pat<(square_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
     (StableHLO_SelectOp
       (StableHLO_CompareOp

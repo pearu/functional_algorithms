@@ -44,6 +44,9 @@ for the following [target libraries and languages](functional_algorithms/targets
 - [NumPy](https://numpy.org/), using numpy functions on real inputs
 - [StableHLO](https://github.com/openxla/stablehlo), using existing decompositions and operations.
 
+The Python and NumPy targets are provided only for debugging and
+testing functional algorithms.
+
 ## Results
 
 See [results](results) for generated implementation of all supported

@@ -188,3 +188,17 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         )
         result = make_complex(real, (-(imag)) if ((signed_y) < (numpy.float32(0))) else (imag))
         return result
+
+
+def asin_2(z: numpy.float64) -> numpy.float64:
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.float64(z)
+        result = (numpy.float64(2)) * (numpy.arctan2(z, (numpy.float64(1)) + (numpy.sqrt((numpy.float64(1)) - ((z) * (z))))))
+        return result
+
+
+def asin_3(z: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.float32(z)
+        result = (numpy.float32(2)) * (numpy.arctan2(z, (numpy.float32(1)) + (numpy.sqrt((numpy.float32(1)) - ((z) * (z))))))
+        return result

@@ -6,7 +6,7 @@
 
 
 
-def : Pat<(hypot_0 $x, $y),
+def : Pat<(hypot_0 NonComplexElementType:$x, NonComplexElementType:$y),
   (StableHLO_SelectOp
     (StableHLO_CompareOp
      (StableHLO_MaxOp:$mx

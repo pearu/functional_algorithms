@@ -43,7 +43,7 @@ def test_myhypot_stablehlo():
     assert (
         hlo
         == """\
-def : Pat<(CHLO_MyHypot $x, $y),
+def : Pat<(CHLO_MyHypot NonComplexElementType:$x, NonComplexElementType:$y),
   (StableHLO_MulOp
     (StableHLO_MaxOp:$mx
       (StableHLO_AbsOp:$abs_x $x),
@@ -135,7 +135,7 @@ def test_complex_square_stablehlo():
     assert (
         shlo
         == """\
-def : Pat<(CHLO_Square $x),
+def : Pat<(CHLO_Square ComplexElementType:$x),
   (StableHLO_ComplexOp
     (StableHLO_SubtractOp
       (StableHLO_MulOp:$x_real_square
