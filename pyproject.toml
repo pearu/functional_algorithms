@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "functional_algorithms"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [{name = "Pearu Peterson", email = "pearu.peterson@gmail.com"}]
 description = "Functional algorithms and implementations"
 readme = "README.md"
@@ -43,7 +43,7 @@ exclude = [".*", "*~", "*/*~", "*/*/*~", "*/__pycache__", "*/*/__pycache__"]
 
 [tool.black]
 line-length = 127
-target-version = ["py310", "py311", "py312"]
+target-version = ["py311", "py312"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
