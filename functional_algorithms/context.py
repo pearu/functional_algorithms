@@ -2,6 +2,7 @@ import inspect
 import sys
 import types
 import typing
+import warnings
 from collections import defaultdict
 from .utils import UNSPECIFIED
 from .expr import Expr, make_constant, make_symbol, make_apply
@@ -79,7 +80,7 @@ class Context:
         for i, (name, param) in enumerate(sig.parameters.items()):
             if i == 0:
                 if name != "ctx":
-                    warnings.warn(f"The first argument of {func.__name__} is expected to have a name `{ctx}` but got {name}")
+                    warnings.warn(f"The first argument of {func.__name__} is expected to have a name `ctx` but got {name}")
                 continue
             assert param.kind in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}, param.kind
             if i <= len(args):
