@@ -6,7 +6,7 @@ source_file_header = ""
 
 
 trace_arguments = dict(
-    asin=[(":complex",)],
+    asin=[(":float",), (":complex",)],
     hypot=[(":float", ":float")],
     square=[(":float",), (":complex",)],
 )

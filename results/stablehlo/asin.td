@@ -5,7 +5,19 @@
 
 
 
-def : Pat<(asin_0 ComplexElementType:$z),
+def : Pat<(asin_0 NonComplexElementType:$z),
+  (StableHLO_MulOp
+    (StableHLO_ConstantLike<"2"> $z),
+    (StableHLO_Atan2Op
+      $z,
+      (StableHLO_AddOp
+        (StableHLO_ConstantLike<"1">:$constant_1 $z),
+        (StableHLO_SqrtOp
+          (StableHLO_SubtractOp
+            $constant_1,
+            (StableHLO_MulOp $z, $z))))))>;
+
+def : Pat<(asin_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
     (StableHLO_Atan2Op:$real
       (StableHLO_RealOp:$signed_x $z),

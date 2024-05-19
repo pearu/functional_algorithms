@@ -21,8 +21,8 @@ sophisticated algorithms for various math libraries that otherwise can
 be a tedious and errorprone task when done manually using LISP-like
 languages. For instance, the definition of the algorithm for computing
 arcus sine for Python or NumPy target has LOC about 45 but for the
-StableHLO target the LOC is 186. Implementing such an algorithm for
-StableHLO by hand would be just unhuman.
+StableHLO target the LOC is 186. Implementing arcus sine algorithm for
+StableHLO by hand would be very hard.
 
 
 ## Supported algorithms
@@ -33,7 +33,9 @@ following math functions:
 
 - `square(z: complex | float)`
 - `hypot(x: float, y: float)`
-- `asin(z: complex)`, using modified [Hull et al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm.
+- `asin(z: complex | float)`, using modified [Hull et
+  al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
+  complex `asin`.
 
 ## Supported targets
 
