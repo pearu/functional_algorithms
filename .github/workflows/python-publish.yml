@@ -29,9 +29,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build
+        pip install build setuptools_scm
     - name: Build package
-      run: python -m build
+      run: |
+        python -c "from setuptools_scm import get_version;print('SETUPTOOLS_SCM_PRETEND_VERSION_FUNCTIONAL_ALGORITHMS='+get_version())" >> $GITHUB_ENV
+        python -m build
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
       with:
