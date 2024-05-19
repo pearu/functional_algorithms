@@ -392,6 +392,7 @@ class numpy_with_mpmath:
                 return ctx.asin(x).conjugate()
         else:
             if abs(x) > 1:
+                # otherwise, mpmath.asin would return complex value
                 return ctx.nan
         return ctx.asin(x)
 
