@@ -62,12 +62,29 @@ def hypot(ctx, x: float, y: float):
     If mn == mx then
       hypot(x, y) = mx * sqrt(2)
     else
-      hypot(x, y) = mx * sqrt(square(mn / mx) + 1)
+      r = square(mn / mx)
+      sq = sqrt(1 + r)
+      if sq == 1 and r > 0 then
+        hypot(x, y) = mx + mx * r / 2
+      else
+        hypot(x, y) = mx * sq
     """
     assert not (x.is_complex or y.is_complex), (x, y)
     mx = ctx.maximum(abs(x), abs(y))
     mn = ctx.minimum(abs(x), abs(y))
-    return ctx(ctx.select(mx == mn, mx * ctx.sqrt(ctx.constant(2, mx)), mx * ctx.sqrt(ctx.square(mn / mx) + 1)))
+    r = ctx.square(mn / mx)
+    sqa = ctx.sqrt(1 + r)
+    # detect underflow for small r:
+    h1 = ctx.sqrt(ctx.constant(2, mx)) * mx
+    h2 = ctx.select(ctx.And(sqa == 1, r > 0), mx + mx * r / 2, mx * sqa)
+    return ctx(ctx.select(mx == mn, h1, h2))
+
+
+def absolute(ctx, z: float | complex):
+    """Absolute value of float and complex inputs."""
+    if z.is_complex:
+        return ctx(hypot(ctx, z.real, z.imag))
+    return ctx(abs(z))
 
 
 def complex_asin(ctx, z: complex):
@@ -218,12 +235,9 @@ def asin(ctx, z: complex | float):
     See complex_asin and real_asin for more information.
     """
     if not z.is_complex:
-        # Why not use the alternative `asin(x) = atan2(x, sqrt(1 - x^2))`
-        # that has less ops?
-        #
-        # No need to use square(z) because abs(z) <= 1 when z is real
-        # and using square(z) makes sense only for large z values.
-        sq = ctx.sqrt(1 - z * z)
+        # (1 - z * z) = (1 - z) * (1 + z) avoids cancellation errors
+        # for abs(z) close to 1
+        sq = ctx.sqrt((1 - z) * (1 + z))
         return ctx(2 * ctx.atan2(z, 1 + sq))
 
     signed_x = z.real

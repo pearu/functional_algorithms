@@ -15,7 +15,7 @@ class TestImplementations:
     def hypot(ctx, x, y):
         mx = ctx.maximum(abs(x), abs(y))
         mn = ctx.minimum(abs(x), abs(y))
-        result = mx * ctx.sqrt(ctx.square(ctx.div(mn, mx, ref="mn_over_mx")) + 1)
+        result = mx * ctx.sqrt(ctx.square(ctx.div(mn, mx).reference("mn_over_mx")) + 1)
         return ctx(result)
 
     @staticmethod

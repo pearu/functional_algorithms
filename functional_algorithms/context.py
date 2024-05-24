@@ -45,11 +45,10 @@ class Context:
                 if ref is UNSPECIFIED:
                     ref = name
                 if isinstance(ref, str):
-                    if ref in self._ref_values:
-                        if self._ref_values[ref] is obj:
-                            # obj must be defined in a caller
-                            continue
-                        ref = prefix + ref
+                    if self._ref_values.get(ref) is obj:
+                        # obj must be defined in a caller
+                        continue
+                    ref = prefix + ref
                     # sanity check that existing ref is unused
                     assert ref not in self._ref_values, (ref, prefix, str(self._ref_values[ref]), str(obj))
                     self._update_expression_ref(obj, ref)

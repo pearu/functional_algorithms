@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["asin", "square", "hypot"])
+@pytest.fixture(scope="function", params=["absolute", "asin", "hypot", "square"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["asin", "square"])
+@pytest.fixture(scope="function", params=["absolute", "asin", "square"])
 def unary_func_name(request):
     return request.param
 
@@ -36,17 +36,33 @@ def test_unary(dtype_name, unary_func_name):
     ctx = Context(paths=[algorithms])
 
     graph = ctx.trace(getattr(algorithms, unary_func_name), dtype)
-
     graph2 = graph.implement_missing(targets.numpy).simplify()
-    func = targets.numpy.as_function(graph2, debug=0)
-    reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=10), unary_func_name)
 
-    if dtype in {numpy.complex64, numpy.complex128}:
-        samples = utils.complex_samples((26, 26), dtype=dtype, include_huge=True).flatten()
+    func = targets.numpy.as_function(graph2, debug=0)
+
+    if unary_func_name == "asin":
+        extra_prec_multiplier = 20
     else:
-        samples = utils.real_samples(500, dtype=dtype).flatten()
-    matches_with_reference = utils.validate_function(func, reference, samples, dtype)
+        extra_prec_multiplier = 1
+    reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier), unary_func_name)
+
+    size = 31
+    if dtype in {numpy.complex64, numpy.complex128}:
+        samples = utils.complex_samples((size, size), dtype=dtype, include_huge=True).flatten()
+    else:
+        samples = utils.real_samples(size * size, dtype=dtype).flatten()
+
+    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
     assert matches_with_reference  # warning: also reference may be wrong
+
+    extra_samples = []
+    if unary_func_name == "absolute" and dtype_name.startswith("complex"):
+        extra_samples.extend([1.0011048e35 + 3.4028235e38j])
+
+    if extra_samples:
+        samples = numpy.array(extra_samples, dtype=dtype)
+        matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
+        assert matches_with_reference  # warning: also reference may be wrong
 
 
 def test_binary(dtype_name, binary_func_name):
@@ -68,7 +84,7 @@ def test_binary(dtype_name, binary_func_name):
     else:
         samples = utils.complex_samples((26, 26), dtype=dtype, include_huge=True).flatten()
         samples = [(x, y) for x, y in zip(samples.real, samples.imag)]
-    matches_with_reference = utils.validate_function(func, reference, samples, dtype)
+    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
     assert matches_with_reference  # warning: also reference may be wrong
 
 

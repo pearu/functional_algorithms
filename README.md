@@ -32,7 +32,7 @@ algorithms](functional_algorithms/algorithms.py) are provided for the
 following math functions:
 
 - `square(z: complex | float)`
-- `hypot(x: float, y: float)`
+- `hypot(x: float, y: float)` and `absolute(z: complex)`
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`.
@@ -73,6 +73,32 @@ evaluation of the numpy target implementation is performed on
 logarithmic-uniform samples that represent the whole complex plane or
 real line including complex infinities, and extremly small and large
 values.
+
+To characterize the correctness of algorithms, we'll use
+[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) to measure
+the distance between function result and its reference value.
+
+When using 1 000 000 samples log-uniformly distribute on a function
+domain, the probability that the function return value is different
+from a reference value by the given number of ULPs, is displayed in
+the following table for provided algorithms:
+
+
+| Function | dtype | ULP=0 (exact) | ULP=1 | ULP=2 | ULP=3 | ULP>3 | errors    |
+| -------- | ----- | ------------- | ----- | ----- | ----- | ----- | --------- |
+| absolute | float32 | 100.000 % | - | - | - | - | - |
+| absolute | float64 | 100.000 % | - | - | - | - | - |
+| absolute | complex64 | 96.590 % | 3.360 % | 0.050 % | - | - | - |
+| absolute | complex128 | 99.156 % | 0.844 % | - | - | - | - |
+| asin | float32 | 97.712 % | 2.193 % | 0.093 % | 0.002 % | - | - |
+| asin | float64 | 99.562 % | 0.434 % | 0.004 % | - | - | - |
+| asin | complex64 | 79.427 % | 20.321 % | 0.246 % | 0.006 % | - | - |
+| asin | complex128 | 72.624 % | 27.272 % | 0.103 % | 0.001 % | - | - |
+| square | float32 | 100.000 % | - | - | - | - | - |
+| square | float64 | 100.000 % | - | - | - | - | - |
+| square | complex64 | 99.578 % | 0.422 % | - | - | - | - |
+| square | complex128 | 99.971 % | 0.029 % | - | - | - | - |
+
 
 ## A case study: square
 

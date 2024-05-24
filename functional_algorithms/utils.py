@@ -540,19 +540,47 @@ def isfloat(value):
     return isinstance(value, (float, numpy.floating))
 
 
+def diff_ulp(x, y, ftz=True) -> int:
+    """Return ULP distance between two floating point numbers.
+
+    For complex inputs, return largest ULP among real and imaginary
+    parts.
+
+    When ftz is True, the distance does not count subnormals.
+    """
+    if isinstance(x, numpy.floating):
+        if numpy.isfinite(x) and numpy.isfinite(y):
+            uint = {numpy.float64: numpy.uint64, numpy.float32: numpy.uint32}[x.dtype.type]
+            x, sx = (abs(x), -1) if x <= 0 else (x, 1)
+            y, sy = (abs(y), -1) if y <= 0 else (y, 1)
+            ix, iy = int(x.view(uint)), int(y.view(uint))
+            if ftz:
+                fi = numpy.finfo(x.dtype)
+                i = int(fi.smallest_normal.view(uint)) - 1  # 0 distance to largest subnormal
+                ix = ix - i if ix > i else 0
+                iy = iy - i if iy > i else 0
+            if sx != sy:
+                # distance is measured through 0 value
+                return ix + iy
+            return ix - iy if ix >= iy else iy - ix
+        elif numpy.isnan(x) and numpy.isnan(y):
+            return 0
+        elif x == y:
+            return 0
+        else:
+            return {numpy.float64: 2**64, numpy.float32: 2**32}[x.dtype.type]
+    elif isinstance(x, numpy.complexfloating):
+        return max(diff_ulp(x.real, y.real, ftz=ftz), diff_ulp(x.imag, y.imag, ftz=ftz))
+    raise NotImplementedError(type(x))
+
+
+# TODO: get_scale is unused
 def get_scale(value):
     values = [value.real, value.imag] if iscomplex(value) else [value]
     return min([numpy.ldexp(1.0, -numpy.frexp(abs(v))[1]) for v in values if numpy.isfinite(v)] or [type(value)(1)])
 
 
-def isequal(x, y):
-    if iscomplex(x):
-        return isequal(x.real, y.real) and isequal(x.imag, y.imag)
-    if numpy.isnan(x) and numpy.isnan(y):
-        return True
-    return x == y
-
-
+# TODO: isclose is unused
 def isclose(x, y, atol, rtol):
     if iscomplex(x):
         return isclose(x.real, y.real, atol, rtol) and isclose(x.imag, y.imag, atol, rtol)
@@ -582,12 +610,9 @@ def mul(x, y):
         return numpy.multiply(x, y, dtype=x.dtype)
 
 
-def validate_function(func, reference, samples, dtype):
+def validate_function(func, reference, samples, dtype, verbose=True):
     fi = numpy.finfo(dtype)
-    atol = fi.eps
-    rtol = fi.resolution * 1e-1
-
-    stats = defaultdict(int)
+    ulp_stats = defaultdict(int)
     for sample in samples:
         if isinstance(sample, tuple):
             v1 = func(*sample)
@@ -597,30 +622,15 @@ def validate_function(func, reference, samples, dtype):
             v2 = reference(sample)
 
         v2 = v2[()]
-        scale = get_scale(v2)
-        if isequal(v1, v2):
-            stats["exact"] += 1
-            continue
-        if numpy.isfinite(v1) and numpy.isfinite(v2):
-            s = rtol
-            while not isclose(v1, v2, atol / scale * s, rtol):
-                s *= 10
-            k = int(round(numpy.log10(s)))
-            stats[k] += 1
+        assert v1.dtype == v2.dtype, (v1, v2)
+        ulp = diff_ulp(v1, v2)
+        ulp_stats[ulp] += 1
+        if ulp > 2 and verbose:
+            print(f"--> {sample, v1, v2, ulp=}")
+        if ulp >= 3:
+            print(f"--> {sample, v1, v2, ulp=}")
 
-            if isclose(v1, v2, atol / scale, rtol):
-                continue
-        # note that also reference function may give wrong results
-        print(f"{func.__name__}({sample}) -> {v1}, reference -> {v2}")
-        stats["mismatch"] += 1
-
-    lst = [f'exact: {stats["exact"]}']
-    for k in sorted([k for k in stats if isinstance(k, int)]):
-        lst.append(f"{k}: {stats[k]}")
-    lst.append(f'mismatch: {stats["mismatch"]}')
-    print(f"{func.__name__} validation statistics:", ", ".join(lst))
-
-    return stats["mismatch"] == 0
+    return ulp_stats[-1] == 0 and max(ulp_stats) <= 3, ulp_stats
 
 
 def format_python(code):
