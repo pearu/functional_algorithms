@@ -70,18 +70,20 @@ MPMath.
 The algorithms are typically validated with 32 and 64-bit floating
 point numbers and their complex compositions using NumPy. The
 evaluation of the numpy target implementation is performed on
-logarithmic-uniform samples that represent the whole complex plane or
-real line including complex infinities, and extremly small and large
-values.
+logarithmic-uniform samples (an
+[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)-distance
+of neighboring samples is constant) that represent the whole complex
+plane or real line including complex infinities, and extremly small
+and large values.
 
 To characterize the correctness of algorithms, we'll use
 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) to measure
 the distance between function result and its reference value.
 
-When using 1 000 000 samples log-uniformly distribute on a function
-domain, the probability that the function return value is different
-from a reference value by the given number of ULPs, is displayed in
-the following table for provided algorithms:
+When using 1 000 000 samples that are log-uniformly distributed on a
+complex plane of real line, the probability that the function return
+value is different from a reference value by the given number of ULPs,
+is displayed in the following table for the supported algorithms:
 
 
 | Function | dtype | ULP=0 (exact) | ULP=1 | ULP=2 | ULP=3 | ULP>3 | errors    |
