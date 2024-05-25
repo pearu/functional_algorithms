@@ -188,9 +188,9 @@ class Context:
 
     def pow(self, x, y):
         if isinstance(y, float) and y == 0.5:
-            return self.sqrt(x, ref=ref)
+            return self.sqrt(x)
         if isinstance(y, int) and y == 2:
-            return self.square(x, ref=ref)
+            return self.square(x)
         return Expr(self, "pow", (x, y))
 
     def logical_and(self, x, y):
