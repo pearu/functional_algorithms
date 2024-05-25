@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
+# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -26,11 +26,17 @@ def hypot_0(x: numpy.float32, y: numpy.float32) -> numpy.float32:
         abs_y: numpy.float32 = numpy.abs(y)
         mx: numpy.float32 = max(abs_x, abs_y)
         mn: numpy.float32 = min(abs_x, abs_y)
-        z: numpy.float32 = (mn) / (mx)
+        mn_over_mx: numpy.float32 = (mn) / (mx)
+        r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
+        sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (r))
         result = (
-            ((mx) * (numpy.sqrt(numpy.float32(2))))
+            ((numpy.sqrt(numpy.float32(2))) * (mx))
             if (numpy.equal(mx, mn, dtype=numpy.bool_))
-            else ((mx) * (numpy.sqrt(((z) * (z)) + (numpy.float32(1)))))
+            else (
+                ((mx) + (((mx) * (r)) / (numpy.float32(2))))
+                if ((numpy.equal(sqa, numpy.float32(1), dtype=numpy.bool_)) and ((r) > (numpy.float32(0))))
+                else ((mx) * (sqa))
+            )
         )
         return result
 
@@ -43,10 +49,16 @@ def hypot_1(x: numpy.float64, y: numpy.float64) -> numpy.float64:
         abs_y: numpy.float64 = numpy.abs(y)
         mx: numpy.float64 = max(abs_x, abs_y)
         mn: numpy.float64 = min(abs_x, abs_y)
-        z: numpy.float64 = (mn) / (mx)
+        mn_over_mx: numpy.float64 = (mn) / (mx)
+        r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
+        sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (r))
         result = (
-            ((mx) * (numpy.sqrt(numpy.float64(2))))
+            ((numpy.sqrt(numpy.float64(2))) * (mx))
             if (numpy.equal(mx, mn, dtype=numpy.bool_))
-            else ((mx) * (numpy.sqrt(((z) * (z)) + (numpy.float64(1)))))
+            else (
+                ((mx) + (((mx) * (r)) / (numpy.float64(2))))
+                if ((numpy.equal(sqa, numpy.float64(1), dtype=numpy.bool_)) and ((r) > (numpy.float64(0))))
+                else ((mx) * (sqa))
+            )
         )
         return result

@@ -114,10 +114,10 @@ def test_complex_square_python():
     assert py == utils.format_python(
         """\
 def square(x: complex) -> complex:
-  _square_1_x: float = (x).real
-  x_real_square: float = (_square_1_x) * (_square_1_x)
-  _square_2_x: float = (x).imag
-  return complex((x_real_square) - ((_square_2_x) * (_square_2_x)), ((2) * (_square_1_x)) * (_square_2_x))"""
+  real_x: float = (x).real
+  x_real_square: float = (real_x) * (real_x)
+  imag_x: float = (x).imag
+  return complex((x_real_square) - ((imag_x) * (imag_x)), ((2) * (real_x)) * (imag_x))"""
     )
 
 
@@ -139,16 +139,16 @@ def : Pat<(CHLO_Square ComplexElementType:$x),
   (StableHLO_ComplexOp
     (StableHLO_SubtractOp
       (StableHLO_MulOp:$x_real_square
-        (StableHLO_RealOp:$_square_1_x $x),
-        $_square_1_x),
+        (StableHLO_RealOp:$real_x $x),
+        $real_x),
       (StableHLO_MulOp
-        (StableHLO_ImagOp:$_square_2_x $x),
-        $_square_2_x)),
+        (StableHLO_ImagOp:$imag_x $x),
+        $imag_x)),
     (StableHLO_MulOp
       (StableHLO_MulOp
-        (StableHLO_ConstantLike<"2"> $_square_1_x),
-        $_square_1_x),
-      $_square_2_x))>;"""
+        (StableHLO_ConstantLike<"2"> $real_x),
+        $real_x),
+      $imag_x))>;"""
     )
 
 

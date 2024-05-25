@@ -72,7 +72,8 @@ def hypot(ctx, x: float, y: float):
     assert not (x.is_complex or y.is_complex), (x, y)
     mx = ctx.maximum(abs(x), abs(y))
     mn = ctx.minimum(abs(x), abs(y))
-    r = ctx.square(mn / mx)
+    mn_over_mx = mn / mx
+    r = ctx.square(mn_over_mx)
     sqa = ctx.sqrt(1 + r)
     # detect underflow for small r:
     h1 = ctx.sqrt(ctx.constant(2, mx)) * mx

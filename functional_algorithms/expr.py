@@ -48,22 +48,22 @@ def normalize_like(expr):
     return expr
 
 
-def make_constant(context, value, like_expr, props=UNSPECIFIED):
+def make_constant(context, value, like_expr):
     # The type of value is defined by the type of like expression
     # which some targets use implicitly to define the constant type.
     if isinstance(value, str):
         value = {"+inf": "posinf", "inf": "posinf", "pinf": "posinf", "-inf": "neginf", "ninf": "neginf"}.get(value, value)
-    return Expr(context, "constant", (value, normalize_like(like_expr)), props)
+    return Expr(context, "constant", (value, normalize_like(like_expr)))
 
 
-def make_symbol(context, name, typ, props=UNSPECIFIED):
+def make_symbol(context, name, typ):
     # All symbols must have a type.
     typ = Type.fromobject(context, typ)
-    return Expr(context, "symbol", (name, typ), props)
+    return Expr(context, "symbol", (name, typ))
 
 
-def make_apply(context, name, args, result, props=UNSPECIFIED):
-    return Expr(context, "apply", (name, *args, result), props)
+def make_apply(context, name, args, result):
+    return Expr(context, "apply", (name, *args, result))
 
 
 def normalize(operands):
@@ -144,7 +144,7 @@ class Printer:
 
 class Expr:
 
-    def __new__(cls, context, kind, operands, props):
+    def __new__(cls, context, kind, operands):
         obj = object.__new__(cls)
         obj.context = context
         obj.kind = kind
@@ -160,10 +160,8 @@ class Expr:
         # updates) have global effect within the given context.
         obj._serialized = obj._serialize()
 
-        # When specified, props is a dictionary that contains ref but
-        # otherwise its content could be anything
-        if props is UNSPECIFIED:
-            props = dict()
+        # props is a dictionary that contains ref, force_ref,
+        # other. In general, its content could be anything.
 
         # When ref is specified in props, it is used as a variable
         # name referencing the expression. When an expression with
@@ -172,23 +170,14 @@ class Expr:
         # its reference value and `<ref> = <expr>` will be added to
         # assignments list (see targets.<target>.Printer).
         #
-        # If ref is UNSPECIFIED, context.update_refs will assign ref
+        # If ref is UNSPECIFIED, context._update_refs will assign ref
         # value to the variable name in locals() that object is
         # identical to the expression object.
         #
         # If ref is None, no assignment of ref value will be
         # attempted.
-        ref = props.get("ref", UNSPECIFIED)
-        assert isinstance(ref, str) or ref in {None, UNSPECIFIED}, props
-
-        obj.props = props
+        obj.props = dict()
         return context._register_expression(obj)
-
-    def _props(self, **props):
-        self.props.update(props)
-        if "ref" in props:
-            self.context._update_expression_ref(self, props["ref"])
-        return self
 
     def _serialize(self):
         if self.kind == "symbol":
@@ -197,44 +186,37 @@ class Expr:
             return f"{self.operands[0]}:type({self.operands[1]._serialized})"
         return f'{self.kind}({",".join(operand._serialized for operand in self.operands)})'
 
-    def _compute_need_ref(self, need_ref: dict) -> None:
-        ref = self.ref
-
-        if ref is None:
-            need_ref[ref] = False
-        elif ref not in need_ref:
-            # the first usage of expression with ref does not require
-            # using ref, unless forced.
-            flag = self.props.get("force_ref", False)
-            need_ref[ref] = self.props.get("force_ref", False)
-        else:
-            # expression with ref is used more than once, hence we'll
-            # mark it as needed
-            need_ref[ref] = True
-            return
-
-        for operand in self.operands:
-            if isinstance(operand, Expr):
-                operand._compute_need_ref(need_ref)
+    def _replace(self, other):
+        # replace self by other
+        ref = self.props.get("ref", UNSPECIFIED)
+        force_ref = self.props.get("force_ref", None)
+        if ref in self.context._ref_values:
+            self.context._ref_values[ref] = other
+        if isinstance(ref, str):
+            other.props.update(ref=ref)
+        if force_ref is not None:
+            other.props.update(force_ref=force_ref)
+        # self cannot be reference anymore:
+        self.props.update(ref=None)
+        # but self can track to other reference if needed:
+        self.props.update(other=other)
+        return other
 
     def implement_missing(self, target):
         if self.kind == "symbol":
             return self
-        props = self.props.copy()
-        if self.kind == "constant":
+        elif self.kind == "constant":
             like = self.operands[1].implement_missing(target)
             if like is self.operands[1]:
                 return self
             value = self.operands[0]
-            return make_constant(self.context, value, like, props)
-
-        if self.kind == "apply":
+            result = make_constant(self.context, value, like)
+        elif self.kind == "apply":
             body = self.operands[-1].implement_missing(target)
             if body is self.operands[-1]:
                 return self
-            return make_apply(self.context, self.operands[0], self.operands[1:-1], body, props)
-
-        if target.kind_to_target.get(self.kind, NotImplemented) is NotImplemented:
+            result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
+        elif target.kind_to_target.get(self.kind, NotImplemented) is NotImplemented:
             func = NotImplemented
             for m in self.context._paths:
                 func = getattr(m, self.kind, NotImplemented)
@@ -244,78 +226,122 @@ class Expr:
                 paths = ":".join([m.__name__ for m in self.context._paths])
                 raise NotImplementedError(f'{self.kind} for {target.__name__.split(".")[-1]} target [paths={paths}]')
 
-            # func may call context.update_refs and to avoid ref value
-            # conflicts in the func and its caller, func update_ref
-            # will use stack name as a prefix to its variables.
-            save_stack_name = self.context._stack_name
-            self.context._stack_name = self.context._stack_name + "_" + func.__name__
-            self.context._stack_call_count[self.context._stack_name] += 1
-
-            assert "." not in self.context._stack_name, self.context._stack_name
-
-            try:
-                expr = func(self.context, *self.operands)._props(**props)
-            finally:
-                # self.context._ref_prefix = prev_ref_prefix
-                self.context._stack_name = save_stack_name
-
-            result = expr.implement_missing(target)
-            if isinstance(self.props.get("ref", UNSPECIFIED), str):
-                self.context._update_expression_ref(result, self.props["ref"])
-            return result
-
-        operands = tuple([operand.implement_missing(target) for operand in self.operands])
-        for o1, o2 in zip(operands, self.operands):
-            if o1 is not o2:
-                break
+            result = self.context.call(func, self.operands).implement_missing(target)
         else:
-            return self
-        return Expr(self.context, self.kind, operands, props)
+            operands = tuple([operand.implement_missing(target) for operand in self.operands])
+            for o1, o2 in zip(operands, self.operands):
+                if o1 is not o2:
+                    break
+            else:
+                return self
+            result = Expr(self.context, self.kind, operands)
+        return self._replace(result)
 
     def simplify(self):
         if self.kind in {"symbol", "constant"}:
             return self
-        props = self.props.copy()
         if self.kind == "apply":
             body = self.operands[-1].simplify()
             if body is self.operands[-1]:
                 return self
-            return make_apply(self.context, self.operands[0], self.operands[1:-1], body, props)
-
-        if self.kind == "abs" and self.operands[0].kind == "abs":
-            return self.operands[0]
-
-        operands = tuple([operand.simplify() for operand in self.operands])
-        for o1, o2 in zip(operands, self.operands):
-            if o1 is not o2:
-                break
+            result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
+        elif self.kind == "abs" and self.operands[0].kind == "abs":
+            result = self.operands[0]
         else:
-            return self
-        return Expr(self.context, self.kind, operands, props)
+            operands = tuple([operand.simplify() for operand in self.operands])
+            for o1, o2 in zip(operands, self.operands):
+                if o1 is not o2:
+                    break
+            else:
+                return self
+            result = Expr(self.context, self.kind, operands)
+        return self._replace(result)
 
     def tostring(self, target, tab="", need_ref=None, debug=0):
         if need_ref is None:
+
+            def compute_need_ref(expr, need_ref: dict) -> None:
+                ref = expr.ref
+                if ref is None:
+                    need_ref[ref] = False
+                elif ref not in need_ref:
+                    # the first usage of expression with ref does not require
+                    # using ref, unless forced.
+                    need_ref[ref] = expr.props.get("force_ref", False)
+                else:
+                    # expression with ref is used more than once, hence we'll
+                    # mark it as needed
+                    need_ref[ref] = True
+                    return
+
+                for operand in expr.operands:
+                    if isinstance(operand, Expr):
+                        compute_need_ref(operand, need_ref)
+
             need_ref = dict()
-            self._compute_need_ref(need_ref)
+            compute_need_ref(self, need_ref)
+
         return target.Printer(need_ref, debug=debug).tostring(self, tab=tab)
 
     @property
     def ref(self):
-        if "ref" in self.props:
-            ref = self.props.get("ref")
-            if ref is UNSPECIFIED:
-                ref = None
-        else:
-            ref = None
-        if ref is None:
+        """Return existing reference name or generate a new one.
+
+        Used by target printers for expressions that need referencing.
+        """
+        ref = self.props.get("ref", UNSPECIFIED)
+        if ref in {None, UNSPECIFIED}:
             ref = make_ref(self)
             assert ref not in self.context._ref_values, ref
         return ref
 
     def reference(self, ref_name=UNSPECIFIED, force=True):
+        """Manage referencing an expression. Returns self.
+
+        Referencing an expression means that in target printer, an
+        expression value is saved in a variable and its name is used
+        in other expressions to reference the expression value.
+
+        By default, expressions that are used in other expressions
+        more than once, are always referenced. Expressions that are
+        used only once, are inlined when force=False. When force=True,
+        such expressions will be referenced. This can be useful when
+        debugging (to print out the values of subexpressions) or for
+        improving the readability of the target printer output.
+
+        When an expression is referenced, it must have a reference
+        name. The reference name can either be user-specified
+        explicitly (using ref_name argument in `.reference(...)`),
+        implicitly (assigning expression to a variable and using
+        Context.__call__ in function return statement), or
+        auto-generated (calling `.ref` property that uses `make_ref`
+        function).
+
+        In all cases, one must be careful for not using the same
+        reference name for different expressions. To detect reference
+        name conflicts, Context instance holds a mapping
+        `._ref_values` that stores pairs `(<ref_name>, <expression>)`
+        that is global within the given context.
+        """
+        if force is not None:
+            self.props.update(force_ref=force)
         if ref_name is UNSPECIFIED:
-            return self._props(force_ref=force)
-        return self._props(ref=ref_name, force_ref=force)
+            return self
+        if ref_name in self.context._ref_values:
+            other = self.context._ref_values[ref_name]
+            if other is self:
+                assert self.props["ref"] == ref_name, (self.props["ref"], ref_name)
+            else:
+                if ref_name.startswith(self.context._stack_name):
+                    raise RuntimeError(f"reference name {ref_name} is already taken")
+                ref_name = self.context._stack_name + ref_name
+                assert ref_name not in self.context._ref_values
+                self.props.update(ref=ref_name)
+                self.context._ref_values[ref_name] = self
+        else:
+            self.props.update(ref=ref_name)
+            self.context._ref_values[ref_name] = self
+        return self
 
     def __str__(self):
         return Printer().tostring(self)

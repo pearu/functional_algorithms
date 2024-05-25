@@ -25,6 +25,7 @@ def make_complex(r, i):
 
 
 trace_arguments = dict(
+    absolute=[(":complex128",), (":complex64",)],
     asin=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     square=[(":complex128",), (":complex64",), (":float64",), (":float32",)],

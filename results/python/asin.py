@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
+# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -19,21 +19,33 @@ def asin_0(z: complex) -> complex:
     _hypot_1_mx: float = max(abs_xp1, y)
     mn: float = min(abs_xp1, y)
     sqrt_two: float = math.sqrt(2)
-    _square_1_z: float = (mn) / (_hypot_1_mx)
+    mn_over_mx: float = (mn) / (_hypot_1_mx)
+    _hypot_1_r: float = (mn_over_mx) * (mn_over_mx)
+    sqa: float = math.sqrt((1) + (_hypot_1_r))
     r: float = (
-        ((_hypot_1_mx) * (sqrt_two))
+        ((sqrt_two) * (_hypot_1_mx))
         if ((_hypot_1_mx) == (mn))
-        else ((_hypot_1_mx) * (math.sqrt(((_square_1_z) * (_square_1_z)) + (1))))
+        else (
+            ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (2)))
+            if (((sqa) == (1)) and ((_hypot_1_r) > (0)))
+            else ((_hypot_1_mx) * (sqa))
+        )
     )
     xm1: float = (x) - (1)
     abs_xm1: float = abs(xm1)
     _hypot_2_mx: float = max(abs_xm1, y)
     _hypot_2_mn: float = min(abs_xm1, y)
-    _square_2_z: float = (_hypot_2_mn) / (_hypot_2_mx)
+    _hypot_2_mn_over_mx: float = (_hypot_2_mn) / (_hypot_2_mx)
+    _hypot_2_r: float = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
+    _hypot_2_sqa: float = math.sqrt((1) + (_hypot_2_r))
     s: float = (
-        ((_hypot_2_mx) * (sqrt_two))
+        ((sqrt_two) * (_hypot_2_mx))
         if ((_hypot_2_mx) == (_hypot_2_mn))
-        else ((_hypot_2_mx) * (math.sqrt(((_square_2_z) * (_square_2_z)) + (1))))
+        else (
+            ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (2)))
+            if (((_hypot_2_sqa) == (1)) and ((_hypot_2_r) > (0)))
+            else ((_hypot_2_mx) * (_hypot_2_sqa))
+        )
     )
     a: float = (0.5) * ((r) + (s))
     half_apx: float = (0.5) * ((a) + (x))
@@ -76,3 +88,7 @@ def asin_0(z: complex) -> complex:
         else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
     )
     return complex(real, (-(imag)) if ((signed_y) < (0)) else (imag))
+
+
+def asin_1(z: float) -> float:
+    return (2) * (math.atan2(z, (1) + (math.sqrt(((1) - (z)) * ((1) + (z))))))

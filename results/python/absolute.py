@@ -7,9 +7,10 @@ import math
 import sys
 
 
-def hypot_0(x: float, y: float) -> float:
+def absolute_0(z: complex) -> float:
+    x: float = (z).real
     abs_x: float = abs(x)
-    abs_y: float = abs(y)
+    abs_y: float = abs((z).imag)
     mx: float = max(abs_x, abs_y)
     mn: float = min(abs_x, abs_y)
     mn_over_mx: float = (mn) / (mx)

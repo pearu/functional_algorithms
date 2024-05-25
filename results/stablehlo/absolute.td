@@ -5,12 +5,14 @@
 
 
 
-def : Pat<(hypot_0 NonComplexElementType:$x, NonComplexElementType:$y),
+def : Pat<(absolute_0 ComplexElementType:$z),
   (StableHLO_SelectOp
     (StableHLO_CompareOp
      (StableHLO_MaxOp:$mx
-       (StableHLO_AbsOp:$abs_x $x),
-       (StableHLO_AbsOp:$abs_y $y)),
+       (StableHLO_AbsOp:$abs_x
+         (StableHLO_RealOp:$x $z)),
+       (StableHLO_AbsOp:$abs_y
+         (StableHLO_ImagOp $z))),
      (StableHLO_MinOp:$mn $abs_x, $abs_y),
       StableHLO_ComparisonDirectionValue<"EQ">,
       (STABLEHLO_DEFAULT_COMPARISON_TYPE)),

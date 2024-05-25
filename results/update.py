@@ -16,7 +16,7 @@ for target_name in dir(fa.targets):
         if func_name.startswith("complex_") or func_name.startswith("real_"):
             continue
         if func_name not in target.trace_arguments:
-            print(f"Please update {target.__module__}.trace_arguments for function `{func_name}`")
+            print(f"Please update {target.__name__}.trace_arguments for function `{func_name}`")
 
     for func_name in target.trace_arguments:
         func = getattr(fa.algorithms, func_name)
@@ -33,7 +33,8 @@ for more information."""
         sources = []
         for i, atypes in enumerate(target.trace_arguments[func_name]):
             ctx = fa.Context(paths=[fa.algorithms])
-            graph = ctx.trace(func, *atypes).implement_missing(target).simplify()._props(name=f"{func_name}_{i}")
+            graph = ctx.trace(func, *atypes).implement_missing(target).simplify()
+            graph.props.update(name=f"{func_name}_{i}")
             src = graph.tostring(target)
             sources.append(src)
         src = "\n\n".join(sources)

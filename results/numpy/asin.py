@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.dev6+g8b58236), see
+# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -32,21 +32,33 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
         _hypot_1_mx: numpy.float64 = max(abs_xp1, y)
         mn: numpy.float64 = min(abs_xp1, y)
         sqrt_two: numpy.float64 = numpy.sqrt(numpy.float64(2))
-        _square_1_z: numpy.float64 = (mn) / (_hypot_1_mx)
+        mn_over_mx: numpy.float64 = (mn) / (_hypot_1_mx)
+        _hypot_1_r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
+        sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (_hypot_1_r))
         r: numpy.float64 = (
-            ((_hypot_1_mx) * (sqrt_two))
+            ((sqrt_two) * (_hypot_1_mx))
             if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
-            else ((_hypot_1_mx) * (numpy.sqrt(((_square_1_z) * (_square_1_z)) + (numpy.float64(1)))))
+            else (
+                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (numpy.float64(2))))
+                if ((numpy.equal(sqa, numpy.float64(1), dtype=numpy.bool_)) and ((_hypot_1_r) > (numpy.float64(0))))
+                else ((_hypot_1_mx) * (sqa))
+            )
         )
         xm1: numpy.float64 = (x) - (numpy.float64(1))
         abs_xm1: numpy.float64 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float64 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float64 = min(abs_xm1, y)
-        _square_2_z: numpy.float64 = (_hypot_2_mn) / (_hypot_2_mx)
+        _hypot_2_mn_over_mx: numpy.float64 = (_hypot_2_mn) / (_hypot_2_mx)
+        _hypot_2_r: numpy.float64 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
+        _hypot_2_sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (_hypot_2_r))
         s: numpy.float64 = (
-            ((_hypot_2_mx) * (sqrt_two))
+            ((sqrt_two) * (_hypot_2_mx))
             if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
-            else ((_hypot_2_mx) * (numpy.sqrt(((_square_2_z) * (_square_2_z)) + (numpy.float64(1)))))
+            else (
+                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (numpy.float64(2))))
+                if ((numpy.equal(_hypot_2_sqa, numpy.float64(1), dtype=numpy.bool_)) and ((_hypot_2_r) > (numpy.float64(0))))
+                else ((_hypot_2_mx) * (_hypot_2_sqa))
+            )
         )
         a: numpy.float64 = (numpy.float64(0.5)) * ((r) + (s))
         half_apx: numpy.float64 = (numpy.float64(0.5)) * ((a) + (x))
@@ -118,21 +130,33 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         _hypot_1_mx: numpy.float32 = max(abs_xp1, y)
         mn: numpy.float32 = min(abs_xp1, y)
         sqrt_two: numpy.float32 = numpy.sqrt(numpy.float32(2))
-        _square_1_z: numpy.float32 = (mn) / (_hypot_1_mx)
+        mn_over_mx: numpy.float32 = (mn) / (_hypot_1_mx)
+        _hypot_1_r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
+        sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (_hypot_1_r))
         r: numpy.float32 = (
-            ((_hypot_1_mx) * (sqrt_two))
+            ((sqrt_two) * (_hypot_1_mx))
             if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
-            else ((_hypot_1_mx) * (numpy.sqrt(((_square_1_z) * (_square_1_z)) + (numpy.float32(1)))))
+            else (
+                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (numpy.float32(2))))
+                if ((numpy.equal(sqa, numpy.float32(1), dtype=numpy.bool_)) and ((_hypot_1_r) > (numpy.float32(0))))
+                else ((_hypot_1_mx) * (sqa))
+            )
         )
         xm1: numpy.float32 = (x) - (numpy.float32(1))
         abs_xm1: numpy.float32 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float32 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float32 = min(abs_xm1, y)
-        _square_2_z: numpy.float32 = (_hypot_2_mn) / (_hypot_2_mx)
+        _hypot_2_mn_over_mx: numpy.float32 = (_hypot_2_mn) / (_hypot_2_mx)
+        _hypot_2_r: numpy.float32 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
+        _hypot_2_sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (_hypot_2_r))
         s: numpy.float32 = (
-            ((_hypot_2_mx) * (sqrt_two))
+            ((sqrt_two) * (_hypot_2_mx))
             if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
-            else ((_hypot_2_mx) * (numpy.sqrt(((_square_2_z) * (_square_2_z)) + (numpy.float32(1)))))
+            else (
+                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (numpy.float32(2))))
+                if ((numpy.equal(_hypot_2_sqa, numpy.float32(1), dtype=numpy.bool_)) and ((_hypot_2_r) > (numpy.float32(0))))
+                else ((_hypot_2_mx) * (_hypot_2_sqa))
+            )
         )
         a: numpy.float32 = (numpy.float32(0.5)) * ((r) + (s))
         half_apx: numpy.float32 = (numpy.float32(0.5)) * ((a) + (x))
@@ -193,12 +217,16 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
 def asin_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
-        result = (numpy.float64(2)) * (numpy.arctan2(z, (numpy.float64(1)) + (numpy.sqrt((numpy.float64(1)) - ((z) * (z))))))
+        result = (numpy.float64(2)) * (
+            numpy.arctan2(z, (numpy.float64(1)) + (numpy.sqrt(((numpy.float64(1)) - (z)) * ((numpy.float64(1)) + (z)))))
+        )
         return result
 
 
 def asin_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
-        result = (numpy.float32(2)) * (numpy.arctan2(z, (numpy.float32(1)) + (numpy.sqrt((numpy.float32(1)) - ((z) * (z))))))
+        result = (numpy.float32(2)) * (
+            numpy.arctan2(z, (numpy.float32(1)) + (numpy.sqrt(((numpy.float32(1)) - (z)) * ((numpy.float32(1)) + (z)))))
+        )
         return result
