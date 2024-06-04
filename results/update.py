@@ -29,10 +29,15 @@ This file is generated using functional_algorithms tool ({fa.__version__}), see
   https://github.com/pearu/functional_algorithms
 for more information."""
         )
+        enable_alt = False
+        default_constant_type = None
+        if target_name == "xla_client":
+            enable_alt = True
+            default_constant_type = "FloatType"
 
         sources = []
         for i, atypes in enumerate(target.trace_arguments[func_name]):
-            ctx = fa.Context(paths=[fa.algorithms])
+            ctx = fa.Context(paths=[fa.algorithms], enable_alt=enable_alt, default_constant_type=default_constant_type)
             graph = ctx.trace(func, *atypes).implement_missing(target).simplify()
             graph.props.update(name=f"{func_name}_{i}")
             src = graph.tostring(target)

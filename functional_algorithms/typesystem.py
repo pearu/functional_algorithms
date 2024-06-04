@@ -7,7 +7,7 @@ class Type:
         self.context = context
         assert kind in {"float", "complex", "integer", "boolean", "type"}, kind
         if isinstance(param, (int, type(None))):
-            assert param in {1, 8, 16, 32, 64, 128, 256, 512, None}, bits
+            assert param in {1, 8, 16, 32, 64, 128, 256, 512, None}, param
         self.kind = kind
         self.param = param
 

@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+// This file is generated using functional_algorithms tool (N/A), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -7,8 +7,12 @@
 #include <limits>
 
 
-XLAOp square_0(XLAOp z) { return Mul(z, z); }
+template <typename FloatType>
+XLAOp square_0(XLAOp z) {
+  return Mul(z, z);
+}
 
+template <typename FloatType>
 XLAOp square_1(XLAOp z) {
   XLAOp x = Real(z);
   XLAOp y = Imag(z);

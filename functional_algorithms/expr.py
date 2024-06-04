@@ -68,9 +68,6 @@ def make_symbol(context, name, typ, _tmp_counter=[0]):
 
 
 def make_apply(context, name, args, result):
-    for a in args:
-        if isinstance(a, Expr):
-            a.props.update(is_argument=True)
     return Expr(context, "apply", (name, *args, result))
 
 

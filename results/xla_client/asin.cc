@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+// This file is generated using functional_algorithms tool (N/A), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -7,30 +7,34 @@
 #include <limits>
 
 
+template <typename FloatType>
 XLAOp asin_0(XLAOp z) {
   XLAOp one = ScalarLike(z, 1);
   return Mul(ScalarLike(z, 2),
              Atan2(z, Add(one, Sqrt(Mul(Sub(one, z), Add(one, z))))));
 }
 
+template <typename FloatType>
 XLAOp asin_1(XLAOp z) {
   XLAOp signed_x = Real(z);
   XLAOp x = Abs(signed_x);
   XLAOp signed_y = Imag(z);
   XLAOp y = Abs(signed_y);
-  XLAOp safe_max =
-      Div(Sqrt(ScalarLike(signed_x, largest)), ScalarLike(signed_x, 8));
+  FloatType safe_max_ =
+      (std::sqrt(std::numeric_limits<FloatType>::max())) / (8);
+  XLAOp safe_max = ScalarLike(symbol__tmp25, safe_max_);
   XLAOp one = ScalarLike(signed_x, 1);
   XLAOp half = ScalarLike(signed_x, 0.5);
   XLAOp xp1 = Add(x, one);
   XLAOp abs_xp1 = Abs(xp1);
   XLAOp _hypot_1_mx = Max(abs_xp1, y);
   XLAOp mn = Min(abs_xp1, y);
-  XLAOp two = ScalarLike(signed_x, 2);
-  XLAOp sqrt_two = Sqrt(two);
+  FloatType two_ = 2;
+  XLAOp sqrt_two = ScalarLike(signed_x, std::sqrt(two_));
   XLAOp _hypot_1_r = Square(Div(mn, _hypot_1_mx));
   XLAOp sqa = Sqrt(Add(one, _hypot_1_r));
   XLAOp zero = ScalarLike(signed_x, 0);
+  XLAOp two = ScalarLike(signed_x, two_);
   XLAOp r =
       Select(Eq(_hypot_1_mx, mn), Mul(sqrt_two, _hypot_1_mx),
              Select(And(Eq(sqa, one), Gt(_hypot_1_r, zero)),
@@ -60,16 +64,20 @@ XLAOp asin_1(XLAOp z) {
                     Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
                                     Div(half_apx, spxm1)))))));
   XLAOp safe_max_opt =
-      Select(Lt(x, Mul(safe_max, ScalarLike(signed_x, 1000000000000.0))),
-             Mul(safe_max, ScalarLike(signed_x, 1e-06)),
-             Mul(safe_max, ScalarLike(signed_x, 100.0)));
+      Select(Lt(x, ScalarLike(symbol__tmp27, (safe_max_) * (1000000000000.0))),
+             ScalarLike(symbol__tmp26, (safe_max_) * (1e-06)),
+             ScalarLike(symbol__tmp28, (safe_max_) * (100.0)));
   XLAOp y_gt_safe_max_opt = Ge(y, safe_max_opt);
   XLAOp mx = Select(y_gt_safe_max_opt, y, x);
-  XLAOp xoy =
-      Select(And(y_gt_safe_max_opt, Not(Eq(y, ScalarLike(signed_y, posinf)))),
-             Div(x, y), zero);
+  XLAOp xoy = Select(
+      And(y_gt_safe_max_opt,
+          Not(Eq(y, ScalarLike(signed_y,
+                               std::numeric_limits<FloatType>::infinity())))),
+      Div(x, y), zero);
   XLAOp logical_and_lt_y_safe_min_lt_x_one = And(
-      Lt(y, Mul(Sqrt(ScalarLike(signed_x, smallest)), ScalarLike(signed_x, 4))),
+      Lt(y,
+         ScalarLike(symbol__tmp23,
+                    (std::sqrt(std::numeric_limits<FloatType>::min())) * (4))),
       Lt(x, one));
   XLAOp ap1 = Add(a, one);
   XLAOp half_yy = Mul(half, yy);
@@ -83,7 +91,8 @@ XLAOp asin_1(XLAOp z) {
   XLAOp sq = Sqrt(Mul(am1, ap1));
   XLAOp imag =
       Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
-             Add(Add(Log(two), Log(mx)), Mul(half, Log1p(Mul(xoy, xoy)))),
+             Add(Add(ScalarLike(symbol__tmp21, std::log(two_)), Log(mx)),
+                 Mul(half, Log1p(Mul(xoy, xoy)))),
              Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
                     Log1p(Add(am1, sq))));
   return Complex(real, Select(Lt(signed_y, zero), Neg(imag), imag));
