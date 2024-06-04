@@ -5,6 +5,9 @@ import warnings
 
 from .. import utils
 from . import numpy as this_module
+from .base import PrinterBase
+
+constant_target = this_module
 
 source_file_header = utils.format_python(
     """
@@ -145,83 +148,50 @@ def as_function(graph, debug=0):
     return d[graph.operands[0].operands[0]]
 
 
-class Printer:
+class Printer(PrinterBase):
     """Printer for Python target"""
 
-    def __init__(self, need_ref, debug=1):
-        self.need_ref = need_ref
-        self.defined_refs = set()
-        self.assignments = []
-        self.debug = debug
+    force_cast_arguments = True
 
-    def tostring(self, expr, tab=""):
-        if expr.kind == "symbol":
-            return str(expr.operands[0])
-        elif expr.kind == "constant":
-            value = expr.operands[0]
-            typ = str(expr.get_type())
-            target_typ = type_to_target[typ]
-            if isinstance(value, str):
-                target_value = constant_to_target.get(value, NotImplemented)
-                if target_value is not NotImplemented:
-                    if value not in self.defined_refs:
-                        target_value = target_value.format(type=typ)
-                        self.assignments.append(f"{value}: {target_typ} = {target_value}")
-                        self.defined_refs.add(value)
-                else:
-                    warnings.warn(f"python constant_to_target does not implement {value}")
-                return value
-            return f"{target_typ}({value})"
-        elif expr.kind == "apply":
-            name = expr.props.get("name", expr.operands[0])
-            if not isinstance(name, str):
-                assert name.kind == "symbol", name
-                name = name.operands[0]
-            args = expr.operands[1:-1]
-            sargs = []
-            for a in args:
-                self.defined_refs.add(a.ref)
-                typ = type_to_target[str(a.operands[1])]
-                arg = self.tostring(a)
-                sargs.append(f"{arg}: {typ}")
-                self.assignments.append(f"{arg} = {typ}({arg})")
-                if self.debug >= 2:
-                    self.assignments.append(f'print("{arg}=", {arg})')
+    kind_to_target = kind_to_target
 
-            sargs = ", ".join(sargs)
-            body = self.tostring(expr.operands[-1])
-            body_type = type_to_target[str(expr.operands[-1].get_type())]
-            lines = []
-            lines.append(f"{tab}def {name}({sargs}) -> {body_type}:")
-            lines.append(f'{tab}  with warnings.catch_warnings(action="ignore"):')
-            for a in self.assignments:
-                lines.append(f"{tab}    {a}")
-            lines.append(f"{tab}    result = {body}")
-            if self.debug >= 2:
-                lines.append(f'{tab}    print("result=", result)')
-            if self.debug >= 1:
-                lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
-            lines.append(f"{tab}    return result")
-            return utils.format_python("\n".join(lines))
-        elif expr.ref in self.defined_refs:
-            assert self.need_ref.get(expr.ref), expr.ref
-            return expr.ref
+    type_to_target = type_to_target
 
-        tmpl = kind_to_target.get(expr.kind, NotImplemented)
-        if tmpl is NotImplemented:
-            raise NotImplementedError(f"python operator for {expr.kind}")
-        result = tmpl.format(*[self.tostring(operand) for operand in expr.operands])
+    constant_to_target = constant_to_target
 
-        if self.need_ref.get(expr.ref):
-            t = type_to_target[str(expr.get_type())]
-            self.assignments.append(f"{expr.ref}: {t} = {result}")
-            if self.debug >= 2:
-                self.assignments.append(f'print("{expr.ref}=",  {expr.ref})')
-            if self.debug >= 1:
-                self.assignments.append(f"assert {expr.ref}.dtype == {t}, ({expr.ref}.dtype, {t})")
-            result = expr.ref
+    def make_assignment(self, typ, var, value):
+        if typ is None:
+            return f"{var} = {value}"
+        return f"{var}: {typ} = {value}"
 
-        if expr.ref is not None:
-            self.defined_refs.add(expr.ref)
+    def make_constant(self, like, value):
+        typ = self.get_type(like)
+        return f"{typ}({value})"
 
-        return result
+    def make_argument(self, arg):
+        assert arg.kind == "symbol", arg.kind
+        typ = self.get_type(arg)
+        return f"{arg}: {typ}"
+
+    def show_value(self, var):
+        return f'print("{var}=", {var})'
+
+    def check_dtype(self, var, dtype):
+        return f"assert {var}.dtype == {dtype}, ({var}.dtype, {dtype})"
+
+    def make_apply(self, expr, name, tab=""):
+        sargs = ", ".join(map(self.make_argument, expr.operands[1:-1]))
+        body = self.tostring(expr.operands[-1])
+        body_type = self.get_type(expr.operands[-1])
+        lines = []
+        lines.append(f"{tab}def {name}({sargs}) -> {body_type}:")
+        lines.append(f'{tab}  with warnings.catch_warnings(action="ignore"):')
+        for a in self.assignments:
+            lines.append(f"{tab}    {a}")
+        lines.append(f"{tab}    result = {body}")
+        if self.debug >= 2:
+            lines.append(f'{tab}    print("result=", result)')
+        if self.debug >= 1:
+            lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
+        lines.append(f"{tab}    return result")
+        return utils.format_python("\n".join(lines))

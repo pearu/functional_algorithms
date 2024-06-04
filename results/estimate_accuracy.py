@@ -6,18 +6,18 @@ print("| Function | dtype | ULP=0 (exact) | ULP=1 | ULP=2 | ULP=3 | ULP>3 | erro
 print("| -------- | ----- | ------------- | ----- | ----- | ----- | ----- | --------- |")
 
 for func_name, dtype in [
-    # ("absolute", np.float32),
-    # ("absolute", np.float64),
-    # ('absolute', np.complex64),
-    # ('absolute', np.complex128),
-    # ("asin", np.float32),
-    # ("asin", np.float64),
-    # ('asin', np.complex64),
-    # ('asin', np.complex128),
-    # ('square', np.float32),
-    # ('square', np.float64),
-    # ('square', np.complex64),
-    # ('square', np.complex128),
+    ("absolute", np.float32),
+    ("absolute", np.float64),
+    ("absolute", np.complex64),
+    ("absolute", np.complex128),
+    ("asin", np.float32),
+    ("asin", np.float64),
+    ("asin", np.complex64),
+    ("asin", np.complex128),
+    ("square", np.float32),
+    ("square", np.float64),
+    ("square", np.complex64),
+    ("square", np.complex128),
 ]:
     ctx = fa.Context(paths=[fa.algorithms])
     graph = ctx.trace(getattr(fa.algorithms, func_name), dtype)

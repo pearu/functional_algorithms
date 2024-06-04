@@ -49,6 +49,8 @@ def normalize_like(expr):
 
 
 def make_constant(context, value, like_expr):
+    if not isinstance(like_expr, Expr):
+        raise TypeError(f"Constant like expression must be Expr instance, got {type(like_expr)}")
     # The type of value is defined by the type of like expression
     # which some targets use implicitly to define the constant type.
     if isinstance(value, str):
@@ -56,23 +58,36 @@ def make_constant(context, value, like_expr):
     return Expr(context, "constant", (value, normalize_like(like_expr)))
 
 
-def make_symbol(context, name, typ):
+def make_symbol(context, name, typ, _tmp_counter=[0]):
+    if name is None:
+        name = f"_tmp{_tmp_counter[0]}"
+        _tmp_counter[0] += 1
     # All symbols must have a type.
     typ = Type.fromobject(context, typ)
     return Expr(context, "symbol", (name, typ))
 
 
 def make_apply(context, name, args, result):
+    for a in args:
+        if isinstance(a, Expr):
+            a.props.update(is_argument=True)
     return Expr(context, "apply", (name, *args, result))
 
 
-def normalize(operands):
+def normalize(context, operands):
     """Convert numbers to constant expressions"""
-    ref_operand = [operand for operand in operands if isinstance(operand, Expr)][0]
+    exprs = [operand for operand in operands if isinstance(operand, Expr)]
+    if len(exprs) == 0:
+        ref_operand = context.default_like
+        if ref_operand is None:
+            raise ValueError("cannot normalize operands with no reference operand or context default constant type")
+    else:
+        ref_operand = exprs[0]
+
     new_operands = []
     for operand in operands:
-        if isinstance(operand, (int, float, str)):
-            operand = make_constant(ref_operand.context, operand, ref_operand)
+        if isinstance(operand, (int, float, complex, str)):
+            operand = make_constant(context, operand, ref_operand)
         new_operands.append(operand)
     return tuple(new_operands)
 
@@ -84,6 +99,8 @@ def make_ref(expr):
     if expr.kind == "symbol":
         return f"{expr.kind}_{expr.operands[0]}"
     if expr.kind == "constant":
+        if isinstance(expr.operands[0], Expr):
+            return f"{expr.kind}_{make_ref(expr.operands[0])}"
         return f"{expr.kind}_{expr.operands[0]}"
     lst = [expr.kind] + list(map(make_ref, expr.operands))
     return "_".join(lst)
@@ -92,6 +109,9 @@ def make_ref(expr):
 class Printer:
 
     def tostring(self, expr, tab=""):
+        if not isinstance(expr, Expr):
+            return str(expr)
+
         if expr.kind == "symbol":
             return f"{tab}{expr.operands[0]}"
         if expr.kind == "apply":
@@ -146,13 +166,44 @@ class Expr:
 
     def __new__(cls, context, kind, operands):
         obj = object.__new__(cls)
+
+        if kind == "symbol":
+            assert len(operands) == 2 and isinstance(operands[0], str) and isinstance(operands[1], Type), operands
+        elif kind == "constant":
+            assert len(operands) == 2
+            assert isinstance(operands[0], (int, float, bool, complex, str, Expr))
+            if isinstance(operands[0], Expr):
+                assert operands[0].context is context.alt, operands
+            if context.alt is not None and not isinstance(operands[0], Expr):
+                operands = [context.alt.constant(operands[0]), operands[1]]
+
+        else:
+            if kind == "select":
+                operands = operands[:1] + normalize(context, operands[1:])
+            else:
+                operands = normalize(context, operands)
+
+            if context.alt is not None:
+                constant_operands = []
+                constant_type = None
+                for o in operands:
+                    if isinstance(o, Expr) and o.kind == "constant":
+                        constant_operands.append(o.operands[0])
+                        t = o.operands[1].get_type()
+                        constant_type = t if constant_type is None else constant_type.max(t)
+                if len(constant_operands) == len(operands):
+                    if constant_type is None:
+                        constant_like = context.default_like
+                    else:
+                        constant_like = context.symbol(None, constant_type)
+                    if constant_like is not None:
+                        operands = [Expr(context.alt, kind, constant_operands), constant_like]
+                        kind = "constant"
+
+            assert False not in [isinstance(operand, Expr) for operand in operands], operands
+
         obj.context = context
         obj.kind = kind
-        if kind not in {"symbol", "constant"}:
-            if kind == "select":
-                operands = operands[:1] + normalize(operands[1:])
-            else:
-                operands = normalize(operands)
         obj.operands = operands
         # expressions are singletons within the given context and are
         # uniquely identified by its serialized string value. However,
@@ -207,9 +258,11 @@ class Expr:
             return self
         elif self.kind == "constant":
             like = self.operands[1].implement_missing(target)
-            if like is self.operands[1]:
-                return self
             value = self.operands[0]
+            if isinstance(value, Expr):
+                value = value.implement_missing(target.constant_target)
+            if value is self.operands[0] and like is self.operands[1]:
+                return self
             result = make_constant(self.context, value, like)
         elif self.kind == "apply":
             body = self.operands[-1].implement_missing(target)
@@ -260,23 +313,21 @@ class Expr:
     def tostring(self, target, tab="", need_ref=None, debug=0):
         if need_ref is None:
 
-            def compute_need_ref(expr, need_ref: dict) -> None:
+            def compute_need_ref(expr: Expr, need_ref: dict) -> None:
                 ref = expr.ref
-                if ref is None:
-                    need_ref[ref] = False
-                elif ref not in need_ref:
-                    # the first usage of expression with ref does not require
-                    # using ref, unless forced.
-                    need_ref[ref] = expr.props.get("force_ref", False)
-                else:
+                assert ref is not None
+                if ref in need_ref:
                     # expression with ref is used more than once, hence we'll
                     # mark it as needed
                     need_ref[ref] = True
-                    return
+                else:
+                    # the first usage of expression with ref does not require
+                    # using ref, unless forced.
+                    need_ref[ref] = expr.props.get("force_ref", False)
 
-                for operand in expr.operands:
-                    if isinstance(operand, Expr):
-                        compute_need_ref(operand, need_ref)
+                    for operand in expr.operands:
+                        if isinstance(operand, Expr):
+                            compute_need_ref(operand, need_ref)
 
             need_ref = dict()
             compute_need_ref(self, need_ref)
@@ -603,4 +654,4 @@ class Expr:
             t = self.operands[0].get_type().max(self.operands[1].get_type())
             bits = t.bits * 2 if t.bits is not None else None
             return Type(self.context, "complex", bits)
-        raise NotImplementedError(self.kind)
+        raise NotImplementedError((self.kind, str(self)))

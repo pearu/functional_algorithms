@@ -76,7 +76,12 @@ def hypot(ctx, x: float, y: float):
     r = ctx.square(mn_over_mx)
     sqa = ctx.sqrt(1 + r)
     # detect underflow for small r:
-    h1 = ctx.sqrt(ctx.constant(2, mx)) * mx
+    if ctx.alt is None:
+        sqrt_two = ctx.sqrt(ctx.constant(2, mx))
+    else:
+        sqrt_two_ = ctx.alt.sqrt(2)
+        sqrt_two = ctx.constant(sqrt_two_, mx)
+    h1 = sqrt_two * mx
     h2 = ctx.select(ctx.And(sqa == 1, r > 0), mx + mx * r / 2, mx * sqa)
     return ctx(ctx.select(mx == mn, h1, h2))
 
@@ -238,8 +243,10 @@ def asin(ctx, z: complex | float):
     if not z.is_complex:
         # (1 - z * z) = (1 - z) * (1 + z) avoids cancellation errors
         # for abs(z) close to 1
-        sq = ctx.sqrt((1 - z) * (1 + z))
-        return ctx(2 * ctx.atan2(z, 1 + sq))
+        one = ctx.constant(1, z)
+        two = ctx.constant(2, z)
+        sq = ctx.sqrt((one - z) * (one + z))
+        return ctx(two * ctx.atan2(z, one + sq))
 
     signed_x = z.real
     signed_y = z.imag

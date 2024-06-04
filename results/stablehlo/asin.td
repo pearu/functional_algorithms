@@ -11,11 +11,11 @@ def : Pat<(asin_0 NonComplexElementType:$z),
     (StableHLO_Atan2Op
       $z,
       (StableHLO_AddOp
-        (StableHLO_ConstantLike<"1">:$constant_1 $z),
+        (StableHLO_ConstantLike<"1">:$one $z),
         (StableHLO_SqrtOp
           (StableHLO_MulOp
-            (StableHLO_SubtractOp $constant_1, $z),
-            (StableHLO_AddOp $constant_1, $z))))))>;
+            (StableHLO_SubtractOp $one, $z),
+            (StableHLO_AddOp $one, $z))))))>;
 
 def : Pat<(asin_1 ComplexElementType:$z),
   (StableHLO_ComplexOp

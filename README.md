@@ -94,7 +94,7 @@ is displayed in the following table for the supported algorithms:
 | absolute | complex128 | 99.156 % | 0.844 % | - | - | - | - |
 | asin | float32 | 97.712 % | 2.193 % | 0.093 % | 0.002 % | - | - |
 | asin | float64 | 99.562 % | 0.434 % | 0.004 % | - | - | - |
-| asin | complex64 | 79.427 % | 20.321 % | 0.246 % | 0.006 % | - | - |
+| asin | complex64 | 79.382 % | 20.368 % | 0.244 % | 0.006 % | - | - |
 | asin | complex128 | 72.624 % | 27.272 % | 0.103 % | 0.001 % | - | - |
 | square | float32 | 100.000 % | - | - | - | - | - |
 | square | float64 | 100.000 % | - | - | - | - | - |

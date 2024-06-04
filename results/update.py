@@ -4,7 +4,7 @@ import functional_algorithms as fa
 results_dir = os.path.dirname(__file__)
 
 for target_name in dir(fa.targets):
-    if target_name.startswith("_"):
+    if target_name.startswith("_") or target_name == "base":
         continue
     target = getattr(fa.targets, target_name)
     target_dir = os.path.join(results_dir, target_name)

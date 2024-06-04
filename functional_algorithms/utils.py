@@ -557,8 +557,8 @@ def diff_ulp(x, y, ftz=True) -> int:
             if ftz:
                 fi = numpy.finfo(x.dtype)
                 i = int(fi.smallest_normal.view(uint)) - 1  # 0 distance to largest subnormal
-                ix = ix - i if ix > i else 0
-                iy = iy - i if iy > i else 0
+                ix = ix - i if ix > i else (0 if 2 * ix < i else 1)
+                iy = iy - i if iy > i else (0 if 2 * iy < i else 1)
             if sx != sy:
                 # distance is measured through 0 value
                 return ix + iy
@@ -639,3 +639,34 @@ def format_python(code):
     except ImportError:
         return code
     return black.format_str(code, mode=black.FileMode(line_length=127))
+
+
+def format_cpp(code):
+    import os
+    import tempfile
+    import subprocess
+
+    with tempfile.NamedTemporaryFile(mode="w", delete_on_close=False, suffix=".cc") as fp:
+        fp.write(code)
+        fp.close()
+
+        command = ["clang-format", "--style=Google", fp.name]
+        try:
+            p = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=None,
+                stdin=subprocess.PIPE,
+                universal_newlines=True,
+            )
+        except OSError as e:
+            # Give the user more context when clang-format isn't
+            # found/isn't executable, etc.
+            print('Failed to run "%s" - %s"' % (" ".join(command), e.strerror))
+            return code
+
+        stdout, stderr = p.communicate()
+        if p.returncode == 0:
+            code = stdout
+
+    return code

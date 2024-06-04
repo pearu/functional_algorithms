@@ -6,7 +6,7 @@ from functional_algorithms import Context, targets, algorithms, utils
 import pytest
 
 
-@pytest.fixture(scope="function", params=["python", "numpy", "stablehlo"])
+@pytest.fixture(scope="function", params=["python", "numpy", "stablehlo", "xla_client"])
 def target_name(request):
     return request.param
 
@@ -92,7 +92,7 @@ def test_target(func_name, target_name):
     # tests that all functions in algorithms have implementations to
     # all targets
     target = getattr(targets, target_name)
-    ctx = Context(paths=[algorithms])
+    ctx = Context(paths=[algorithms], enable_alt=dict(xla_client=True).get(target_name, False), default_constant_type="DType2")
     graph = ctx.trace(getattr(algorithms, func_name)).implement_missing(target).simplify()
     src = graph.tostring(target)
     assert isinstance(src, str)
