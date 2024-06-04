@@ -643,10 +643,11 @@ def format_python(code):
 
 def format_cpp(code):
     import os
+    import pathlib
     import tempfile
     import subprocess
 
-    with tempfile.NamedTemporaryFile(mode="w", delete_on_close=False, suffix=".cc") as fp:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".cc", delete=False) as fp:
         fp.write(code)
         fp.close()
 
@@ -663,10 +664,13 @@ def format_cpp(code):
             # Give the user more context when clang-format isn't
             # found/isn't executable, etc.
             print('Failed to run "%s" - %s"' % (" ".join(command), e.strerror))
+            pathlib.Path(fp.name).unlink(missing_ok=True)
             return code
 
         stdout, stderr = p.communicate()
         if p.returncode == 0:
             code = stdout
+
+        pathlib.Path(fp.name).unlink(missing_ok=True)
 
     return code
