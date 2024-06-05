@@ -1,13 +1,10 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
 
 import numpy
 import warnings
-
-finfo_float32 = numpy.finfo(numpy.float32)
-finfo_float64 = numpy.finfo(numpy.float64)
 
 
 def make_complex(r, i):
@@ -25,7 +22,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
         x: numpy.float64 = numpy.abs(signed_x)
         signed_y: numpy.float64 = (z).imag
         y: numpy.float64 = numpy.abs(signed_y)
-        safe_max: numpy.float64 = (numpy.sqrt(numpy.float64(finfo_float64.max))) / (numpy.float64(8))
+        safe_max: numpy.float64 = (numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).max))) / (numpy.float64(8))
         one: numpy.float64 = numpy.float64(1)
         half: numpy.float64 = numpy.float64(0.5)
         xp1: numpy.float64 = (x) + (one)
@@ -94,7 +91,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
             else (zero)
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
-            (y) < ((numpy.sqrt(numpy.float64(finfo_float64.tiny))) * (numpy.float64(4)))
+            (y) < ((numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).tiny))) * (numpy.float64(4)))
         ) and ((x) < (one))
         ap1: numpy.float64 = (a) + (one)
         half_yy: numpy.float64 = (half) * (yy)
@@ -122,7 +119,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         x: numpy.float32 = numpy.abs(signed_x)
         signed_y: numpy.float32 = (z).imag
         y: numpy.float32 = numpy.abs(signed_y)
-        safe_max: numpy.float32 = (numpy.sqrt(numpy.float32(finfo_float32.max))) / (numpy.float32(8))
+        safe_max: numpy.float32 = (numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).max))) / (numpy.float32(8))
         one: numpy.float32 = numpy.float32(1)
         half: numpy.float32 = numpy.float32(0.5)
         xp1: numpy.float32 = (x) + (one)
@@ -191,7 +188,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
             else (zero)
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
-            (y) < ((numpy.sqrt(numpy.float32(finfo_float32.tiny))) * (numpy.float32(4)))
+            (y) < ((numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).tiny))) * (numpy.float32(4)))
         ) and ((x) < (one))
         ap1: numpy.float32 = (a) + (one)
         half_yy: numpy.float32 = (half) * (yy)

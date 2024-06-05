@@ -7,14 +7,18 @@ from .. import utils
 constant_target = this_module
 
 source_file_header = """
-#include <limits>
-#include <cmath>
 #include <algorithm>
-#include  <cstdint>
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <limits>
 """
 
 trace_arguments = dict(
-    hypot=[(":float", ":float")],
+    square=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
+    absolute=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
+    hypot=[(":float32", ":float32"), (":float64", ":float64")],
+    asin=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     # complex_asin=[(":complex", ":complex")],
     # real_asin=[(":float", ":float")],
     # square=[(":float", ":float"), (":complex", ":complex")],
@@ -86,12 +90,12 @@ kind_to_target = dict(
     conj=NotImplemented,
     real="({0}).real()",
     imag="({0}).imag()",
-    complex="std::complex<dtype>({0}, {1})",
+    complex="std::complex<{typeof_0}>({0}, {1})",
     hypot=NotImplemented,
     # square="std::square({0})",
     sqrt="std::sqrt({0})",
     select="(({0}) ? ({1}) : ({2}))",
-    lt="({0}) < ({1}",
+    lt="({0}) < ({1})",
     le="({0}) <= ({1})",
     gt="({0}) > ({1})",
     ge="({0}) >= ({1})",
@@ -104,7 +108,6 @@ kind_to_target = dict(
     # is_nan="IsNan({0})",
     # is_negzero="IsNegZero({0})",
     # nextafter="NextAfter({0}, {1})",
-    typeof="typeof({0})",
 )
 
 constant_to_target = dict(
@@ -158,3 +161,36 @@ class Printer(PrinterBase):
         lines.append(f"{tab}    return {body};")
         lines.append(f"{tab}}}")
         return utils.format_cpp("\n".join(lines))
+
+
+def try_compile(filename):
+    import subprocess
+    import pathlib
+    import tempfile
+
+    _, outfilename = tempfile.mkstemp()
+
+    command = ["g++", "-c", filename, "-o", outfilename]
+
+    try:
+        p = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=None,
+            stdin=subprocess.PIPE,
+            universal_newlines=True,
+        )
+    except FileNotFoundError as e:
+        print('Failed to run "%s": %s"' % (" ".join(command), e))
+        return False
+    except OSError as e:
+        print('Failed to run "%s" - %s"' % (" ".join(command), e.strerror))
+        pathlib.Path(outfilename).unlink(missing_ok=True)
+        return False
+
+    stdout, stderr = p.communicate()
+    status = p.returncode == 0
+    if not status:
+        print(stdout)
+    pathlib.Path(outfilename).unlink(missing_ok=True)
+    return status

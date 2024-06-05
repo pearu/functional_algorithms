@@ -31,8 +31,8 @@ Currently, [the definitions of
 algorithms](functional_algorithms/algorithms.py) are provided for the
 following math functions:
 
-- `square(z: complex | float)`
-- `hypot(x: float, y: float)` and `absolute(z: complex)`
+- `square(z: complex | float)`,
+- `hypot(x: float, y: float)` and `absolute(z: complex)`,
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`.
@@ -42,9 +42,12 @@ following math functions:
 Currently, the implementations of supported algorithms are provided
 for the following [target libraries and languages](functional_algorithms/targets/):
 
-- [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs
-- [NumPy](https://numpy.org/), using numpy functions on real inputs
-- [StableHLO](https://github.com/openxla/stablehlo), using existing decompositions and operations.
+- [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs,
+- [NumPy](https://numpy.org/), using numpy functions on real inputs,
+- [StableHLO](https://github.com/openxla/stablehlo/), using existing decompositions and operations,
+- [XLA Client](https://github.com/openxla/xla/), using existing decompositions and operations,
+- C++, using [C++ Standard Library](https://en.cppreference.com/w/cpp/standard_library).
+
 
 The Python and NumPy targets are provided only for debugging and
 testing functional algorithms.

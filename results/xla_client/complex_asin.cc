@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (N/A), see
+// This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -15,7 +15,7 @@ XLAOp complex_asin_0(XLAOp z) {
   XLAOp y = Abs(signed_y);
   FloatType safe_max_ =
       (std::sqrt(std::numeric_limits<FloatType>::max())) / (8);
-  XLAOp safe_max = ScalarLike(symbol__tmp8, safe_max_);
+  XLAOp safe_max = ScalarLike(signed_x, safe_max_);
   XLAOp one = ScalarLike(signed_x, 1);
   XLAOp half = ScalarLike(signed_x, 0.5);
   XLAOp xp1 = Add(x, one);
@@ -57,9 +57,9 @@ XLAOp complex_asin_0(XLAOp z) {
                     Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
                                     Div(half_apx, spxm1)))))));
   XLAOp safe_max_opt =
-      Select(Lt(x, ScalarLike(symbol__tmp10, (safe_max_) * (1000000000000.0))),
-             ScalarLike(symbol__tmp9, (safe_max_) * (1e-06)),
-             ScalarLike(symbol__tmp11, (safe_max_) * (100.0)));
+      Select(Lt(x, ScalarLike(signed_x, (safe_max_) * (1000000000000.0))),
+             ScalarLike(signed_x, (safe_max_) * (1e-06)),
+             ScalarLike(signed_x, (safe_max_) * (100.0)));
   XLAOp y_gt_safe_max_opt = Ge(y, safe_max_opt);
   XLAOp mx = Select(y_gt_safe_max_opt, y, x);
   XLAOp xoy = Select(
@@ -69,7 +69,7 @@ XLAOp complex_asin_0(XLAOp z) {
       Div(x, y), zero);
   XLAOp logical_and_lt_y_safe_min_lt_x_one = And(
       Lt(y,
-         ScalarLike(symbol__tmp6,
+         ScalarLike(signed_x,
                     (std::sqrt(std::numeric_limits<FloatType>::min())) * (4))),
       Lt(x, one));
   XLAOp ap1 = Add(a, one);
@@ -82,11 +82,10 @@ XLAOp complex_asin_0(XLAOp z) {
   XLAOp am1 = Select(logical_and_lt_y_safe_min_lt_x_one,
                      Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XLAOp sq = Sqrt(Mul(am1, ap1));
-  XLAOp imag =
-      Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
-             Add(Add(ScalarLike(symbol__tmp4, std::log(two_)), Log(mx)),
-                 Mul(half, Log1p(Mul(xoy, xoy)))),
-             Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
-                    Log1p(Add(am1, sq))));
+  XLAOp imag = Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
+                      Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
+                          Mul(half, Log1p(Mul(xoy, xoy)))),
+                      Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
+                             Log1p(Add(am1, sq))));
   return Complex(real, Select(Lt(signed_y, zero), Neg(imag), imag));
 }

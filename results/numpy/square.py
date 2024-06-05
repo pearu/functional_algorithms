@@ -1,13 +1,10 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
 
 import numpy
 import warnings
-
-finfo_float32 = numpy.finfo(numpy.float32)
-finfo_float64 = numpy.finfo(numpy.float64)
 
 
 def make_complex(r, i):

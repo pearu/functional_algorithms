@@ -1,3 +1,4 @@
+import warnings
 from .utils import UNSPECIFIED
 from . import algorithms
 from .typesystem import Type
@@ -183,19 +184,20 @@ class Expr:
             if context.alt is not None:
                 constant_operands = []
                 constant_type = None
+                constant_like = None
                 for o in operands:
                     if isinstance(o, Expr) and o.kind == "constant":
                         constant_operands.append(o.operands[0])
-                        t = o.operands[1].get_type()
-                        constant_type = t if constant_type is None else constant_type.max(t)
-                if len(constant_operands) == len(operands):
-                    if constant_type is None:
-                        constant_like = context.default_like
-                    else:
-                        constant_like = context.symbol(None, constant_type)
-                    if constant_like is not None:
-                        operands = [Expr(context.alt, kind, constant_operands), constant_like]
-                        kind = "constant"
+                        if constant_like is None:
+                            constant_like = o.operands[1]
+                            constant_type = constant_like.get_type()
+                        else:
+                            t = o.operands[1].get_type()
+                            if not constant_type.is_same(t):
+                                warnings.warn(f"{kind}: unexpected operand type `{t}`, expected `{constant_type}`")
+                if len(constant_operands) == len(operands) and constant_like is not None:
+                    operands = [Expr(context.alt, kind, constant_operands), constant_like]
+                    kind = "constant"
 
             assert False not in [isinstance(operand, Expr) for operand in operands], operands
 

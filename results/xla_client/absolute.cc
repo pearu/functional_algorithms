@@ -8,9 +8,10 @@
 
 
 template <typename FloatType>
-XLAOp hypot_0(XLAOp x, XLAOp y) {
+XLAOp absolute_0(XLAOp z) {
+  XLAOp x = Real(z);
   XLAOp abs_x = Abs(x);
-  XLAOp abs_y = Abs(y);
+  XLAOp abs_y = Abs(Imag(z));
   XLAOp mx = Max(abs_x, abs_y);
   XLAOp mn = Min(abs_x, abs_y);
   FloatType constant_2 = 2;

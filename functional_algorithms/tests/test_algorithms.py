@@ -96,3 +96,4 @@ def test_target(func_name, target_name):
     graph = ctx.trace(getattr(algorithms, func_name)).implement_missing(target).simplify()
     src = graph.tostring(target)
     assert isinstance(src, str)
+    assert "symbol__tmp" not in src

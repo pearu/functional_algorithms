@@ -14,9 +14,6 @@ source_file_header = utils.format_python(
 import numpy
 import warnings
 
-finfo_float32 = numpy.finfo(numpy.float32)
-finfo_float64 = numpy.finfo(numpy.float64)
-
 def make_complex(r, i):
   if r.dtype == numpy.float32 and i.dtype == numpy.float32:
     return numpy.array([r, i]).view(numpy.complex64)[0]
@@ -108,10 +105,10 @@ kind_to_target = dict(
 )
 
 constant_to_target = dict(
-    smallest="finfo_{type}.tiny",
-    largest="finfo_{type}.max",
-    posinf="numpy.{type}(numpy.inf)",
-    neginf="-numpy.{type}(numpy.inf)",
+    smallest="numpy.finfo({type}).tiny",
+    largest="numpy.finfo({type}).max",
+    posinf="{type}(numpy.inf)",
+    neginf="-{type}(numpy.inf)",
 )
 
 type_to_target = dict(

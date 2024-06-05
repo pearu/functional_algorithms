@@ -8,4 +8,4 @@ def test_populate():
     ctx(x)
 
     asin = ctx.asin
-    print(asin(x))
+    assert str(asin(x)) == "(asin x)"

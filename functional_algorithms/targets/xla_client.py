@@ -10,6 +10,7 @@ source_file_header = """
 """
 
 trace_arguments = dict(
+    absolute=[(":complex",)],
     hypot=[(":float", ":float")],
     complex_asin=[(":complex", ":complex")],
     real_asin=[(":float", ":float")],
@@ -100,15 +101,9 @@ kind_to_target = dict(
     is_nan="IsNan({0})",
     is_negzero="IsNegZero({0})",
     nextafter="NextAfter({0}, {1})",
-    typeof="primitive_util::ComplexComponentType(({0}).builder()->GetShape({0}).element_type())",
 )
 
-constant_to_target = dict(
-    # smallest="std::numeric_limits<DType>::min()",
-    # largest="std::numeric_limits<DType>::max()",
-    # posinf="std::numeric_limits<DType>::infinity()",
-    # neginf="-std::numeric_limits<DType>::infinity()",
-)
+constant_to_target = dict()
 
 
 class Printer(PrinterBase):

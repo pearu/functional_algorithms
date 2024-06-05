@@ -49,13 +49,21 @@ for more information."""
             f = open(fn, "r")
             old_src = f.read()
             f.close()
+            create = not old_src.endswith(src)
+        else:
+            create = True
 
-            if old_src.endswith(src):
-                print(f"Skipped {fn}")
-                continue
+        if create:
+            f = open(fn, "w")
+            f.write(comment + "\n\n")
+            f.write(src)
+            f.close()
+            print(f"Created {fn}")
+        else:
+            print(f"Skipped {fn}")
 
-        f = open(fn, "w")
-        f.write(comment + "\n\n")
-        f.write(src)
-        f.close()
-        print(f"Created {fn}")
+        if hasattr(target, "try_compile"):
+            if target.try_compile(fn):
+                print(f"Try compile {fn} PASSED")
+            else:
+                print(f"Try compile {fn} FAILED")

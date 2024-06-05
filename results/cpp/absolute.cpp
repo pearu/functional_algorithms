@@ -11,9 +11,14 @@
 #include <limits>
 
 
-float hypot_0(float x, float y) {
+float absolute_0(float z) { return std::abs(z); }
+
+double absolute_1(double z) { return std::abs(z); }
+
+float absolute_2(std::complex<float> z) {
+  float x = (z).real();
   float abs_x = std::abs(x);
-  float abs_y = std::abs(y);
+  float abs_y = std::abs((z).imag());
   float mx = std::max(abs_x, abs_y);
   float mn = std::min(abs_x, abs_y);
   float constant_2 = 2;
@@ -27,9 +32,10 @@ float hypot_0(float x, float y) {
                                  : ((mx) * (sqa)))));
 }
 
-double hypot_1(double x, double y) {
+double absolute_3(std::complex<double> z) {
+  double x = (z).real();
   double abs_x = std::abs(x);
-  double abs_y = std::abs(y);
+  double abs_y = std::abs((z).imag());
   double mx = std::max(abs_x, abs_y);
   double mn = std::min(abs_x, abs_y);
   double constant_2 = 2;

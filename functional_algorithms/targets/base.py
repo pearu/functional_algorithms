@@ -23,8 +23,11 @@ class PrinterBase:
     def get_type(self, expr):
         typ = expr.get_type()
         if typ.kind == "type":
-            return str(typ.param)
-        return self.type_to_target[str(typ)]
+            typ = str(typ.param)
+        else:
+            typ = str(typ)
+            typ = self.type_to_target[typ]
+        return typ
 
     def make_assignment(self, typ, var, value):
         raise NotImplementedError(type(self))
@@ -74,10 +77,7 @@ class PrinterBase:
             elif isinstance(value, str):
                 target_value = self.constant_to_target.get(value, NotImplemented)
                 if target_value is not NotImplemented:
-
-                    typ = expr.get_type()
-                    if typ.kind == "type":
-                        typ = str(typ.param)
+                    typ = self.get_type(expr)
                     target_value = target_value.format(type=typ)
                     result = self.make_constant(like, target_value)
                 else:
@@ -95,7 +95,10 @@ class PrinterBase:
                 raise NotImplementedError(
                     f"{type(self).__module__}.{type(self).__name__}.kind_to_target does not implement `{expr.kind}`"
                 )
-            result = tmpl.format(*[self.tostring(operand) for operand in expr.operands])
+            m = dict()
+            for i in range(len(expr.operands)):
+                m["typeof_0"] = self.get_type(expr.operands[i])
+            result = tmpl.format(*[self.tostring(operand) for operand in expr.operands], **m)
 
         assert expr.ref is not None
         if self.need_ref.get(expr.ref):
