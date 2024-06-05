@@ -1,6 +1,9 @@
 import warnings
 
 from . import stablehlo as this_module
+from ..expr import Expr
+
+constant_target = this_module
 
 source_file_header = ""
 
@@ -102,6 +105,8 @@ constant_to_target = dict(
 
 class Printer:
     """Printer for stablehlo"""
+
+    constant_target = None
 
     def __init__(self, need_ref, debug=1):
         self.need_ref = need_ref

@@ -29,6 +29,11 @@ class TestImplementations:
             return ctx(r)
         return z * z
 
+    @staticmethod
+    def safe_min(ctx, x):
+        m = ctx.alt.constant("smallest")
+        return ctx.constant(ctx.alt.sqrt(m) / 4, x)
+
 
 def test_myhypot_stablehlo():
 
@@ -69,8 +74,6 @@ def test_myhypot_python():
     graph1.props.update(name="myhypot")
     py = graph1.tostring(targets.python, tab="")
 
-    print(py)
-
     assert py == utils.format_python(
         """\
 def myhypot(x: float, y: float) -> float:
@@ -82,6 +85,52 @@ def myhypot(x: float, y: float) -> float:
     )
 
 
+def test_myhypot_xla_client():
+
+    ctx = Context(paths=[TestImplementations])
+    constant_ctx = Context()
+
+    graph = ctx.trace(TestImplementations.hypot)
+
+    graph1 = graph.implement_missing(targets.xla_client)
+
+    graph1.props.update(name="myhypot")
+    py = graph1.tostring(targets.xla_client, tab="")
+
+    assert py == utils.format_cpp(
+        """\
+XLAOp myhypot(XLAOp x, XLAOp y) {
+  XLAOp abs_x = Abs(x);
+  XLAOp abs_y = Abs(y);
+  XLAOp mx = Max(abs_x, abs_y);
+  XLAOp mn_over_mx = Div(Min(abs_x, abs_y), mx);
+  return Mul(mx, Sqrt(Add(Square(mn_over_mx), ScalarLike(x, 1))));
+}"""
+    )
+
+
+def test_myhypot_cpp():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.hypot)
+
+    graph1 = graph.implement_missing(targets.cpp)
+    graph1.props.update(name="myhypot")
+    py = graph1.tostring(targets.cpp, tab="")
+
+    assert py == utils.format_cpp(
+        """\
+double myhypot(double x, double y) {
+  double abs_x = std::abs(x);
+  double abs_y = std::abs(y);
+  double mx = std::max(abs_x, abs_y);
+  double mn_over_mx = (std::min(abs_x, abs_y)) / (mx);
+  return (mx) * (std::sqrt(((mn_over_mx) * (mn_over_mx)) + (1)));
+}"""
+    )
+
+
 def test_square_python():
 
     ctx = Context(paths=[TestImplementations])
@@ -90,8 +139,6 @@ def test_square_python():
 
     graph1 = graph.implement_missing(targets.python)
     py = graph1.tostring(targets.python, tab="")
-
-    print(py)
 
     assert py == utils.format_python(
         """\
@@ -108,8 +155,6 @@ def test_complex_square_python():
 
     graph1 = graph.implement_missing(targets.python)
     py = graph1.tostring(targets.python, tab="")
-
-    print(py)
 
     assert py == utils.format_python(
         """\
@@ -129,8 +174,6 @@ def test_complex_square_stablehlo():
 
     graph1 = graph.implement_missing(targets.stablehlo)
     shlo = graph1.tostring(targets.stablehlo, tab="")
-
-    print(shlo)
 
     assert (
         shlo
@@ -158,12 +201,8 @@ def test_readme_square_python():
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
 
-    print(graph)
-
     graph1 = graph.implement_missing(targets.python)
     py = graph1.tostring(targets.python, tab="")
-
-    print(py)
 
     assert py == utils.format_python(
         """\
@@ -175,4 +214,117 @@ def readme_square(z: complex) -> complex:
   real: float = (0) if ((x) == (y)) else (real_part)
   imag: float = (2) * ((x) * (y))
   return complex(real, imag)"""
+    )
+
+
+def test_readme_square_numpy_debug_0():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.readme_square, complex)
+    graph1 = graph.implement_missing(targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def readme_square(z: numpy.complex128) -> numpy.complex128:
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex128(z)
+        real_z: numpy.float64 = (z).real
+        x: numpy.float64 = numpy.abs(real_z)
+        y: numpy.float64 = numpy.abs((z).imag)
+        real_part: numpy.float64 = ((x) - (y)) * ((y) + (y))
+        real: numpy.float64 = (numpy.float64(0)) if (numpy.equal(x, y, dtype=numpy.bool_)) else (real_part)
+        imag: numpy.float64 = (numpy.float64(2)) * ((x) * (y))
+        result = make_complex(real, imag)
+        return result"""
+    )
+
+
+def test_readme_square_numpy_debug_1():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.readme_square, complex)
+    graph1 = graph.implement_missing(targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=1)
+
+    assert py == utils.format_python(
+        """\
+def readme_square(z: numpy.complex128) -> numpy.complex128:
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex128(z)
+        real_z: numpy.float64 = (z).real
+        assert real_z.dtype == numpy.float64, (real_z.dtype, numpy.float64)
+        x: numpy.float64 = numpy.abs(real_z)
+        assert x.dtype == numpy.float64, (x.dtype, numpy.float64)
+        y: numpy.float64 = numpy.abs((z).imag)
+        assert y.dtype == numpy.float64, (y.dtype, numpy.float64)
+        real_part: numpy.float64 = ((x) - (y)) * ((y) + (y))
+        assert real_part.dtype == numpy.float64, (real_part.dtype, numpy.float64)
+        real: numpy.float64 = (numpy.float64(0)) if (numpy.equal(x, y, dtype=numpy.bool_)) else (real_part)
+        assert real.dtype == numpy.float64, (real.dtype, numpy.float64)
+        imag: numpy.float64 = (numpy.float64(2)) * ((x) * (y))
+        assert imag.dtype == numpy.float64, (imag.dtype, numpy.float64)
+        result = make_complex(real, imag)
+        assert result.dtype == numpy.complex128, (result.dtype,)
+        return result"""
+    )
+
+
+def test_readme_square_numpy_debug_2():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.readme_square, complex)
+    graph1 = graph.implement_missing(targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=2)
+
+    assert py == utils.format_python(
+        """\
+def readme_square(z: numpy.complex128) -> numpy.complex128:
+    with warnings.catch_warnings(action="ignore"):
+        z = numpy.complex128(z)
+        print("z=", z)
+        real_z: numpy.float64 = (z).real
+        print("real_z=", real_z)
+        assert real_z.dtype == numpy.float64, (real_z.dtype, numpy.float64)
+        x: numpy.float64 = numpy.abs(real_z)
+        print("x=", x)
+        assert x.dtype == numpy.float64, (x.dtype, numpy.float64)
+        y: numpy.float64 = numpy.abs((z).imag)
+        print("y=", y)
+        assert y.dtype == numpy.float64, (y.dtype, numpy.float64)
+        real_part: numpy.float64 = ((x) - (y)) * ((y) + (y))
+        print("real_part=", real_part)
+        assert real_part.dtype == numpy.float64, (real_part.dtype, numpy.float64)
+        real: numpy.float64 = (numpy.float64(0)) if (numpy.equal(x, y, dtype=numpy.bool_)) else (real_part)
+        print("real=", real)
+        assert real.dtype == numpy.float64, (real.dtype, numpy.float64)
+        imag: numpy.float64 = (numpy.float64(2)) * ((x) * (y))
+        print("imag=", imag)
+        assert imag.dtype == numpy.float64, (imag.dtype, numpy.float64)
+        result = make_complex(real, imag)
+        print("result=", result)
+        assert result.dtype == numpy.complex128, (result.dtype,)
+        return result"""
+    )
+
+
+def test_safe_min_xla_client():
+
+    ctx = Context(paths=[TestImplementations], enable_alt=True, default_constant_type="MyDType")
+    graph = ctx.trace(TestImplementations.safe_min, "y:XLAOp")
+    graph1 = graph.implement_missing(targets.xla_client)
+
+    py = graph1.tostring(targets.xla_client, tab="")
+
+    assert py == utils.format_cpp(
+        """\
+template <typename MyDType>
+XLAOp safe_min(XLAOp y) {
+  return ScalarLike(
+      y,
+      (std::sqrt(std::numeric_limits<MyDType>::min())) / (4));
+}"""
     )

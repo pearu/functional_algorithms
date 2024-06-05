@@ -1,13 +1,10 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
 
 import numpy
 import warnings
-
-finfo_float32 = numpy.finfo(numpy.float32)
-finfo_float64 = numpy.finfo(numpy.float64)
 
 
 def make_complex(r, i):
@@ -25,43 +22,46 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
         x: numpy.float64 = numpy.abs(signed_x)
         signed_y: numpy.float64 = (z).imag
         y: numpy.float64 = numpy.abs(signed_y)
-        largest: numpy.float64 = finfo_float64.max
-        safe_max: numpy.float64 = (numpy.sqrt(largest)) / (numpy.float64(8))
-        xp1: numpy.float64 = (x) + (numpy.float64(1))
+        safe_max: numpy.float64 = (numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).max))) / (numpy.float64(8))
+        one: numpy.float64 = numpy.float64(1)
+        half: numpy.float64 = numpy.float64(0.5)
+        xp1: numpy.float64 = (x) + (one)
         abs_xp1: numpy.float64 = numpy.abs(xp1)
         _hypot_1_mx: numpy.float64 = max(abs_xp1, y)
         mn: numpy.float64 = min(abs_xp1, y)
-        sqrt_two: numpy.float64 = numpy.sqrt(numpy.float64(2))
+        two: numpy.float64 = numpy.float64(2)
+        sqrt_two: numpy.float64 = numpy.sqrt(two)
         mn_over_mx: numpy.float64 = (mn) / (_hypot_1_mx)
         _hypot_1_r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
-        sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (_hypot_1_r))
+        sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_1_r))
+        zero: numpy.float64 = numpy.float64(0)
         r: numpy.float64 = (
             ((sqrt_two) * (_hypot_1_mx))
             if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
             else (
-                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (numpy.float64(2))))
-                if ((numpy.equal(sqa, numpy.float64(1), dtype=numpy.bool_)) and ((_hypot_1_r) > (numpy.float64(0))))
+                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
+                if ((numpy.equal(sqa, one, dtype=numpy.bool_)) and ((_hypot_1_r) > (zero)))
                 else ((_hypot_1_mx) * (sqa))
             )
         )
-        xm1: numpy.float64 = (x) - (numpy.float64(1))
+        xm1: numpy.float64 = (x) - (one)
         abs_xm1: numpy.float64 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float64 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float64 = min(abs_xm1, y)
         _hypot_2_mn_over_mx: numpy.float64 = (_hypot_2_mn) / (_hypot_2_mx)
         _hypot_2_r: numpy.float64 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
-        _hypot_2_sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (_hypot_2_r))
+        _hypot_2_sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_2_r))
         s: numpy.float64 = (
             ((sqrt_two) * (_hypot_2_mx))
             if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
             else (
-                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (numpy.float64(2))))
-                if ((numpy.equal(_hypot_2_sqa, numpy.float64(1), dtype=numpy.bool_)) and ((_hypot_2_r) > (numpy.float64(0))))
+                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
+                if ((numpy.equal(_hypot_2_sqa, one, dtype=numpy.bool_)) and ((_hypot_2_r) > (zero)))
                 else ((_hypot_2_mx) * (_hypot_2_sqa))
             )
         )
-        a: numpy.float64 = (numpy.float64(0.5)) * ((r) + (s))
-        half_apx: numpy.float64 = (numpy.float64(0.5)) * ((a) + (x))
+        a: numpy.float64 = (half) * ((r) + (s))
+        half_apx: numpy.float64 = (half) * ((a) + (x))
         yy: numpy.float64 = (y) * (y)
         rpxp1: numpy.float64 = (r) + (xp1)
         smxm1: numpy.float64 = (s) - (xm1)
@@ -73,7 +73,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
                 if ((max(x, y)) >= (safe_max))
                 else (
                     (numpy.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                    if ((x) <= (numpy.float64(1)))
+                    if ((x) <= (one))
                     else ((y) * (numpy.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
                 )
             ),
@@ -85,34 +85,30 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
         )
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float64 = (y) if (y_gt_safe_max_opt) else (x)
-        posinf: numpy.float64 = numpy.float64(numpy.inf)
         xoy: numpy.float64 = (
-            ((x) / (y)) if ((y_gt_safe_max_opt) and (not (numpy.equal(y, posinf, dtype=numpy.bool_)))) else (numpy.float64(0))
+            ((x) / (y))
+            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.float64(numpy.inf)), dtype=numpy.bool_))))
+            else (zero)
         )
-        smallest: numpy.float64 = finfo_float64.tiny
-        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < ((numpy.sqrt(smallest)) * (numpy.float64(4)))) and (
-            (x) < (numpy.float64(1))
-        )
-        ap1: numpy.float64 = (a) + (numpy.float64(1))
-        half_yy: numpy.float64 = (numpy.float64(0.5)) * (yy)
+        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
+            (y) < ((numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).tiny))) * (numpy.float64(4)))
+        ) and ((x) < (one))
+        ap1: numpy.float64 = (a) + (one)
+        half_yy: numpy.float64 = (half) * (yy)
         divide_half_yy_rpxp1: numpy.float64 = (half_yy) / (rpxp1)
         x_ge_1_or_not: numpy.float64 = (
-            ((divide_half_yy_rpxp1) + ((numpy.float64(0.5)) * (spxm1)))
-            if ((x) >= (numpy.float64(1)))
-            else (
-                ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
-                if ((a) <= (numpy.float64(1.5)))
-                else ((a) - (numpy.float64(1)))
-            )
+            ((divide_half_yy_rpxp1) + ((half) * (spxm1)))
+            if ((x) >= (one))
+            else (((divide_half_yy_rpxp1) + ((half_yy) / (smxm1))) if ((a) <= (numpy.float64(1.5))) else ((a) - (one)))
         )
         am1: numpy.float64 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float64 = numpy.sqrt((am1) * (ap1))
         imag: numpy.float64 = (
-            (((numpy.log(numpy.float64(2))) + (numpy.log(mx))) + ((numpy.float64(0.5)) * (numpy.log1p((xoy) * (xoy)))))
+            (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
-        result = make_complex(real, (-(imag)) if ((signed_y) < (numpy.float64(0))) else (imag))
+        result = make_complex(real, (-(imag)) if ((signed_y) < (zero)) else (imag))
         return result
 
 
@@ -123,43 +119,46 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         x: numpy.float32 = numpy.abs(signed_x)
         signed_y: numpy.float32 = (z).imag
         y: numpy.float32 = numpy.abs(signed_y)
-        largest: numpy.float32 = finfo_float32.max
-        safe_max: numpy.float32 = (numpy.sqrt(largest)) / (numpy.float32(8))
-        xp1: numpy.float32 = (x) + (numpy.float32(1))
+        safe_max: numpy.float32 = (numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).max))) / (numpy.float32(8))
+        one: numpy.float32 = numpy.float32(1)
+        half: numpy.float32 = numpy.float32(0.5)
+        xp1: numpy.float32 = (x) + (one)
         abs_xp1: numpy.float32 = numpy.abs(xp1)
         _hypot_1_mx: numpy.float32 = max(abs_xp1, y)
         mn: numpy.float32 = min(abs_xp1, y)
-        sqrt_two: numpy.float32 = numpy.sqrt(numpy.float32(2))
+        two: numpy.float32 = numpy.float32(2)
+        sqrt_two: numpy.float32 = numpy.sqrt(two)
         mn_over_mx: numpy.float32 = (mn) / (_hypot_1_mx)
         _hypot_1_r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
-        sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (_hypot_1_r))
+        sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_1_r))
+        zero: numpy.float32 = numpy.float32(0)
         r: numpy.float32 = (
             ((sqrt_two) * (_hypot_1_mx))
             if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
             else (
-                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (numpy.float32(2))))
-                if ((numpy.equal(sqa, numpy.float32(1), dtype=numpy.bool_)) and ((_hypot_1_r) > (numpy.float32(0))))
+                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
+                if ((numpy.equal(sqa, one, dtype=numpy.bool_)) and ((_hypot_1_r) > (zero)))
                 else ((_hypot_1_mx) * (sqa))
             )
         )
-        xm1: numpy.float32 = (x) - (numpy.float32(1))
+        xm1: numpy.float32 = (x) - (one)
         abs_xm1: numpy.float32 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float32 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float32 = min(abs_xm1, y)
         _hypot_2_mn_over_mx: numpy.float32 = (_hypot_2_mn) / (_hypot_2_mx)
         _hypot_2_r: numpy.float32 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
-        _hypot_2_sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (_hypot_2_r))
+        _hypot_2_sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_2_r))
         s: numpy.float32 = (
             ((sqrt_two) * (_hypot_2_mx))
             if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
             else (
-                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (numpy.float32(2))))
-                if ((numpy.equal(_hypot_2_sqa, numpy.float32(1), dtype=numpy.bool_)) and ((_hypot_2_r) > (numpy.float32(0))))
+                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
+                if ((numpy.equal(_hypot_2_sqa, one, dtype=numpy.bool_)) and ((_hypot_2_r) > (zero)))
                 else ((_hypot_2_mx) * (_hypot_2_sqa))
             )
         )
-        a: numpy.float32 = (numpy.float32(0.5)) * ((r) + (s))
-        half_apx: numpy.float32 = (numpy.float32(0.5)) * ((a) + (x))
+        a: numpy.float32 = (half) * ((r) + (s))
+        half_apx: numpy.float32 = (half) * ((a) + (x))
         yy: numpy.float32 = (y) * (y)
         rpxp1: numpy.float32 = (r) + (xp1)
         smxm1: numpy.float32 = (s) - (xm1)
@@ -171,7 +170,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
                 if ((max(x, y)) >= (safe_max))
                 else (
                     (numpy.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                    if ((x) <= (numpy.float32(1)))
+                    if ((x) <= (one))
                     else ((y) * (numpy.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
                 )
             ),
@@ -183,50 +182,44 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         )
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float32 = (y) if (y_gt_safe_max_opt) else (x)
-        posinf: numpy.float32 = numpy.float32(numpy.inf)
         xoy: numpy.float32 = (
-            ((x) / (y)) if ((y_gt_safe_max_opt) and (not (numpy.equal(y, posinf, dtype=numpy.bool_)))) else (numpy.float32(0))
+            ((x) / (y))
+            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.float32(numpy.inf)), dtype=numpy.bool_))))
+            else (zero)
         )
-        smallest: numpy.float32 = finfo_float32.tiny
-        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < ((numpy.sqrt(smallest)) * (numpy.float32(4)))) and (
-            (x) < (numpy.float32(1))
-        )
-        ap1: numpy.float32 = (a) + (numpy.float32(1))
-        half_yy: numpy.float32 = (numpy.float32(0.5)) * (yy)
+        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
+            (y) < ((numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).tiny))) * (numpy.float32(4)))
+        ) and ((x) < (one))
+        ap1: numpy.float32 = (a) + (one)
+        half_yy: numpy.float32 = (half) * (yy)
         divide_half_yy_rpxp1: numpy.float32 = (half_yy) / (rpxp1)
         x_ge_1_or_not: numpy.float32 = (
-            ((divide_half_yy_rpxp1) + ((numpy.float32(0.5)) * (spxm1)))
-            if ((x) >= (numpy.float32(1)))
-            else (
-                ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
-                if ((a) <= (numpy.float32(1.5)))
-                else ((a) - (numpy.float32(1)))
-            )
+            ((divide_half_yy_rpxp1) + ((half) * (spxm1)))
+            if ((x) >= (one))
+            else (((divide_half_yy_rpxp1) + ((half_yy) / (smxm1))) if ((a) <= (numpy.float32(1.5))) else ((a) - (one)))
         )
         am1: numpy.float32 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float32 = numpy.sqrt((am1) * (ap1))
         imag: numpy.float32 = (
-            (((numpy.log(numpy.float32(2))) + (numpy.log(mx))) + ((numpy.float32(0.5)) * (numpy.log1p((xoy) * (xoy)))))
+            (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
-        result = make_complex(real, (-(imag)) if ((signed_y) < (numpy.float32(0))) else (imag))
+        result = make_complex(real, (-(imag)) if ((signed_y) < (zero)) else (imag))
         return result
 
 
 def asin_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
-        result = (numpy.float64(2)) * (
-            numpy.arctan2(z, (numpy.float64(1)) + (numpy.sqrt(((numpy.float64(1)) - (z)) * ((numpy.float64(1)) + (z)))))
-        )
+        one: numpy.float64 = numpy.float64(1)
+        result = (numpy.float64(2)) * (numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z))))))
         return result
 
 
 def asin_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
-        result = (numpy.float32(2)) * (
-            numpy.arctan2(z, (numpy.float32(1)) + (numpy.sqrt(((numpy.float32(1)) - (z)) * ((numpy.float32(1)) + (z)))))
-        )
+        one: numpy.float32 = numpy.float32(1)
+        result = (numpy.float32(2)) * (numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z))))))
         return result

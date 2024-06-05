@@ -1,13 +1,10 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev2+g1428951.d20240525), see
+# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
 
 import numpy
 import warnings
-
-finfo_float32 = numpy.finfo(numpy.float32)
-finfo_float64 = numpy.finfo(numpy.float64)
 
 
 def make_complex(r, i):
@@ -26,15 +23,17 @@ def hypot_0(x: numpy.float32, y: numpy.float32) -> numpy.float32:
         abs_y: numpy.float32 = numpy.abs(y)
         mx: numpy.float32 = max(abs_x, abs_y)
         mn: numpy.float32 = min(abs_x, abs_y)
+        constant_2: numpy.float32 = numpy.float32(2)
+        constant_1: numpy.float32 = numpy.float32(1)
         mn_over_mx: numpy.float32 = (mn) / (mx)
         r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
-        sqa: numpy.float32 = numpy.sqrt((numpy.float32(1)) + (r))
+        sqa: numpy.float32 = numpy.sqrt((constant_1) + (r))
         result = (
-            ((numpy.sqrt(numpy.float32(2))) * (mx))
+            ((numpy.sqrt(constant_2)) * (mx))
             if (numpy.equal(mx, mn, dtype=numpy.bool_))
             else (
-                ((mx) + (((mx) * (r)) / (numpy.float32(2))))
-                if ((numpy.equal(sqa, numpy.float32(1), dtype=numpy.bool_)) and ((r) > (numpy.float32(0))))
+                ((mx) + (((mx) * (r)) / (constant_2)))
+                if ((numpy.equal(sqa, constant_1, dtype=numpy.bool_)) and ((r) > (numpy.float32(0))))
                 else ((mx) * (sqa))
             )
         )
@@ -49,15 +48,17 @@ def hypot_1(x: numpy.float64, y: numpy.float64) -> numpy.float64:
         abs_y: numpy.float64 = numpy.abs(y)
         mx: numpy.float64 = max(abs_x, abs_y)
         mn: numpy.float64 = min(abs_x, abs_y)
+        constant_2: numpy.float64 = numpy.float64(2)
+        constant_1: numpy.float64 = numpy.float64(1)
         mn_over_mx: numpy.float64 = (mn) / (mx)
         r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
-        sqa: numpy.float64 = numpy.sqrt((numpy.float64(1)) + (r))
+        sqa: numpy.float64 = numpy.sqrt((constant_1) + (r))
         result = (
-            ((numpy.sqrt(numpy.float64(2))) * (mx))
+            ((numpy.sqrt(constant_2)) * (mx))
             if (numpy.equal(mx, mn, dtype=numpy.bool_))
             else (
-                ((mx) + (((mx) * (r)) / (numpy.float64(2))))
-                if ((numpy.equal(sqa, numpy.float64(1), dtype=numpy.bool_)) and ((r) > (numpy.float64(0))))
+                ((mx) + (((mx) * (r)) / (constant_2)))
+                if ((numpy.equal(sqa, constant_1, dtype=numpy.bool_)) and ((r) > (numpy.float64(0))))
                 else ((mx) * (sqa))
             )
         )

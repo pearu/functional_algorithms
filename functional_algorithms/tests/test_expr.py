@@ -5,6 +5,4 @@ def test_normalize_like():
 
     ctx = Context(paths=[])
     x = ctx.symbol("x", "complex")
-    z = ctx.symbol("z")
-
-    print(expr.normalize_like(abs(x)))
+    assert expr.normalize_like(abs(x)) == "(abs x)"

@@ -19,7 +19,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 
-dependencies = ["black", "numpy", "mpmath"]
+dependencies = ["black", "numpy", "mpmath", "clang-format"]
 
 [project.optional-dependencies]
 

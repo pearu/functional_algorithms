@@ -31,8 +31,8 @@ Currently, [the definitions of
 algorithms](functional_algorithms/algorithms.py) are provided for the
 following math functions:
 
-- `square(z: complex | float)`
-- `hypot(x: float, y: float)` and `absolute(z: complex)`
+- `square(z: complex | float)`,
+- `hypot(x: float, y: float)` and `absolute(z: complex)`,
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`.
@@ -42,9 +42,12 @@ following math functions:
 Currently, the implementations of supported algorithms are provided
 for the following [target libraries and languages](functional_algorithms/targets/):
 
-- [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs
-- [NumPy](https://numpy.org/), using numpy functions on real inputs
-- [StableHLO](https://github.com/openxla/stablehlo), using existing decompositions and operations.
+- [Python](https://www.python.org/), using [math](https://docs.python.org/3/library/math.html) functions on real inputs,
+- [NumPy](https://numpy.org/), using numpy functions on real inputs,
+- [StableHLO](https://github.com/openxla/stablehlo/), using existing decompositions and operations,
+- [XLA Client](https://github.com/openxla/xla/), using existing decompositions and operations,
+- C++, using [C++ Standard Library](https://en.cppreference.com/w/cpp/standard_library).
+
 
 The Python and NumPy targets are provided only for debugging and
 testing functional algorithms.
@@ -94,7 +97,7 @@ is displayed in the following table for the supported algorithms:
 | absolute | complex128 | 99.156 % | 0.844 % | - | - | - | - |
 | asin | float32 | 97.712 % | 2.193 % | 0.093 % | 0.002 % | - | - |
 | asin | float64 | 99.562 % | 0.434 % | 0.004 % | - | - | - |
-| asin | complex64 | 79.427 % | 20.321 % | 0.246 % | 0.006 % | - | - |
+| asin | complex64 | 79.382 % | 20.368 % | 0.244 % | 0.006 % | - | - |
 | asin | complex128 | 72.624 % | 27.272 % | 0.103 % | 0.001 % | - | - |
 | square | float32 | 100.000 % | - | - | - | - | - |
 | square | float64 | 100.000 % | - | - | - | - | - |

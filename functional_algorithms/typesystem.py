@@ -3,15 +3,24 @@ import string
 
 class Type:
 
-    def __init__(self, context, kind, bits):
+    def __init__(self, context, kind, param):
         self.context = context
-        assert kind in {"float", "complex", "integer", "boolean"}, kind
-        assert bits in {1, 8, 16, 32, 64, 128, 256, 512, None}, bits
+        assert kind in {"float", "complex", "integer", "boolean", "type"}, kind
+        if isinstance(param, (int, type(None))):
+            assert param in {1, 8, 16, 32, 64, 128, 256, 512, None}, param
         self.kind = kind
-        self.bits = bits
+        self.param = param
+
+    @property
+    def bits(self):
+        if self.kind in {"float", "complex", "integer", "boolean"}:
+            return self.param
+        raise NotImplementedError(self.kind)
 
     @classmethod
     def fromobject(cls, context, obj):
+        from .expr import Expr
+
         if isinstance(obj, str):
             if obj.startswith("float"):
                 kind = "float"
@@ -21,8 +30,11 @@ class Type:
                 kind = "complex"
             elif obj.startswith("bool"):
                 kind = "boolean"
+            elif obj.startswith("type"):
+                kind = "type"
             else:
-                raise ValueError(f"expected string starting with float|complex|int|bool, got {obj}")
+                return cls(context, "type", obj)
+                raise ValueError(f"expected string starting with float|complex|int|bool|type, got {obj}")
             bits = obj.strip(string.ascii_letters) or None
             if bits:
                 bits = int(bits)
@@ -39,17 +51,24 @@ class Type:
             return cls(context, "integer", None)
         elif obj is bool:
             return cls(context, "boolean", None)
+        elif isinstance(obj, Expr):
+            return cls(context, "type", obj)
+
         raise NotImplementedError(type(obj))
 
     def __repr__(self):
-        return f"Type({self.kind}, {self.bits})"
+        return f"Type({self.kind}, {self.param})"
 
     def __str__(self):
-        if self.bits is None:
+        if self.param is None:
             return self.kind
-        return f"{self.kind}{self.bits}"
+        if self.kind == "type":
+            return str(self.param)
+        return f"{self.kind}{self.param}"
 
     def max(self, other):
+        if self == other:
+            return self
         if "complex" in {self.kind, other.kind}:
             kind = "complex"
         elif "float" in {self.kind, other.kind}:
@@ -84,6 +103,10 @@ class Type:
     @property
     def is_boolean(self):
         return self.kind == "boolean"
+
+    @property
+    def is_type(self):
+        return self.kind == "type"
 
     def tostring(self, target):
         return target.Printer(dict()).tostring(self)

@@ -6,22 +6,54 @@ import warnings
 from collections import defaultdict
 from .utils import UNSPECIFIED
 from .expr import Expr, make_constant, make_symbol, make_apply
+from .typesystem import Type
 
 
 class Context:
 
-    def __init__(self, paths=[]):
+    def __init__(self, paths=[], enable_alt=None, default_constant_type=None):
         """Parameters
         ----------
         paths : list
           Module-like objects providing implementations to functions
           not defined by the context instance.
+        enable_alt : bool
+          When True, enable alternative context for constant
+          expression values. Enable when target printer supports
+          constant target to reduce evaluating constant expressions in
+          runtime.
+        default_constant_type : {str, Type}
+          Default type for constant expressions. Use together with
+          enable_alt=True.
         """
         self._expressions = {}
         self._stack_name = ""
         self._stack_call_count = defaultdict(int)
         self._ref_values = {}
         self._paths = paths
+        self._alt = None
+        self._enable_alt = enable_alt
+        self._default_constant_type = default_constant_type
+        self._default_like = None
+
+    @property
+    def alt(self):
+        """Return alternate context that can be used to tracing constant
+        expressions that may use different target printer.
+        """
+        if self._alt is None and self._enable_alt:
+            self._alt = Context(paths=self._paths, enable_alt=False, default_constant_type=self._default_constant_type)
+        return self._alt
+
+    @property
+    def default_like(self):
+        if self._default_like is None:
+            if self._default_constant_type is not None:
+                typ = self._default_constant_type
+                if not isinstance(typ, Type):
+                    typ = Type.fromobject(self, typ)
+                self._default_like = self.symbol(None, typ)
+        return self._default_like
 
     def _register_expression(self, expr):
         # Expressions are singletons.  Notice that Expr does not
@@ -62,11 +94,16 @@ class Context:
             if isinstance(obj, Expr) and obj.props["origin"] == self._stack_name:
                 ref = obj.props.get("ref", UNSPECIFIED)
                 if ref is UNSPECIFIED:
-                    if name not in self._ref_values and 1:
+                    if name not in self._ref_values:
                         ref = name
                     else:
                         ref = self._stack_name + name
                     obj.reference(ref_name=ref, force=obj.props.get("force", None))
+                    if self.alt is not None and obj.kind == "constant" and isinstance(obj.operands[0], Expr):
+                        ref_ = ref + "_"
+                        assert ref_ not in self.alt._ref_values
+                        obj.operands[0].reference(ref_name=ref_, force=obj.props.get("force", None))
+
         return expr
 
     def trace(self, func, *args):
@@ -120,10 +157,16 @@ class Context:
 
     def symbol(self, name, typ=UNSPECIFIED):
         if typ is UNSPECIFIED:
-            typ = "float"
+            like = self.default_like
+            if like is not None:
+                typ = like.operands[0]
+            else:
+                typ = "float"
         return make_symbol(self, name, typ)
 
-    def constant(self, value, like_expr):
+    def constant(self, value, like_expr=UNSPECIFIED):
+        if like_expr is UNSPECIFIED:
+            like_expr = self.default_like
         return make_constant(self, value, like_expr)
 
     def call(self, func, args):
