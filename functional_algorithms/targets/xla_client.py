@@ -116,10 +116,10 @@ class Printer(PrinterBase):
     constant_to_target = constant_to_target
 
     type_to_target = dict(
-        float="XLAOp",
-        complex="XLAOp",
-        boolean="XLAOp",
-        type="XLAOp",
+        float="XlaOp",
+        complex="XlaOp",
+        boolean="XlaOp",
+        type="XlaOp",
     )
 
     def make_assignment(self, typ, var, value):
