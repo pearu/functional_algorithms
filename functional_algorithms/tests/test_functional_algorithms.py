@@ -99,11 +99,11 @@ def test_myhypot_xla_client():
 
     assert py == utils.format_cpp(
         """\
-XLAOp myhypot(XLAOp x, XLAOp y) {
-  XLAOp abs_x = Abs(x);
-  XLAOp abs_y = Abs(y);
-  XLAOp mx = Max(abs_x, abs_y);
-  XLAOp mn_over_mx = Div(Min(abs_x, abs_y), mx);
+XlaOp myhypot(XlaOp x, XlaOp y) {
+  XlaOp abs_x = Abs(x);
+  XlaOp abs_y = Abs(y);
+  XlaOp mx = Max(abs_x, abs_y);
+  XlaOp mn_over_mx = Div(Min(abs_x, abs_y), mx);
   return Mul(mx, Sqrt(Add(Square(mn_over_mx), ScalarLike(x, 1))));
 }"""
     )
@@ -314,7 +314,7 @@ def readme_square(z: numpy.complex128) -> numpy.complex128:
 def test_safe_min_xla_client():
 
     ctx = Context(paths=[TestImplementations], enable_alt=True, default_constant_type="MyDType")
-    graph = ctx.trace(TestImplementations.safe_min, "y:XLAOp")
+    graph = ctx.trace(TestImplementations.safe_min, "y:XlaOp")
     graph1 = graph.implement_missing(targets.xla_client)
 
     py = graph1.tostring(targets.xla_client, tab="")
@@ -322,7 +322,7 @@ def test_safe_min_xla_client():
     assert py == utils.format_cpp(
         """\
 template <typename MyDType>
-XLAOp safe_min(XLAOp y) {
+XlaOp safe_min(XlaOp y) {
   return ScalarLike(
       y,
       (std::sqrt(std::numeric_limits<MyDType>::min())) / (4));
