@@ -97,6 +97,8 @@ def complex_asin(ctx, z: complex):
     # fmt: off
     """Arcus sine on complex input.
 
+    arcsin(z) = 2 * arctan2(z, (1 + sqrt(1 - z * z)))
+
     Here we well use a modified version of the [Hull et
     al]((https://dl.acm.org/doi/10.1145/275323.275324) algorithm with
     a reduced number of approximation regions.
@@ -231,6 +233,10 @@ def real_asin(ctx, x: float):
     """Arcus sine on real input:
 
     arcsin(x) = 2 * arctan2(x, (1 + sqrt(1 - x * x)))
+
+    To avoid cancellation errors at abs(x) close to 1, we'll use
+
+      1 - x * x == (1 - x) * (1 + x)
     """
     return asin(ctx, x)
 

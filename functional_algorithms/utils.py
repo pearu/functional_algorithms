@@ -428,8 +428,8 @@ def real_samples(
     include_zero=True,
     include_subnormal=False,
     include_nan=False,
-    nonnegative=False,
     include_huge=True,
+    nonnegative=False,
 ):
     """Return a 1-D array of real line samples.
 
@@ -439,12 +439,20 @@ def real_samples(
       Initial size of the samples array. A minimum value is 6. The
       actual size of the returned array may differ from size.
     dtype:
+      Floating-point type: float32, float64.
     include_infinity: bool
+      When True, samples include signed infinities.
     include_zero: bool
+      When True, samples include zero.
     include_subnormal: bool
+      When True, samples include subnormal numbers.
     include_nan: bool
-    nonnegative: bool
+      When True, samples include nan.
     include_huge: bool
+      When True, samples include a value that has 1 ULP smaller than
+      maximal value.
+    nonnegative: bool
+      When True, finite samples are all non-negative.
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
@@ -499,7 +507,6 @@ def complex_samples(
     include_subnormal: bool
     include_nan: bool
     nonnegative: bool
-
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
@@ -530,6 +537,105 @@ def complex_samples(
     imag_part.real[:] = 0
     imag_part = imag_part.reshape((im.size, -1)).repeat(re.size, 1)
     return real_part + imag_part  # TODO: avoid arithmetic operations
+
+
+def real_pair_samples(
+    size=(10, 10),
+    dtype=numpy.float32,
+    include_infinity=True,
+    include_zero=True,
+    include_subnormal=False,
+    include_nan=False,
+    include_huge=True,
+    nonnegative=False,
+):
+    """Return a pair of 1-D arrays of real line samples.
+
+    Parameters
+    ----------
+    size : tuple(int, int)
+      Initial size of the samples array. A minimum value is (6, 6). The
+      actual size of the returned array is approximately size[0] * size[1].
+    dtype:
+    include_infinity: bool
+    include_zero: bool
+    include_subnormal: bool
+    include_nan: bool
+    nonnegative: bool
+    """
+    s1 = real_samples(
+        size=size[0],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+    )
+    s2 = real_samples(
+        size=size[1],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+    )
+    s1, s2 = s1.reshape(1, -1).repeat(s2.size, 0).flatten(), s2.repeat(s1.size)
+    return s1, s2
+
+
+def complex_pair_samples(
+    size=((10, 10), (10, 10)),
+    dtype=numpy.float32,
+    include_infinity=True,
+    include_zero=True,
+    include_subnormal=False,
+    include_nan=False,
+    include_huge=True,
+    nonnegative=False,
+):
+    """Return a pair of 2-D arrays of complex plane samples.
+
+    Parameters
+    ----------
+    size : tuple(tuple(int, int), tuple(int, int))
+      Initial size of the samples array. A minimum value is ((6, 6),
+      (6, 6)). The actual size of the returned array is approximately
+      (size[0][0] * size[1][0], size[0][1] * size[1][1]).
+    dtype:
+    include_infinity: bool
+    include_zero: bool
+    include_subnormal: bool
+    include_nan: bool
+    nonnegative: bool
+    """
+    s1 = complex_samples(
+        size=size[0],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+    )
+    s2 = complex_samples(
+        size=size[1],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+    )
+    shape1 = s1.shape
+    shape2 = s2.shape
+    s1, s2 = numpy.tile(s1, shape2), s2.repeat(shape1[0], 0).repeat(shape1[1], 1)
+    return s1, s2
 
 
 def iscomplex(value):

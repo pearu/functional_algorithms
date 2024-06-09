@@ -6,6 +6,8 @@ from .base import PrinterBase
 from .. import utils
 
 source_file_header = """
+#include "xla/client/lib/constants.h"
+#include "xla/client/xla_builder.h"
 #include <limits>
 """
 
