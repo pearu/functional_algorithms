@@ -1,5 +1,6 @@
 import numpy
 import pytest
+import itertools
 
 from functional_algorithms import utils
 
@@ -95,78 +96,88 @@ def _check_real_samples(
                 assert r[loc - 1] == -fi.smallest_normal
 
 
+def _iter_samples_parameters():
+    for include_huge, include_subnormal, include_infinity, include_zero, include_nan, nonnegative in itertools.product(
+        *(([False, True],) * 6)
+    ):
+        yield dict(
+            include_huge=include_huge,
+            include_subnormal=include_subnormal,
+            include_infinity=include_infinity,
+            include_zero=include_zero,
+            include_nan=include_nan,
+            nonnegative=nonnegative,
+        )
+
+
 def test_real_samples(dtype):
     for size in range(6, 20):
-        for include_huge in [False, True]:
-            for include_subnormal in [False, True]:
-                for include_infinity in [False, True]:
-                    for include_zero in [False, True]:
-                        for include_nan in [False, True]:
-                            for nonnegative in [False, True]:
-                                r = utils.real_samples(
-                                    size=size,
-                                    dtype=dtype,
-                                    include_infinity=include_infinity,
-                                    include_zero=include_zero,
-                                    include_subnormal=include_subnormal,
-                                    include_nan=include_nan,
-                                    nonnegative=nonnegative,
-                                    include_huge=include_huge,
-                                )
-                                assert r.dtype == dtype
-                                _check_real_samples(
-                                    r,
-                                    include_infinity=include_infinity,
-                                    include_zero=include_zero,
-                                    include_subnormal=include_subnormal,
-                                    include_nan=include_nan,
-                                    nonnegative=nonnegative,
-                                    include_huge=include_huge,
-                                )
+        for params in _iter_samples_parameters():
+            r = utils.real_samples(size=size, dtype=dtype, **params)
+            assert r.dtype == dtype
+            _check_real_samples(r, **params)
 
 
 def test_complex_samples(dtype):
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
-        for include_huge in [False, True]:
-            for include_subnormal in [False, True]:
-                for include_infinity in [False, True]:
-                    for include_zero in [False, True]:
-                        for include_nan in [False, True]:
-                            for nonnegative in [False, True]:
-                                r = utils.complex_samples(
-                                    size=size,
-                                    dtype=dtype,
-                                    include_infinity=include_infinity,
-                                    include_zero=include_zero,
-                                    include_subnormal=include_subnormal,
-                                    include_nan=include_nan,
-                                    nonnegative=nonnegative,
-                                    include_huge=include_huge,
-                                )
-                                re = r.real
-                                im = r.imag
-                                assert re.dtype == dtype
-                                assert im.dtype == dtype
-                                for i in range(r.shape[0]):
-                                    _check_real_samples(
-                                        re[i],
-                                        include_infinity=include_infinity,
-                                        include_zero=include_zero,
-                                        include_subnormal=include_subnormal,
-                                        include_nan=include_nan,
-                                        nonnegative=nonnegative,
-                                        include_huge=include_huge,
-                                    )
-                                for j in range(r.shape[1]):
-                                    _check_real_samples(
-                                        im[:, j],
-                                        include_infinity=include_infinity,
-                                        include_zero=include_zero,
-                                        include_subnormal=include_subnormal,
-                                        include_nan=include_nan,
-                                        nonnegative=nonnegative,
-                                        include_huge=include_huge,
-                                    )
+        for params in _iter_samples_parameters():
+            r = utils.complex_samples(size=size, dtype=dtype, **params)
+            re, im = r.real, r.imag
+            assert re.dtype == dtype
+            assert im.dtype == dtype
+            for i in range(r.shape[0]):
+                _check_real_samples(re[i], **params)
+            for j in range(r.shape[1]):
+                _check_real_samples(im[:, j], **params)
+
+
+def test_real_pair_samples(dtype):
+    for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
+        for params in _iter_samples_parameters():
+            s1 = utils.real_samples(size=size[0], dtype=dtype, **params).size
+            s2 = utils.real_samples(size=size[1], dtype=dtype, **params).size
+            r1, r2 = utils.real_pair_samples(size=size, dtype=dtype, **params)
+            assert r1.dtype == dtype
+            assert r2.dtype == dtype
+            assert r1.size == s1 * s2
+            assert r2.size == s1 * s2
+            for r in r1.reshape(s2, s1):
+                _check_real_samples(r, **params)
+            for r in r2.reshape(s2, s1).T:
+                _check_real_samples(r, **params)
+
+
+def test_complex_pair_samples(dtype):
+    for size1 in [(6, 6), (6, 7)]:
+        for size2 in [(6, 6), (7, 6)]:
+            for params in _iter_samples_parameters():
+                s1 = utils.complex_samples(size=size1, dtype=dtype, **params).shape
+                s2 = utils.complex_samples(size=size2, dtype=dtype, **params).shape
+                r1, r2 = utils.complex_pair_samples(size=(size1, size2), dtype=dtype, **params)
+                re1, im1 = r1.real, r1.imag
+                re2, im2 = r2.real, r2.imag
+                assert re1.dtype == dtype
+                assert re2.dtype == dtype
+                assert r1.shape == (s1[0] * s2[0], s1[1] * s2[1])
+                assert r2.shape == (s1[0] * s2[0], s1[1] * s2[1])
+
+                for i in range(0, s1[0] * s2[0], s1[0]):
+                    for j in range(0, s1[1] * s2[1], s1[1]):
+                        r = re1[i : i + s1[0], j : j + s1[1]]
+                        for i1 in range(r.shape[0]):
+                            _check_real_samples(r[i1], **params)
+                        r = im1[i : i + s1[0], j : j + s1[1]]
+                        for j1 in range(r.shape[1]):
+                            _check_real_samples(r[:, j1], **params)
+
+                for i in range(s1[0]):
+                    for j in range(s1[1]):
+                        r = re2[i :: s1[0], j :: s1[1]]
+                        for i1 in range(r.shape[0]):
+                            _check_real_samples(r[i1], **params)
+                        r = im2[i :: s1[0], j :: s1[1]]
+                        for j1 in range(r.shape[1]):
+                            _check_real_samples(r[:, j1], **params)
 
 
 def test_isclose(dtype):
