@@ -601,8 +601,16 @@ class Expr:
             return self.operands[1]
         if self.kind == "constant":
             return self.operands[1].get_type()
-        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor"}:
+        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "isfinite"}:
             return Type.fromobject(self.context, "boolean")
+        elif self.kind == "ldexp":
+            return self.operands[0].get_type()
+        elif self.kind == "fpfraction":
+            return self.operands[0].get_type()
+        elif self.kind == "fpexponent":
+            return Type.fromobject(self.context, "integer32")
+        elif self.kind == "floor_divide":
+            return self.operands[0].get_type()
         elif self.kind in {
             "positive",
             "negative",
@@ -629,6 +637,7 @@ class Expr:
             "ceil",
             "floor",
             "logical_not",
+            "sign",
         }:
             return self.operands[0].get_type()
         elif self.kind in {
@@ -649,6 +658,8 @@ class Expr:
             return t.complex_part if t.is_complex else t
         elif self.kind == "select":
             return self.operands[1].get_type().max(self.operands[2].get_type())
+        elif self.kind == "fma":
+            return self.operands[0].get_type().max(self.operands[1].get_type()).max(self.operands[2].get_type())
         elif self.kind == "complex":
             t = self.operands[0].get_type().max(self.operands[1].get_type())
             bits = t.bits * 2 if t.bits is not None else None

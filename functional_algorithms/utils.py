@@ -196,6 +196,7 @@ class numpy_with_mpmath:
         "sinc",
         "normalize",
         "hypot",
+        "multiply",
     ]
 
     _mpmath_names = dict(
@@ -296,6 +297,16 @@ class numpy_with_mpmath:
             return worker(ctx, scale, exact, reference, value)
         else:
             assert 0  # unreachable
+
+    def multiply(self, w, z):
+        if w == z:
+            x = w
+            ctx = x.context
+            if isinstance(x, ctx.mpc):
+                if abs(x.real) == abs(x.imag):
+                    return ctx.make_mpc((ctx.zero._mpf_, (x.real * x.imag * 2)._mpf_))
+                return ctx.make_mpc((((x.real - x.imag) * (x.real + x.imag))._mpf_, (x.real * x.imag * 2)._mpf_))
+        return w * z
 
     def square(self, x):
         ctx = x.context
@@ -719,7 +730,10 @@ def mul(x, y):
 def validate_function(func, reference, samples, dtype, verbose=True):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
+    count = 0
+    count_ulp_ge3 = 0
     for sample in samples:
+        count += 1
         if isinstance(sample, tuple):
             v1 = func(*sample)
             v2 = reference(*sample)
@@ -731,11 +745,17 @@ def validate_function(func, reference, samples, dtype, verbose=True):
         assert v1.dtype == v2.dtype, (v1, v2)
         ulp = diff_ulp(v1, v2)
         ulp_stats[ulp] += 1
-        if ulp > 2 and verbose:
+        if ulp > 2 and verbose and 0:
             print(f"--> {sample, v1, v2, ulp=}")
         if ulp >= 3:
-            print(f"--> {sample, v1, v2, ulp=}")
+            print(f"--> {sample, (v1, v2), ulp=}")
+            (cx, ex), (cy, ey) = numpy.frexp(sample[0].real), numpy.frexp(sample[0].imag)
+            (cp, ep), (cq, eq) = numpy.frexp(sample[1].real), numpy.frexp(sample[1].imag)
+            print(f"       {cx, cy, cp, cq=} {ex, ey, ep, eq=} {ex + ey + ep + eq=}")
+            count_ulp_ge3 += 1
 
+    if count_ulp_ge3:
+        print(f"{count_ulp_ge3} out of {count} samples lead to ULP difference larger that 2")
     return ulp_stats[-1] == 0 and max(ulp_stats) <= 3, ulp_stats
 
 

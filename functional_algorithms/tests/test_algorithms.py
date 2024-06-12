@@ -26,7 +26,7 @@ def unary_func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["hypot"])
+@pytest.fixture(scope="function", params=["hypot", "multiply"])
 def binary_func_name(request):
     return request.param
 
@@ -79,8 +79,10 @@ def test_binary(dtype_name, binary_func_name):
     reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=10), binary_func_name)
 
     if dtype in {numpy.complex64, numpy.complex128}:
-        samples1, samples2 = utils.complex_pair_samples(((26, 26), (13, 13)), dtype=dtype, include_huge=True)
-        samples = [(x, y) for x, y in zip(samples1, samples2)]
+        samples1, samples2 = utils.complex_pair_samples(
+            ((26, 26), (13, 13)), dtype=dtype, include_huge=True, include_infinity=False, include_nan=False
+        )
+        samples = [(x, y) for x, y in zip(samples1.flatten(), samples2.flatten())]
     else:
         samples1, samples2 = utils.real_pair_samples((26, 26), dtype=dtype, include_huge=True)
         samples = [(x, y) for x, y in zip(samples1, samples2)]

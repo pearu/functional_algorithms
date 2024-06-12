@@ -12,6 +12,48 @@ accurate on the whole complex plane or real line.
 # doc-strings could be provided.
 
 
+def multiply(ctx, z: complex | float, w: complex | float):
+    """ """
+    if z.is_complex and w.is_complex:
+        x, y = z.real, z.imag
+        p, q = w.real, w.imag
+        cx, ex = ctx.frexp(x)
+        cy, ey = ctx.frexp(y)
+        cp, ep = ctx.frexp(p)
+        cq, eq = ctx.frexp(q)
+        re1 = x * p - y * q
+        im1 = x * q + y * p
+        zero = ctx.constant(0, x)
+        # re1 = ctx.fma(x, p, ctx.fma(-y, q, zero))
+        # im1 = ctx.fma(x, q, ctx.fma(y, p, zero))
+
+        e_xp = ex + ep
+        e_xq = ex + eq
+        e_yp = ey + ep
+        e_yq = ey + eq
+        re_e = (e_xp + e_yq) // 2
+        im_e = (e_xq + e_yp) // 2
+        exp = e_xp - re_e
+        eyq = e_yq - re_e
+        exq = e_xq - im_e
+        eyp = e_yp - im_e
+
+        x1 = ctx.ldexp(cx, exp)
+        y1 = ctx.ldexp(cy, eyq)
+        p1 = ctx.ldexp(cp, exp)
+        q1 = ctx.ldexp(cq, eyq)
+
+        # re2 = ctx.ldexp(ctx.fma(x1, p1, ctx.fma(-y1, q1, 0)), re_e)
+
+        re2 = ctx.ldexp(ctx.ldexp(cx * cp, exp) - ctx.ldexp(cy * cq, eyq), re_e)
+        im2 = ctx.ldexp(ctx.ldexp(cx * cq, exq) + ctx.ldexp(cy * cp, eyp), im_e)
+        # re,im 1 gives incorrect non-finite values while re,im 2 may false-overflow
+        re = ctx.select(ctx.isfinite(re1), re1, re2)
+        im = ctx.select(ctx.isfinite(im1), im1, im2)
+        return ctx(ctx.complex(re, im))
+    return z * w
+
+
 def real_square(ctx, x: float):
     """Square on real input: x * x"""
     return square(ctx, x)

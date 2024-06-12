@@ -3,7 +3,7 @@ import numpy
 import sys
 import warnings
 
-from .. import utils
+from .. import utils, ctypes_math
 from . import numpy as this_module
 from .base import PrinterBase
 
@@ -13,6 +13,8 @@ source_file_header = utils.format_python(
     """
 import numpy
 import warnings
+from functional_algorithms import ctypes_math
+
 
 def make_complex(r, i):
   if r.dtype == numpy.float32 and i.dtype == numpy.float32:
@@ -29,6 +31,12 @@ trace_arguments = dict(
     asin=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     square=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
+    multiply=[
+        (":complex128", ":complex128"),
+        (":complex64", ":complex64"),
+        (":float64", ":float64"),
+        (":float32", ":float32"),
+    ][:1],
 )
 
 
@@ -86,7 +94,6 @@ kind_to_target = dict(
     floor="numpy.floor({0})",
     copysign="numpy.copysign({0})",
     round=NotImplemented,
-    sign=NotImplemented,
     trunc="numpy.trunc({0})",
     conj="({0}).conjugate()",
     real="({0}).real",
@@ -102,6 +109,12 @@ kind_to_target = dict(
     ge="({0}) >= ({1})",
     eq="numpy.equal({0}, {1}, dtype=numpy.bool_)",
     ne="({0}) != ({1})",
+    isfinite="numpy.isfinite({0})",
+    sign="numpy.sign({0})",
+    fpfraction="numpy.frexp({0})[0]",
+    fpexponent="numpy.frexp({0})[1]",
+    ldexp="numpy.ldexp({0}, {1})",
+    fma="ctypes_math.fma({0}, {1}, {2})",
 )
 
 constant_to_target = dict(
@@ -137,9 +150,10 @@ def as_function(graph, debug=0):
         finfo_float32=numpy.finfo(numpy.float32),
         finfo_float64=numpy.finfo(numpy.float64),
         warnings=warnings,
+        ctypes_math=ctypes_math,
     )
     np = graph.tostring(this_module, debug=debug)
-    if debug >= 2:
+    if debug >= 2 or 1:
         print(np)
     exec(np, d)
     return d[graph.operands[0].operands[0]]
@@ -174,7 +188,7 @@ class Printer(PrinterBase):
         return f'print("{var}=", {var})'
 
     def check_dtype(self, var, dtype):
-        return f"assert {var}.dtype == {dtype}, ({var}.dtype, {dtype})"
+        return f"assert {var}.dtype == {dtype}, ({var}.dtype, {dtype}, '{var}')"
 
     def make_apply(self, expr, name, tab=""):
         sargs = ", ".join(map(self.make_argument, expr.operands[1:-1]))

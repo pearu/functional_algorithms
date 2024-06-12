@@ -412,3 +412,15 @@ class Context:
 
     def select(self, cond, x, y):
         return Expr(self, "select", (cond, x, y))
+
+    def isfinite(self, x):
+        return Expr(self, "isfinite", (x,))
+
+    def frexp(self, x):
+        return Expr(self, "fpfraction", (x,)), Expr(self, "fpexponent", (x,))
+
+    def ldexp(self, cx, ex):
+        return Expr(self, "ldexp", (cx, ex))
+
+    def fma(self, x, y, z):
+        return Expr(self, "fma", (x, y, z))
