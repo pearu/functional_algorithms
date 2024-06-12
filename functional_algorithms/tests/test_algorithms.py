@@ -31,7 +31,12 @@ def binary_func_name(request):
     return request.param
 
 
-def test_unary(dtype_name, unary_func_name):
+@pytest.fixture(scope="function", params=[False, True])
+def flush_subnormals(request):
+    return request.param
+
+
+def test_unary(dtype_name, unary_func_name, flush_subnormals):
     dtype = getattr(numpy, dtype_name)
     ctx = Context(paths=[algorithms])
 
@@ -44,15 +49,20 @@ def test_unary(dtype_name, unary_func_name):
         extra_prec_multiplier = 20
     else:
         extra_prec_multiplier = 1
-    reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier), unary_func_name)
+    reference = getattr(
+        utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=flush_subnormals),
+        unary_func_name,
+    )
 
     size = 31
     if dtype in {numpy.complex64, numpy.complex128}:
-        samples = utils.complex_samples((size, size), dtype=dtype, include_huge=True).flatten()
+        samples = utils.complex_samples(
+            (size, size), dtype=dtype, include_huge=True, include_subnormal=not flush_subnormals
+        ).flatten()
     else:
-        samples = utils.real_samples(size * size, dtype=dtype).flatten()
+        samples = utils.real_samples(size * size, dtype=dtype, include_subnormal=not flush_subnormals).flatten()
 
-    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
+    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype, flush_subnormals=flush_subnormals)
     assert matches_with_reference  # warning: also reference may be wrong
 
     extra_samples = []
@@ -61,11 +71,11 @@ def test_unary(dtype_name, unary_func_name):
 
     if extra_samples:
         samples = numpy.array(extra_samples, dtype=dtype)
-        matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
+        matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype, flush_subnormals=flush_subnormals)
         assert matches_with_reference  # warning: also reference may be wrong
 
 
-def test_binary(dtype_name, binary_func_name):
+def test_binary(dtype_name, binary_func_name, flush_subnormals):
     if dtype_name.startswith("complex") and binary_func_name in {"hypot"}:
         pytest.skip(reason=f"{binary_func_name} does not support {dtype_name} inputs")
 
@@ -76,16 +86,20 @@ def test_binary(dtype_name, binary_func_name):
 
     graph2 = graph.implement_missing(targets.numpy).simplify()
     func = targets.numpy.as_function(graph2, debug=1)
-    reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=10), binary_func_name)
+    reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=10, flush_subnormals=flush_subnormals), binary_func_name)
 
     if dtype in {numpy.complex64, numpy.complex128}:
-        samples1, samples2 = utils.complex_pair_samples(((26, 26), (13, 13)), dtype=dtype, include_huge=True)
+        samples1, samples2 = utils.complex_pair_samples(
+            ((26, 26), (13, 13)), dtype=dtype, include_huge=True, include_subnormal=not flush_subnormals
+        )
         samples = [(x, y) for x, y in zip(samples1, samples2)]
     else:
-        samples1, samples2 = utils.real_pair_samples((26, 26), dtype=dtype, include_huge=True)
+        samples1, samples2 = utils.real_pair_samples(
+            (26, 26), dtype=dtype, include_huge=True, include_subnormal=not flush_subnormals
+        )
         samples = [(x, y) for x, y in zip(samples1, samples2)]
 
-    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype)
+    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype, flush_subnormals=flush_subnormals)
     assert matches_with_reference  # warning: also reference may be wrong
 
 

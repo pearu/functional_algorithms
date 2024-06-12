@@ -13,6 +13,7 @@ class UNSPECIFIED:
 
 
 UNSPECIFIED = UNSPECIFIED()
+default_flush_subnormals = False
 
 
 class vectorize_with_mpmath(numpy.vectorize):
@@ -31,7 +32,8 @@ class vectorize_with_mpmath(numpy.vectorize):
         # longdouble=113
     )
 
-    float_minexp = dict(float16=-14, float32=-126, float64=-1022, float128=-16382)
+    float_subexp = dict(float16=-23, float32=-148, float64=-1073, float128=-16444)
+    float_minexp = dict(float16=-13, float32=-125, float64=-1021, float128=-16381)
 
     float_maxexp = dict(
         float16=16,
@@ -43,6 +45,8 @@ class vectorize_with_mpmath(numpy.vectorize):
     def __init__(self, *args, **kwargs):
         self.extra_prec_multiplier = kwargs.pop("extra_prec_multiplier", 0)
         self.extra_prec = kwargs.pop("extra_prec", 0)
+        flush_subnormals = kwargs.pop("flush_subnormals", UNSPECIFIED)
+        self.flush_subnormals = flush_subnormals if flush_subnormals is UNSPECIFIED else default_flush_subnormals
         self.contexts = dict()
         self.contexts_inv = dict()
         for fp_format, prec in self.float_prec.items():
@@ -115,7 +119,8 @@ class vectorize_with_mpmath(numpy.vectorize):
                 if ctx.isfinite(x):
                     sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
                     assert bc >= 0, (sign, man, exp, bc, x._mpf_)
-                    if exp + bc < self.float_minexp[fp_format]:
+                    zexp = self.float_minexp[fp_format] if self.flush_subnormals else self.float_subexp[fp_format]
+                    if exp + bc < zexp:
                         return -ctx.zero if sign else ctx.zero
                     if exp + bc > self.float_maxexp[fp_format]:
                         return ctx.ninf if sign else ctx.inf
@@ -210,7 +215,7 @@ class numpy_with_mpmath:
         arctanh="atanh",
     )
 
-    def __init__(self, extra_prec_multiplier=0, extra_prec=0):
+    def __init__(self, extra_prec_multiplier=0, extra_prec=0, flush_subnormals=UNSPECIFIED):
 
         for name in self._provides:
             mp_name = self._mpmath_names.get(name, name)
@@ -228,7 +233,9 @@ class numpy_with_mpmath:
                     def op(x, mp_name=mp_name):
                         return getattr(x.context, mp_name)(x)
 
-            vop = vectorize_with_mpmath(op, extra_prec_multiplier=extra_prec_multiplier, extra_prec=extra_prec)
+            vop = vectorize_with_mpmath(
+                op, extra_prec_multiplier=extra_prec_multiplier, extra_prec=extra_prec, flush_subnormals=flush_subnormals
+            )
             setattr(self, name, vop)
             if not hasattr(self, mp_name):
                 setattr(self, mp_name, vop)
@@ -646,55 +653,42 @@ def isfloat(value):
     return isinstance(value, (float, numpy.floating))
 
 
-def diff_ulp(x, y, ftz=True) -> int:
+def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
     """Return ULP distance between two floating point numbers.
 
     For complex inputs, return largest ULP among real and imaginary
     parts.
 
-    When ftz is True, the distance does not count subnormals.
+    When flush_subnormals is set to True, ULP difference does not
+    account for subnormals while subnormal values are rounded to
+    nearest normal, ties to even.
     """
     if isinstance(x, numpy.floating):
+        uint = {numpy.float64: numpy.uint64, numpy.float32: numpy.uint32, numpy.float16: numpy.uint16}[x.dtype.type]
+        sx = -1 if x <= 0 else 1
+        sy = -1 if y <= 0 else 1
+        x, y = abs(x), abs(y)
+        ix, iy = int(x.view(uint)), int(y.view(uint))
         if numpy.isfinite(x) and numpy.isfinite(y):
-            uint = {numpy.float64: numpy.uint64, numpy.float32: numpy.uint32}[x.dtype.type]
-            x, sx = (abs(x), -1) if x <= 0 else (x, 1)
-            y, sy = (abs(y), -1) if y <= 0 else (y, 1)
-            ix, iy = int(x.view(uint)), int(y.view(uint))
-            if ftz:
+            flush_subnormals if flush_subnormals is UNSPECIFIED else default_flush_subnormals
+            if flush_subnormals:
                 fi = numpy.finfo(x.dtype)
                 i = int(fi.smallest_normal.view(uint)) - 1  # 0 distance to largest subnormal
-                ix = ix - i if ix > i else (0 if 2 * ix < i else 1)
-                iy = iy - i if iy > i else (0 if 2 * iy < i else 1)
+                ix = ix - i if ix > i else (0 if 2 * ix <= i else 1)
+                iy = iy - i if iy > i else (0 if 2 * iy <= i else 1)
             if sx != sy:
                 # distance is measured through 0 value
                 return ix + iy
             return ix - iy if ix >= iy else iy - ix
-        elif numpy.isnan(x) and numpy.isnan(y):
+        elif ix == iy and sx == sy:
             return 0
-        elif x == y:
-            return 0
-        else:
-            return {numpy.float64: 2**64, numpy.float32: 2**32}[x.dtype.type]
+        return {numpy.float64: 2**64, numpy.float32: 2**32, numpy.float16: 2**16}[x.dtype.type]
     elif isinstance(x, numpy.complexfloating):
-        return max(diff_ulp(x.real, y.real, ftz=ftz), diff_ulp(x.imag, y.imag, ftz=ftz))
+        return max(
+            diff_ulp(x.real, y.real, flush_subnormals=flush_subnormals),
+            diff_ulp(x.imag, y.imag, flush_subnormals=flush_subnormals),
+        )
     raise NotImplementedError(type(x))
-
-
-# TODO: get_scale is unused
-def get_scale(value):
-    values = [value.real, value.imag] if iscomplex(value) else [value]
-    return min([numpy.ldexp(1.0, -numpy.frexp(abs(v))[1]) for v in values if numpy.isfinite(v)] or [type(value)(1)])
-
-
-# TODO: isclose is unused
-def isclose(x, y, atol, rtol):
-    if iscomplex(x):
-        return isclose(x.real, y.real, atol, rtol) and isclose(x.imag, y.imag, atol, rtol)
-    if numpy.isnan(x) and numpy.isnan(y):
-        return True
-    # atol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
-    # rtol = {numpy.float32: 1e-8, numpy.float64: 1e-15}[x.dtype.type]
-    return numpy.isclose(x, y, atol=atol, rtol=rtol, equal_nan=True)
 
 
 def make_complex(r, i):
@@ -716,7 +710,7 @@ def mul(x, y):
         return numpy.multiply(x, y, dtype=x.dtype)
 
 
-def validate_function(func, reference, samples, dtype, verbose=True):
+def validate_function(func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
     for sample in samples:
@@ -729,7 +723,7 @@ def validate_function(func, reference, samples, dtype, verbose=True):
 
         v2 = v2[()]
         assert v1.dtype == v2.dtype, (v1, v2)
-        ulp = diff_ulp(v1, v2)
+        ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
         ulp_stats[ulp] += 1
         if ulp > 2 and verbose:
             print(f"--> {sample, v1, v2, ulp=}")
