@@ -98,6 +98,13 @@ class Context:
                         ref = name
                     else:
                         ref = self._stack_name + name
+                        if ref in self._ref_values:
+                            c = 0
+                            ref_ = ref + f"__{c}"
+                            while ref_ in self._ref_values:
+                                c += 1
+                                ref_ = ref + f"__{c}"
+                            ref = ref_
                     obj.reference(ref_name=ref, force=obj.props.get("force", None))
                     if self.alt is not None and obj.kind == "constant" and isinstance(obj.operands[0], Expr):
                         ref_ = ref + "_"

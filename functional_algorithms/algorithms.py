@@ -317,3 +317,43 @@ def asin(ctx, z: complex | float):
 
     signed_imag = ctx.select(signed_y < zero, -imag, imag)
     return ctx(ctx.complex(real, signed_imag))
+
+
+def complex_asinh(ctx, z: complex):
+    """Inverse hyperbolic sine on complex input:
+
+    asinh(z) = -I * asin(I * z)
+    """
+    return asinh(ctx, z)
+
+
+def real_asinh(ctx, x: float):
+    """Inverse hyperbolic sine on real input:
+
+    asinh(x) = log(x + sqrt(x ** 2 + 1))
+             = log(x + hypot(1, x))
+
+
+
+
+    For small x, we have
+      log(x + sqrt(x ** 2 + 1)) = log(1 + x + hypot(x, 1) - 1)
+
+      log(x + sqrt(x ** 2 + 1)) = log1p(x + sqrt(x ** 2 + 1) - 1)
+                                = log1p(x + x ** 2 / 2)
+    """
+    return asinh(ctx, x)
+
+
+def asinh(ctx, z: complex | float):
+    """Inverse hyperbolic sine on complex and real inputs.
+
+    See complex_asinh and real_asinh for more information.
+    """
+    if not z.is_complex:
+        return asin(ctx, ctx.complex(0, z)).imag
+
+    # i * z = i * (x + i * y) = -y + i * x
+    w = ctx.asin(ctx.complex(-z.imag, z.real))
+    # -i * w = -i * (a + i * b) = b - i * a
+    return ctx(ctx.complex(w.imag, -w.real))

@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "asin", "hypot", "square"])
+@pytest.fixture(scope="function", params=["absolute", "asin", "asinh", "hypot", "square"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "asin", "square"])
+@pytest.fixture(scope="function", params=["absolute", "asin", "asinh", "square"])
 def unary_func_name(request):
     return request.param
 
@@ -45,7 +45,7 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     func = targets.numpy.as_function(graph2, debug=0)
 
-    if unary_func_name == "asin":
+    if unary_func_name in {"asin", "asinh"}:
         extra_prec_multiplier = 20
     else:
         extra_prec_multiplier = 1

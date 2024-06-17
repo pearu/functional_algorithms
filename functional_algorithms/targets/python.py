@@ -18,6 +18,7 @@ import sys
 trace_arguments = dict(
     absolute=[(":complex",)],
     asin=[(":complex",), (":float",)],
+    asinh=[(":complex",), (":float",)],
     hypot=[(":float", ":float")],
     square=[(":float",), (":complex",)],
 )
@@ -56,7 +57,7 @@ kind_to_target = dict(
     minimum="min({0}, {1})",
     acos="math.acos({0})",
     acosh="math.acosh({0})",
-    asin="math.asin({0})",
+    # asin="math.asin({0})",
     asinh="math.asinh({0})",
     atan="math.atan({0})",
     atanh="math.atanh({0})",

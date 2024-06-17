@@ -1,23 +1,25 @@
-// This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
+// This file is generated using functional_algorithms tool (0.4.0), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
 
 
+#include "xla/client/lib/constants.h"
+#include "xla/client/xla_builder.h"
 #include <limits>
 
 
 template <typename FloatType>
-XLAOp absolute_0(XLAOp z) {
-  XLAOp x = Real(z);
-  XLAOp abs_x = Abs(x);
-  XLAOp abs_y = Abs(Imag(z));
-  XLAOp mx = Max(abs_x, abs_y);
-  XLAOp mn = Min(abs_x, abs_y);
+XlaOp absolute_0(XlaOp z) {
+  XlaOp x = Real(z);
+  XlaOp abs_x = Abs(x);
+  XlaOp abs_y = Abs(Imag(z));
+  XlaOp mx = Max(abs_x, abs_y);
+  XlaOp mn = Min(abs_x, abs_y);
   FloatType constant_2 = 2;
-  XLAOp constant_constant_1 = ScalarLike(x, 1);
-  XLAOp r = Square(Div(mn, mx));
-  XLAOp sqa = Sqrt(Add(constant_constant_1, r));
+  XlaOp constant_constant_1 = ScalarLike(x, 1);
+  XlaOp r = Square(Div(mn, mx));
+  XlaOp sqa = Sqrt(Add(constant_constant_1, r));
   return Select(
       Eq(mx, mn), Mul(ScalarLike(x, std::sqrt(constant_2)), mx),
       Select(And(Eq(sqa, constant_constant_1), Gt(r, ScalarLike(x, 0))),

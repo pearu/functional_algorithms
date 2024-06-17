@@ -45,6 +45,9 @@ class PrinterBase:
         return NotImplemented
 
     def tostring(self, expr, tab=""):
+        if expr.ref is None and "other" in expr.props:
+            return self.tostring(expr.props["other"], tab=tab)
+
         if expr.ref in self.defined_refs:
             assert self.need_ref.get(expr.ref), expr.ref
             return expr.ref
@@ -101,8 +104,9 @@ class PrinterBase:
             result = tmpl.format(*[self.tostring(operand) for operand in expr.operands], **m)
 
         assert expr.ref is not None
+
         if self.need_ref.get(expr.ref):
-            assert expr.ref not in self.defined_refs
+            assert expr.ref not in self.defined_refs, expr.ref
             self.defined_refs.add(expr.ref)
             self.assignments.append(self.make_assignment(self.get_type(expr), expr.ref, result))
             result = expr.ref
