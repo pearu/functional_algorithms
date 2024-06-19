@@ -278,6 +278,7 @@ class Rewriter:
         if x.kind == "constant":
             value, like = x.operands
             if isinstance(value, (int, float)):
+                ctx = x.context
                 if value == 0:
                     return ctx.constant(0, like)
                 return ctx.constant(1 if value > 0 else -1, like)
