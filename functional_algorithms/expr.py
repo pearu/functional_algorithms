@@ -2,6 +2,7 @@ import warnings
 from .utils import UNSPECIFIED
 from . import algorithms
 from .typesystem import Type
+from .rewrite import rewrite
 
 
 def normalize_like(expr):
@@ -44,6 +45,10 @@ def normalize_like(expr):
             expr = expr.operands[0]
         elif expr.kind == "abs" and not expr.operands[0].is_complex:
             expr = expr.operands[0]
+        elif expr.kind == "real" and expr.operands[0].kind == "complex":
+            expr = expr.operands[0].operands[0]
+        elif expr.kind == "imag" and expr.operands[0].kind == "complex":
+            expr = expr.operands[0].operands[1]
         else:
             break
     return expr
@@ -174,7 +179,6 @@ class Expr:
                 assert operands[0].context is context.alt, operands
             if context.alt is not None and not isinstance(operands[0], Expr):
                 operands = [context.alt.constant(operands[0]), operands[1]]
-
         else:
             if kind == "select":
                 operands = operands[:1] + normalize(context, operands[1:])
@@ -196,14 +200,14 @@ class Expr:
                             if not constant_type.is_same(t):
                                 warnings.warn(f"{kind}: unexpected operand type `{t}`, expected `{constant_type}`")
                 if len(constant_operands) == len(operands) and constant_like is not None:
-                    operands = [Expr(context.alt, kind, constant_operands), constant_like]
+                    operands = (Expr(context.alt, kind, tuple(constant_operands)), constant_like)
                     kind = "constant"
 
             assert False not in [isinstance(operand, Expr) for operand in operands], operands
 
         obj.context = context
         obj.kind = kind
-        obj.operands = operands
+        obj.operands = tuple(operands)
         # expressions are singletons within the given context and are
         # uniquely identified by its serialized string value. However,
         # expression props are mutable. Therefore. mutations (e.g. ref
@@ -237,6 +241,9 @@ class Expr:
         return f'{self.kind}({",".join(operand._serialized for operand in self.operands)})'
 
     def _replace(self, other):
+        if other is self:
+            # nothing to replace
+            return self
         # replace self by other
         ref = self.props.get("ref", UNSPECIFIED)
         force_ref = self.props.get("force_ref", None)
@@ -292,34 +299,46 @@ class Expr:
     def simplify(self):
         if self.kind in {"symbol", "constant"}:
             return self
+
+        # result = rewrite(self)
+
+        # if result is not None:
+        #    return self._replace(result.simplify())
+        result = self
+
         if self.kind == "apply":
             body = self.operands[-1].simplify()
-            if body is self.operands[-1]:
-                return self
-            result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
-        elif self.kind == "abs" and self.operands[0].kind == "abs":
-            result = self.operands[0]
+            if body is not self.operands[-1]:
+                result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
         else:
             operands = tuple([operand.simplify() for operand in self.operands])
+
             for o1, o2 in zip(operands, self.operands):
                 if o1 is not o2:
+                    result = Expr(self.context, self.kind, operands)
                     break
-            else:
-                return self
-            result = Expr(self.context, self.kind, operands)
+
+        result_ = rewrite(result)
+        if result_ is not None:
+            result = result_  # call simplify?
+
         return self._replace(result)
 
     def tostring(self, target, tab="", need_ref=None, debug=0):
         if need_ref is None:
 
             def compute_need_ref(expr: Expr, need_ref: dict) -> None:
+
                 ref = expr.ref
-                assert ref is not None
-                if ref in need_ref:
+
+                if ref is None and "other" in expr.props:
+                    compute_need_ref(expr.props["other"], need_ref)
+                elif ref in need_ref:
                     # expression with ref is used more than once, hence we'll
                     # mark it as needed
                     need_ref[ref] = True
                 else:
+                    assert ref is not None
                     # the first usage of expression with ref does not require
                     # using ref, unless forced.
                     need_ref[ref] = expr.props.get("force_ref", False)
@@ -340,9 +359,13 @@ class Expr:
         Used by target printers for expressions that need referencing.
         """
         ref = self.props.get("ref", UNSPECIFIED)
+        if ref is None and "other" in self.props:
+            return self.props["other"].ref  # + '__other'
         if ref in {None, UNSPECIFIED}:
             ref = make_ref(self)
+            # assert ref is not None, self.props
             assert ref not in self.context._ref_values, ref
+        assert ref is not UNSPECIFIED
         return ref
 
     def reference(self, ref_name=UNSPECIFIED, force=True):
@@ -629,6 +652,7 @@ class Expr:
             "ceil",
             "floor",
             "logical_not",
+            "sign",
         }:
             return self.operands[0].get_type()
         elif self.kind in {

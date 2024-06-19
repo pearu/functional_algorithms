@@ -16,8 +16,11 @@ trace_arguments = dict(
     hypot=[(":float", ":float")],
     complex_asin=[(":complex", ":complex")],
     real_asin=[(":float", ":float")],
+    complex_asinh=[(":complex", ":complex")],
+    real_asinh=[(":float", ":float")],
     square=[(":float", ":float"), (":complex", ":complex")],
     asin=[(":float", ":float"), (":complex", ":complex")],
+    asinh=[(":float", ":float"), (":complex", ":complex")],
 )
 
 source_file_extension = ".cc"

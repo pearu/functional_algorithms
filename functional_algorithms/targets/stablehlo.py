@@ -11,6 +11,7 @@ source_file_header = ""
 trace_arguments = dict(
     absolute=[(":complex",)],
     asin=[(":float",), (":complex",)],
+    asinh=[(":float",), (":complex",)],
     hypot=[(":float", ":float")],
     square=[(":float",), (":complex",)],
 )
@@ -55,7 +56,7 @@ kind_to_target = dict(
     minimum="StableHLO_MinOp",
     acos=NotImplemented,
     acosh=NotImplemented,
-    asin=NotImplemented,
+    asin="CHLO_AsinOp",
     asinh=NotImplemented,
     atan=NotImplemented,
     atanh=NotImplemented,
@@ -76,7 +77,7 @@ kind_to_target = dict(
     floor=NotImplemented,
     copysign=NotImplemented,
     round=NotImplemented,
-    sign=NotImplemented,
+    sign="StableHLO_SignOp",
     trunc=NotImplemented,
     conj=NotImplemented,
     real="StableHLO_RealOp",
@@ -153,17 +154,20 @@ class Printer:
 
         if expr.kind == "constant":
             value, like = expr.operands
-            if like.ref not in self.defined_refs:
-                raise RuntimeError(
+            if like.ref in self.defined_refs:
+                like_val = f"${like.ref}"
+            else:
+                warnings.warn(
                     f"undefined reference {like} in {expr} (when a constant is used as left operand, its ref value must be specified explicitly)"
                 )
+                like_val = self.tostring(like)
             if isinstance(value, str):
                 v = constant_to_target.get(value, NotImplemented)
                 if v is not NotImplemented:
-                    return f"{tab}({v} ${like.ref})"
+                    return f"{tab}({v} {like_val})"
                 else:
                     warnings.warn(f"Constant `{value}` is not implemented in {this_module.__name__}.constant_to_target")
-            return f'{tab}(StableHLO_ConstantLike<"{value}">{ref} ${like.ref})'
+            return f'{tab}(StableHLO_ConstantLike<"{value}">{ref} {like_val})'
 
         elif expr.kind in {"lt", "le", "gt", "ge", "eq", "ne"}:
             lines = []

@@ -3,6 +3,11 @@ import mpmath
 import warnings
 from collections import defaultdict
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda seq: seq
+
 
 class UNSPECIFIED:
 
@@ -710,10 +715,10 @@ def mul(x, y):
         return numpy.multiply(x, y, dtype=x.dtype)
 
 
-def validate_function(func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED):
+def validate_function(func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED, enable_progressbar=False):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
-    for sample in samples:
+    for sample in tqdm(samples) if enable_progressbar else samples:
         if isinstance(sample, tuple):
             v1 = func(*sample)
             v2 = reference(*sample)

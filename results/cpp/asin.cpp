@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
+// This file is generated using functional_algorithms tool (0.4.0), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 

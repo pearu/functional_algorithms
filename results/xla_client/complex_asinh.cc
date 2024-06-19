@@ -10,8 +10,7 @@
 
 
 template <typename FloatType>
-XlaOp real_asin_0(XlaOp x) {
-  XlaOp one = ScalarLike(x, 1);
-  return Mul(ScalarLike(x, 2),
-             Atan2(x, Add(one, Sqrt(Mul(Sub(one, x), Add(one, x))))));
+XlaOp complex_asinh_0(XlaOp z) {
+  XlaOp w = Asin(Complex(Neg(Imag(z)), Real(z)));
+  return Complex(Imag(w), Neg(Real(w)));
 }
