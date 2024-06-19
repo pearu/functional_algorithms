@@ -330,19 +330,105 @@ def complex_asinh(ctx, z: complex):
 def real_asinh(ctx, x: float):
     """Inverse hyperbolic sine on real input:
 
-    asinh(x) = log(x + sqrt(x ** 2 + 1))
-             = log(x + hypot(1, x))
+      asinh(x) = log(x + hypot(1, x))
 
+    This algorithm is based on the StableHLO v1.0 function CHLO_AsinhOp.
 
+    To avoid overflow in x * x, we use
 
+      asinh(x) = log(2) + log(x)
 
-    For small x, we have
-      log(x + sqrt(x ** 2 + 1)) = log(1 + x + hypot(x, 1) - 1)
+    when abs(x) > sqrt(max),
 
-      log(x + sqrt(x ** 2 + 1)) = log1p(x + sqrt(x ** 2 + 1) - 1)
-                                = log1p(x + x ** 2 / 2)
+    To avoid underflow in 1 + x * x, we'll define z = hypot(1, x) and
+    write
+
+      log(x + z)
+      = log(((x + z) * (1 + z)) / (1 + z))
+      [ z ** 2 = 1 + x ** 2]
+      = log((x + x * z + z + 1 + x**2) / (1 + z))
+      = log(1 + x + x ** 2 / (1 + z))
+      = log1p(x + x ** 2 / (1 + hypot(1, x)))
+
+    that is, for non-negative x, we have
+
+      asinh(x) = log1p(x + x ** 2 / (1 + hypot(1, x)))
+
+    It turns out, this is accurate for all abs(x) < sqrt(max).
+
+    For x < 0, we'll use
+
+      asinh(x) = -asinh(-x)
+
     """
-    return asinh(ctx, x)
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+    ax = abs(x)
+    ax2 = ax * ax
+    z = ctx.sqrt(one + ax2)
+    a0 = ctx.log(two) + ctx.log(ax)
+    a1 = ctx.log1p(ax + ax2 / (one + z))
+    a2 = ctx.log(ax + z)
+
+    safe_max_limit_coefficient = ctx.parameters.get("safe_max_limit_coefficient", 1)
+    safe_max_limit = ctx.sqrt(ctx.constant("largest", x)) * safe_max_limit_coefficient
+
+    # | Function                        | dtype   | dULP=0 | dULP=1 | dULP=2 | dULP=3 | dULP>3 | errors  |
+    # | ------------------------------- | ------- | ------ | ------ | ------ | ------ | ------ | ------- |
+    # | asinh                           | float32 | 895795 | 104084 | 122    | -      | -      | -       |
+    # | real_asinh[safe_min_limit=1]    | float32 | 922339 | 77566  | 96     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=10]   | float32 | 922885 | 77050  | 66     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=100]  | float32 | 922811 | 77124  | 66     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=1000] | float32 | 922813 | 77122  | 66     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=None] | float32 | 922791 | 77144  | 66     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=0.1]  | float64 | 829011 | 170324 | 292    | 156    | 218    | -       |
+    # | real_asinh[safe_min_limit=1]    | float64 | 829565 | 170340 | 96     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=10]   | float64 | 829593 | 170314 | 94     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=100]  | float64 | 829605 | 170302 | 94     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=1000] | float64 | 829599 | 170308 | 94     | -      | -      | -       |
+    # | real_asinh[safe_min_limit=None] | float64 | 829637 | 170270 | 94     | -      | -      | -       |
+
+    safe_min_limit = ctx.parameters.get("safe_min_limit", None)
+
+    if safe_min_limit is None:
+        r = ctx.select(ax >= safe_max_limit, a0, a1)
+    else:
+        r = ctx.select(
+            ax >= safe_max_limit,
+            a0,
+            ctx.select(ax <= safe_min_limit, a1, a2),
+        )
+
+    return ctx(ctx.sign(x) * r)
+
+
+def real_asinh_2(ctx, x: float):
+    """Inverse hyperbolic sine on real input.
+
+    This algorithm is based on the modified version of the [Hull et
+    al]((https://dl.acm.org/doi/10.1145/275323.275324) algorithm used
+    for asin and the relation
+     asinh(x) = asin(complex(0, x)).imag
+    """
+    y = abs(x)
+    one = ctx.constant(1, y)
+    two = ctx.constant(2, y)
+    s = ctx.hypot(one, y)
+    am1 = ctx.select(s <= 1.5, y * y / (s + one), s - one)
+    sq = ctx.sqrt(am1 * (s + one))
+
+    a0 = ctx.log(two) + ctx.log(y)
+    a1 = ctx.log1p(am1 + sq)
+
+    safe_max = ctx.sqrt(ctx.constant("largest", y)) / 8
+    large_y_cond = y > safe_max * 1e-6
+
+    safe_min = ctx.sqrt(ctx.constant("smallest", y)) * 4
+    small_y_cond = y < safe_min
+
+    imag = ctx.select(large_y_cond, a0, ctx.select(small_y_cond, y, a1))
+
+    return ctx(ctx.select(x < 0, -imag, imag))
 
 
 def asinh(ctx, z: complex | float):
@@ -351,9 +437,10 @@ def asinh(ctx, z: complex | float):
     See complex_asinh and real_asinh for more information.
     """
     if not z.is_complex:
-        return asin(ctx, ctx.complex(0, z)).imag
+        return real_asinh(ctx, z)
 
     # i * z = i * (x + i * y) = -y + i * x
     w = ctx.asin(ctx.complex(-z.imag, z.real))
+    # w = ctx.asin(ctx.complex(-z.imag, z.real))
     # -i * w = -i * (a + i * b) = b - i * a
     return ctx(ctx.complex(w.imag, -w.real))

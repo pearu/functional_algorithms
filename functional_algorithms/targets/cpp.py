@@ -86,7 +86,7 @@ kind_to_target = dict(
     floor="std::floot({0})",
     copysign=NotImplemented,
     round="std::round({0})",
-    sign="std::sign({0})",
+    sign="({0} == 0 ? {0} : std::copysign(1, {0}))",
     trunc=NotImplemented,
     conj=NotImplemented,
     real="({0}).real()",

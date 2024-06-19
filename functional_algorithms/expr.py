@@ -652,6 +652,7 @@ class Expr:
             "ceil",
             "floor",
             "logical_not",
+            "sign",
         }:
             return self.operands[0].get_type()
         elif self.kind in {

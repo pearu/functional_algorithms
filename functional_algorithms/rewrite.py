@@ -273,6 +273,18 @@ class Rewriter:
                 if value == 0 or value == 1:
                     return x
 
+    def sign(self, expr):
+        (x,) = expr.operands
+        if x.kind == "constant":
+            value, like = x.operands
+            if isinstance(value, (int, float)):
+                if value == 0:
+                    return ctx.constant(0, like)
+                return ctx.constant(1 if value > 0 else -1, like)
+
+        if x.kind == "sign":
+            return x
+
     def square(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":

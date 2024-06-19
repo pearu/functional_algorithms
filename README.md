@@ -35,7 +35,8 @@ following math functions:
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
-  complex `asin`.
+  complex `asin`,
+- `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`.
 
 ## Supported targets
 
@@ -83,26 +84,26 @@ To characterize the correctness of algorithms, we'll use
 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) to measure
 the distance between function result and its reference value.
 
-When using 1 000 000 samples that are log-uniformly distributed on a
-complex plane of real line, the probability that the function return
-value is different from a reference value by the given number of ULPs,
-is displayed in the following table for the supported algorithms:
+When using over a million samples that are log-uniformly distributed
+on a complex plane of real line, the probability that the function
+return value is different from a reference value by the given number
+of ULPs, is displayed in the following table for the supported
+algorithms:
 
 
 | Function | dtype | ULP=0 (exact) | ULP=1 | ULP=2 | ULP=3 | ULP>3 | errors    |
 | -------- | ----- | ------------- | ----- | ----- | ----- | ----- | --------- |
 | absolute | float32 | 100.000 % | - | - | - | - | - |
-| absolute | float64 | 100.000 % | - | - | - | - | - |
 | absolute | complex64 | 96.590 % | 3.360 % | 0.050 % | - | - | - |
-| absolute | complex128 | 99.156 % | 0.844 % | - | - | - | - |
 | asin | float32 | 97.712 % | 2.193 % | 0.093 % | 0.002 % | - | - |
-| asin | float64 | 99.562 % | 0.434 % | 0.004 % | - | - | - |
 | asin | complex64 | 79.382 % | 20.368 % | 0.244 % | 0.006 % | - | - |
-| asin | complex128 | 72.624 % | 27.272 % | 0.103 % | 0.001 % | - | - |
+| asinh | float32 | 92.279% | 7.714 % | 0.006 % | - | - | - |
+| asinh | complex64 | 76.625 % | 23.350 % | 0.024 % | - | - | - |
 | square | float32 | 100.000 % | - | - | - | - | - |
-| square | float64 | 100.000 % | - | - | - | - | - |
 | square | complex64 | 99.578 % | 0.422 % | - | - | - | - |
-| square | complex128 | 99.971 % | 0.029 % | - | - | - | - |
+
+See a complete table of [ULP differences for all provided
+algoritms](results/README.md).
 
 
 ## A case study: square

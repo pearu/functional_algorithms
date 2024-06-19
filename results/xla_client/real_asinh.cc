@@ -10,22 +10,16 @@
 
 
 template <typename FloatType>
-XlaOp asinh_0(XlaOp z) {
-  XlaOp ax = Abs(z);
+XlaOp real_asinh_0(XlaOp x) {
+  XlaOp ax = Abs(x);
   FloatType one_ = 1;
   XlaOp ax2 = Mul(ax, ax);
-  XlaOp one = ScalarLike(z, one_);
+  XlaOp one = ScalarLike(x, one_);
   return Mul(
-      Sign(z),
+      Sign(x),
       Select(Ge(ax, ScalarLike(
-                        z, (std::sqrt(std::numeric_limits<FloatType>::max())) *
+                        x, (std::sqrt(std::numeric_limits<FloatType>::max())) *
                                (one_))),
-             Add(ScalarLike(z, std::log(2)), Log(ax)),
+             Add(ScalarLike(x, std::log(2)), Log(ax)),
              Log1p(Add(ax, Div(ax2, Add(one, Sqrt(Add(one, ax2))))))));
-}
-
-template <typename FloatType>
-XlaOp asinh_1(XlaOp z) {
-  XlaOp w = Asin(Complex(Neg(Imag(z)), Real(z)));
-  return Complex(Imag(w), Neg(Real(w)));
 }

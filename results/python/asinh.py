@@ -92,40 +92,12 @@ def asinh_0(z: complex) -> complex:
     return complex((-(imag)) if ((signed_y) < (zero)) else (imag), -(real))
 
 
-def asinh_1(signed_y: float) -> float:
-    xoy: float = 0
-    y: float = abs(signed_y)
-    safe_max: float = (math.sqrt(sys.float_info.max)) / (8)
-    safe_max_opt: float = (safe_max) * (1e-06)
-    y_gt_safe_max_opt: bool = (y) >= (safe_max_opt)
-    mx: float = (y) if (y_gt_safe_max_opt) else (xoy)
-    two: float = 2
-    lt_y_safe_min: bool = (y) < ((math.sqrt(sys.float_info.min)) * (4))
-    xm1: float = -1
-    half: float = 0.5
-    xp1: float = 1
-    _hypot_2_mx: float = max(xp1, y)
-    _hypot_2_mn_over_mx: float = (min(xp1, y)) / (_hypot_2_mx)
-    _hypot_2_r: float = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
-    _hypot_2_sqa: float = math.sqrt((xp1) + (_hypot_2_r))
-    s: float = (
-        ((math.sqrt(two)) * (_hypot_2_mx))
-        if ((xp1) == (y))
-        else (
-            ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
-            if (((_hypot_2_sqa) == (xp1)) and ((_hypot_2_r) > (xoy)))
-            else ((_hypot_2_mx) * (_hypot_2_sqa))
-        )
+def asinh_1(z: float) -> float:
+    ax: float = abs(z)
+    one: float = 1
+    ax2: float = (ax) * (ax)
+    return ((0 if z == 0 else math.copysign(1, z))) * (
+        ((math.log(2)) + (math.log(ax)))
+        if ((ax) >= ((math.sqrt(sys.float_info.max)) * (one)))
+        else (math.log1p((ax) + ((ax2) / ((one) + (math.sqrt((one) + (ax2)))))))
     )
-    apx: float = (half) * ((s) + (s))
-    ap1: float = (apx) + (xp1)
-    half_yy: float = (half) * ((y) * (y))
-    x_ge_1_or_not: float = (((half_yy) / ((s) + (xp1))) + ((half_yy) / ((s) - (xm1)))) if ((apx) <= (1.5)) else ((apx) - (xp1))
-    am1: float = (-((xm1) / (ap1))) if (lt_y_safe_min) else (x_ge_1_or_not)
-    sq: float = math.sqrt((am1) * (ap1))
-    imag: float = (
-        ((math.log(two)) + (math.log(mx)))
-        if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-        else (((y) / (sq)) if (lt_y_safe_min) else (math.log1p((am1) + (sq))))
-    )
-    return (-(imag)) if ((signed_y) < (xoy)) else (imag)
