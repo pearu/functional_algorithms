@@ -332,7 +332,7 @@ def real_asinh(ctx, x: float):
 
       asinh(x) = log(x + hypot(1, x))
 
-    This algorithm is based on the StableHLO v1.0 function CHLO_AsinhOp.
+    This algorithm is based on the StableHLO v1.1.4 function CHLO_AsinhOp.
 
     To avoid overflow in x * x, we use
 
@@ -370,8 +370,11 @@ def real_asinh(ctx, x: float):
     a1 = ctx.log1p(ax + ax2 / (one + z))
     a2 = ctx.log(ax + z)
 
-    safe_max_limit_coefficient = ctx.parameters.get("safe_max_limit_coefficient", 1)
-    safe_max_limit = ctx.sqrt(ctx.constant("largest", x)) * safe_max_limit_coefficient
+    safe_max_limit_coefficient = ctx.parameters.get("safe_max_limit_coefficient", None)
+    if safe_max_limit_coefficient is None:
+        safe_max_limit = ctx.sqrt(ctx.constant("largest", x))
+    else:
+        safe_max_limit = ctx.sqrt(ctx.constant("largest", x)) * safe_max_limit_coefficient
 
     # | Function                        | dtype   | dULP=0 | dULP=1 | dULP=2 | dULP=3 | dULP>3 | errors  |
     # | ------------------------------- | ------- | ------ | ------ | ------ | ------ | ------ | ------- |

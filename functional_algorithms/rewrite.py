@@ -141,10 +141,30 @@ class Rewriter:
                     return y_
 
     def subtract(self, expr):
-        return self._binary_op(expr, lambda x, y: x - y)
+        result = self._binary_op(expr, lambda x, y: x - y)
+
+        if result is not None:
+            return result
+
+        x, y = expr.operands
+        for x_, y_, s in [(x, y, -1), (y, x, 1)]:
+            if x_.kind == "constant":
+                value, like = x_.operands
+                if isinstance(value, (int, float)) and value == 0:
+                    return -y_ if s == -1 else y_
 
     def multiply(self, expr):
-        return self._binary_op(expr, lambda x, y: x * y)
+        result = self._binary_op(expr, lambda x, y: x * y)
+
+        if result is not None:
+            return result
+
+        x, y = expr.operands
+        for x_, y_ in [(x, y), (y, x)]:
+            if x_.kind == "constant":
+                value, like = x_.operands
+                if isinstance(value, (int, float)) and value == 1:
+                    return y_
 
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))

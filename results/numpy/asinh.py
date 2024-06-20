@@ -35,11 +35,11 @@ def asinh_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
         ax: numpy.float64 = numpy.abs(z)
-        one: numpy.float64 = numpy.float64(1)
         ax2: numpy.float64 = (ax) * (ax)
+        one: numpy.float64 = numpy.float64(1)
         result = (numpy.sign(z)) * (
             ((numpy.log(numpy.float64(2))) + (numpy.log(ax)))
-            if ((ax) >= ((numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).max))) * (one)))
+            if ((ax) >= (numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).max))))
             else (numpy.log1p((ax) + ((ax2) / ((one) + (numpy.sqrt((one) + (ax2)))))))
         )
         return result
@@ -49,11 +49,11 @@ def asinh_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
         ax: numpy.float32 = numpy.abs(z)
-        one: numpy.float32 = numpy.float32(1)
         ax2: numpy.float32 = (ax) * (ax)
+        one: numpy.float32 = numpy.float32(1)
         result = (numpy.sign(z)) * (
             ((numpy.log(numpy.float32(2))) + (numpy.log(ax)))
-            if ((ax) >= ((numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).max))) * (one)))
+            if ((ax) >= (numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).max))))
             else (numpy.log1p((ax) + ((ax2) / ((one) + (numpy.sqrt((one) + (ax2)))))))
         )
         return result

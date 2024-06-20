@@ -11,10 +11,8 @@ def : Pat<(asinh_0 NonComplexElementType:$z),
     (StableHLO_SelectOp
       (StableHLO_CompareOp
        (StableHLO_AbsOp:$ax $z),
-       (StableHLO_MulOp
-         (StableHLO_SqrtOp
-           (StableHLO_ConstantLikeMaxFiniteValue $z)),
-         (StableHLO_ConstantLike<"1">:$one $z)),
+       (StableHLO_SqrtOp
+         (StableHLO_ConstantLikeMaxFiniteValue $z)),
         StableHLO_ComparisonDirectionValue<"GE">,
         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
       (StableHLO_AddOp
@@ -27,7 +25,7 @@ def : Pat<(asinh_0 NonComplexElementType:$z),
           (StableHLO_DivOp
             (StableHLO_MulOp:$ax2 $ax, $ax),
             (StableHLO_AddOp
-              $one,
+              (StableHLO_ConstantLike<"1">:$one $z),
               (StableHLO_SqrtOp
                 (StableHLO_AddOp $one, $ax2))))))))>;
 

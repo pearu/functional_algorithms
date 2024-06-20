@@ -94,10 +94,10 @@ def asinh_0(z: complex) -> complex:
 
 def asinh_1(z: float) -> float:
     ax: float = abs(z)
-    one: float = 1
     ax2: float = (ax) * (ax)
+    one: float = 1
     return ((0 if z == 0 else math.copysign(1, z))) * (
         ((math.log(2)) + (math.log(ax)))
-        if ((ax) >= ((math.sqrt(sys.float_info.max)) * (one)))
+        if ((ax) >= (math.sqrt(sys.float_info.max)))
         else (math.log1p((ax) + ((ax2) / ((one) + (math.sqrt((one) + (ax2)))))))
     )
