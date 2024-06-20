@@ -332,7 +332,7 @@ def real_asinh(ctx, x: float):
 
       asinh(x) = log(x + hypot(1, x))
 
-    This algorithm is based on the StableHLO v1.0 function CHLO_AsinhOp.
+    This algorithm is based on the StableHLO v1.1.4 function CHLO_AsinhOp.
 
     To avoid overflow in x * x, we use
 

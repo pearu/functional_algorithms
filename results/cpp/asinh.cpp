@@ -13,10 +13,10 @@
 
 float asinh_0(float z) {
   float ax = std::abs(z);
-  float one = 1;
   float ax2 = (ax) * (ax);
+  float one = 1;
   return ((z == 0 ? z : std::copysign(1, z))) *
-         ((((ax) >= ((std::sqrt(std::numeric_limits<float>::max())) * (one)))
+         ((((ax) >= (std::sqrt(std::numeric_limits<float>::max())))
                ? ((std::log(2)) + (std::log(ax)))
                : (std::log1p((ax) +
                              ((ax2) / ((one) + (std::sqrt((one) + (ax2)))))))));
@@ -24,10 +24,10 @@ float asinh_0(float z) {
 
 double asinh_1(double z) {
   double ax = std::abs(z);
-  double one = 1;
   double ax2 = (ax) * (ax);
+  double one = 1;
   return ((z == 0 ? z : std::copysign(1, z))) *
-         ((((ax) >= ((std::sqrt(std::numeric_limits<double>::max())) * (one)))
+         ((((ax) >= (std::sqrt(std::numeric_limits<double>::max())))
                ? ((std::log(2)) + (std::log(ax)))
                : (std::log1p((ax) +
                              ((ax2) / ((one) + (std::sqrt((one) + (ax2)))))))));
