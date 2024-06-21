@@ -12,6 +12,10 @@ MPMath functions using multi-precision arithmetic.
 | absolute | float64 | 1000001 | - | - | - | - | - |
 | absolute | complex64 | 977109 | 24892 | - | - | - | - |
 | absolute | complex128 | 989613 | 12372 | 16 | - | - | - |
+| acos | float32 | 504842 | 488335 | 6599 | 225 | - | - |
+| acos | float64 | 985299 | 13318 | 1376 | 8 | - | - |
+| acos | complex64 | 804838 | 196477 | 680 | 6 | - | - |
+| acos | complex128 | 701506 | 300255 | 238 | 2 | - | - |
 | asin | float32 | 937353 | 61812 | 810 | 26 | - | - |
 | asin | float64 | 983317 | 16662 | 22 | - | - | - |
 | asin | complex64 | 808487 | 191878 | 1592 | 44 | - | - |
@@ -24,5 +28,3 @@ MPMath functions using multi-precision arithmetic.
 | square | float64 | 999649 | 352 | - | - | - | - |
 | square | complex64 | 974577 | 27424 | - | - | - | - |
 | square | complex128 | 994505 | 7496 | - | - | - | - |
-
-Total number of samples is 1002001

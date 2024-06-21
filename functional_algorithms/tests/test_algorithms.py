@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "asin", "asinh", "hypot", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "asin", "asinh", "hypot", "square"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "asin", "asinh", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "asin", "asinh", "square"])
 def unary_func_name(request):
     return request.param
 
@@ -45,7 +45,7 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     func = targets.numpy.as_function(graph2, debug=0)
 
-    if unary_func_name in {"asin", "asinh"}:
+    if unary_func_name in {"acos", "asin", "asinh"}:
         extra_prec_multiplier = 20
     else:
         extra_prec_multiplier = 1
@@ -62,7 +62,20 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
     else:
         samples = utils.real_samples(size * size, dtype=dtype, include_subnormal=not flush_subnormals).flatten()
 
-    matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype, flush_subnormals=flush_subnormals)
+    matches_with_reference, ulp_stats = utils.validate_function(
+        func, reference, samples, dtype, flush_subnormals=flush_subnormals
+    )
+    if not matches_with_reference:
+        print("Samples:")
+        gt3_ulp_total = 0
+        for ulp in sorted(ulp_stats):
+            if ulp in {0, 1, 2, 3}:
+                print(f"  dULP={ulp}: {ulp_stats[ulp]}")
+            elif ulp > 0:
+                gt3_ulp_total += ulp_stats[ulp]
+        else:
+            print(f"  dULP>3: {gt3_ulp_total}")
+
     assert matches_with_reference  # warning: also reference may be wrong
 
     extra_samples = []
@@ -71,7 +84,19 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     if extra_samples:
         samples = numpy.array(extra_samples, dtype=dtype)
-        matches_with_reference, _ = utils.validate_function(func, reference, samples, dtype, flush_subnormals=flush_subnormals)
+        matches_with_reference, ulp_stats = utils.validate_function(
+            func, reference, samples, dtype, flush_subnormals=flush_subnormals
+        )
+        if not matches_with_reference:
+            print("Extra samples:")
+            gt3_ulp_total = 0
+            for ulp in sorted(ulp_stats):
+                if ulp in {0, 1, 2, 3}:
+                    print(f"  dULP={ulp}: {ulp_stats[ulp]}")
+                elif ulp > 0:
+                    gt3_ulp_total += ulp_stats[ulp]
+            else:
+                print(f"  dULP>3: {gt3_ulp_total}")
         assert matches_with_reference  # warning: also reference may be wrong
 
 

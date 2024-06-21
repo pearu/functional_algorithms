@@ -12,14 +12,12 @@
 template <typename FloatType>
 XlaOp asinh_0(XlaOp z) {
   XlaOp ax = Abs(z);
-  FloatType one_ = 1;
   XlaOp ax2 = Mul(ax, ax);
-  XlaOp one = ScalarLike(z, one_);
+  XlaOp one = ScalarLike(z, 1);
   return Mul(
       Sign(z),
       Select(Ge(ax, ScalarLike(
-                        z, (std::sqrt(std::numeric_limits<FloatType>::max())) *
-                               (one_))),
+                        z, std::sqrt(std::numeric_limits<FloatType>::max()))),
              Add(ScalarLike(z, std::log(2)), Log(ax)),
              Log1p(Add(ax, Div(ax2, Add(one, Sqrt(Add(one, ax2))))))));
 }

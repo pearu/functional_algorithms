@@ -31,12 +31,15 @@ Currently, [the definitions of
 algorithms](functional_algorithms/algorithms.py) are provided for the
 following math functions:
 
-- `square(z: complex | float)`,
-- `hypot(x: float, y: float)` and `absolute(z: complex)`,
+- `acos(z: complex | float)`, using modified [Hull et
+  al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
+  complex `acos`,
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`,
 - `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`.
+- `hypot(x: float, y: float)` and `absolute(z: complex)`,
+- `square(z: complex | float)`,
 
 ## Supported targets
 

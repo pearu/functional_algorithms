@@ -238,7 +238,10 @@ def real_asin(ctx, x: float):
 
       1 - x * x == (1 - x) * (1 + x)
     """
-    return asin(ctx, x)
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+    sq = ctx.sqrt((one - x) * (one + x))
+    return ctx(two * ctx.atan2(x, one + sq))
 
 
 def asin(ctx, z: complex | float):
@@ -247,12 +250,11 @@ def asin(ctx, z: complex | float):
     See complex_asin and real_asin for more information.
     """
     if not z.is_complex:
-        # (1 - z * z) = (1 - z) * (1 + z) avoids cancellation errors
-        # for abs(z) close to 1
-        one = ctx.constant(1, z)
-        two = ctx.constant(2, z)
-        sq = ctx.sqrt((one - z) * (one + z))
-        return ctx(two * ctx.atan2(z, one + sq))
+        return real_asin(ctx, z)
+    return complex_asin_acos(ctx, z)[0]
+
+
+def complex_asin_acos(ctx, z: complex):
 
     signed_x = z.real
     signed_y = z.imag
@@ -296,6 +298,7 @@ def asin(ctx, z: complex | float):
         ),
     )
     real = ctx.atan2(signed_x, y1).reference()
+    acos_real = ctx.atan2(y1, signed_x).reference()
 
     am1 = ctx.select(
         ctx.And(y < safe_min, x < one),
@@ -316,7 +319,8 @@ def asin(ctx, z: complex | float):
     )
 
     signed_imag = ctx.select(signed_y < zero, -imag, imag)
-    return ctx(ctx.complex(real, signed_imag))
+    acos_signed_imag = ctx.select(signed_y < zero, imag, -imag)
+    return ctx(ctx.complex(real, signed_imag)), ctx(ctx.complex(acos_real, acos_signed_imag))
 
 
 def complex_asinh(ctx, z: complex):
@@ -447,3 +451,64 @@ def asinh(ctx, z: complex | float):
     # w = ctx.asin(ctx.complex(-z.imag, z.real))
     # -i * w = -i * (a + i * b) = b - i * a
     return ctx(ctx.complex(w.imag, -w.real))
+
+
+def real_acos(ctx, x: float):
+    """Arcus cosine on real input:
+
+    arccos(x) = 2 * arctan2(sqrt(1 - x * x), 1 + x)
+
+    To avoid cancellation errors at abs(x) close to 1, we'll use
+
+      1 - x * x == (1 - x) * (1 + x)
+    """
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+    sq = ctx.sqrt((one - x) * (one + x))
+    return ctx(two * ctx.atan2(sq, one + x))
+
+
+def complex_acos(ctx, z: complex):
+    """Arcus cosine on complex input:
+
+    Here we well use a modified version of the [Hull et
+    al]((https://dl.acm.org/doi/10.1145/275323.275324) algorithm with
+    a reduced number of approximation regions.
+
+    Hull et al define complex arcus cosine as
+
+      arccos(x + I*y) = arccos(x/a) - sign(y; x) * I * log(a + sqrt(a*a-1))
+
+    where
+
+      x and y are real and imaginary parts of the input to arccos, and
+      I is imaginary unit,
+      a = (hypot(x+1, y) + hypot(x-1, y))/2,
+      sign(y; x) = 1 when y >= 0 and abs(x) <= 1, otherwise -1.
+
+    The algorithm for arccos is identical to arcsin except that its
+    real part uses real arccos and the imaginary part has opposite
+    sign. Therefore, refer to arcsin documentation regarding the
+    details of the algorithm and notice that from
+
+      real(arcsin(z)) = arctan2(p, q)
+
+    follows that
+
+      real(arccos(z)) = argtan2(q, p),
+
+    and we have identity
+
+       imag(arccos(z)) = -imag(arcsin(z)).
+    """
+    return complex_asin_acos(ctx, z)[1]
+
+
+def acos(ctx, z: complex | float):
+    """Arcus cosine on complex and real inputs.
+
+    See complex_acos and real_acos for more information.
+    """
+    if z.is_complex:
+        return complex_acos(ctx, z)
+    return real_acos(ctx, z)

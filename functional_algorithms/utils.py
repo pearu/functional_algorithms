@@ -398,8 +398,10 @@ class numpy_with_mpmath:
                 return ctx.make_mpc((real._mpf_, imag._mpf_))
             elif ctx.isinf(x.imag):
                 return ctx.make_mpc((zero._mpf_, x.imag._mpf_))
-            # On branch cut, mpmath.mp.asin returns different value compared
-            # to mpmath.fp.asin and numpy.arcsin (see
+            # On branch cut, mpmath.mp.asin returns different value
+            # compared to mpmath.fp.asin and numpy.arcsin. The
+            # following if-block ensures compatibiliy with
+            # numpy.arcsin.
             if x.real > 1 and x.imag == 0:
                 return ctx.asin(x).conjugate()
         else:
@@ -431,6 +433,38 @@ class numpy_with_mpmath:
             if x.real == 0 and x.imag < -1:
                 return (-ctx.asinh(x)).conjugate()
         return ctx.asinh(x)
+
+    def arccos(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            # Workaround mpmath 1.3 bug in acos(+-inf+-infj) evaluation (see
+            # mpmath/mpmath#795 for a fix).
+            pi = ctx.pi
+            inf = ctx.inf
+            zero = ctx.zero
+            if ctx.isinf(x.imag):
+                if ctx.isinf(x.real):
+                    real = pi / 4 if x.real > 0 else 3 * pi / 4
+                else:
+                    real = pi / 2
+                imag = inf if x.imag < 0 else -inf
+                return ctx.make_mpc((real._mpf_, imag._mpf_))
+            elif ctx.isinf(x.real):
+                inf = ctx.inf
+                sign_imag = -1 if x.imag < 0 else 1
+                real = zero if x.real > 0 else pi
+                return ctx.make_mpc((real._mpf_, (-sign_imag * inf)._mpf_))
+            # On branch cut, mpmath.mp.acos returns different value
+            # compared to mpmath.fp.acos and numpy.arccos. The
+            # following if-block ensures compatibiliy with
+            # numpy.arccos.
+            if x.imag == 0 and x.real > 1:
+                return -ctx.acos(x)
+        else:
+            if abs(x) > 1:
+                # otherwise, mpmath.asin would return complex value
+                return ctx.nan
+        return ctx.acos(x)
 
 
 def real_samples(
