@@ -26,6 +26,7 @@ def make_complex(r, i):
 
 trace_arguments = dict(
     absolute=[(":complex128",), (":complex64",)],
+    acos=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     asin=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     asinh=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
@@ -110,6 +111,7 @@ constant_to_target = dict(
     largest="numpy.finfo({type}).max",
     posinf="{type}(numpy.inf)",
     neginf="-{type}(numpy.inf)",
+    pi="numpy.pi",
 )
 
 type_to_target = dict(

@@ -14,11 +14,14 @@ source_file_header = """
 trace_arguments = dict(
     absolute=[(":complex",)],
     hypot=[(":float", ":float")],
+    complex_acos=[(":complex", ":complex")],
+    real_acos=[(":float", ":float")],
     complex_asin=[(":complex", ":complex")],
     real_asin=[(":float", ":float")],
     complex_asinh=[(":complex", ":complex")],
     real_asinh=[(":float", ":float")],
     square=[(":float", ":float"), (":complex", ":complex")],
+    acos=[(":float", ":float"), (":complex", ":complex")],
     asin=[(":float", ":float"), (":complex", ":complex")],
     asinh=[(":float", ":float"), (":complex", ":complex")],
 )

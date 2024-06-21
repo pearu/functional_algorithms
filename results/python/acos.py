@@ -7,7 +7,7 @@ import math
 import sys
 
 
-def asin_0(z: complex) -> complex:
+def acos_0(z: complex) -> complex:
     signed_x: float = (z).real
     x: float = abs(signed_x)
     signed_y: float = (z).imag
@@ -56,8 +56,7 @@ def asin_0(z: complex) -> complex:
     rpxp1: float = (r) + (xp1)
     smxm1: float = (s) - (xm1)
     spxm1: float = (s) + (xm1)
-    real: float = math.atan2(
-        signed_x,
+    acos_real: float = math.atan2(
         (
             (y)
             if ((max(x, y)) >= (safe_max))
@@ -67,6 +66,7 @@ def asin_0(z: complex) -> complex:
                 else ((y) * (math.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
             )
         ),
+        signed_x,
     )
     safe_max_opt: float = ((safe_max) * (1e-06)) if ((x) < ((safe_max) * (1000000000000.0))) else ((safe_max) * (100.0))
     y_gt_safe_max_opt: bool = (y) >= (safe_max_opt)
@@ -88,9 +88,10 @@ def asin_0(z: complex) -> complex:
         if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
         else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
     )
-    return complex(real, (-(imag)) if ((signed_y) < (zero)) else (imag))
+    return complex(acos_real, (imag) if ((signed_y) < (zero)) else (-(imag)))
 
 
-def asin_1(z: float) -> float:
+def acos_1(z: float) -> float:
     one: float = 1
-    return (2) * (math.atan2(z, (one) + (math.sqrt(((one) - (z)) * ((one) + (z))))))
+    add_one_z: float = (one) + (z)
+    return (2) * (math.atan2(math.sqrt(((one) - (z)) * (add_one_z)), add_one_z))

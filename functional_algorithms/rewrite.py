@@ -222,6 +222,9 @@ class Rewriter:
             if isinstance(value, (int, float)):
                 return x.context.constant(-value, like)
 
+        if x.kind == "negative":
+            return x.operands[0]
+
     def real(self, expr):
 
         (x,) = expr.operands
