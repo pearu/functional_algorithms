@@ -70,10 +70,10 @@ MPMath functions using multi-precision arithmetic.
 
     for func_name, dtype, parameters, row_prefix in get_inputs():
         if row_prefix in precomputed:
-            print(f"{func_name}: {dtype=} {parameters=}, using previous result.")
+            print(f"{row_prefix}- using previous result.")
             print(precomputed[row_prefix], file=f)
             continue
-        print(f"{func_name}: {dtype=} {parameters=}")
+        print(f"{row_prefix}")
         ctx = fa.Context(paths=[fa.algorithms], parameters=parameters)
         graph = ctx.trace(getattr(fa.algorithms, func_name), dtype)
         graph2 = graph.implement_missing(fa.targets.numpy).simplify()
@@ -85,7 +85,9 @@ MPMath functions using multi-precision arithmetic.
             extra_prec_multiplier = 1
         reference = getattr(
             fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=flush_subnormals),
-            dict(real_asinh="asinh", real_asinh_2="asinh").get(func_name, func_name),
+            dict(real_asinh="asinh", real_asinh_2="asinh", acos="arccos", asin="arcsin", asinh="arcsinh", acosh="arccosh").get(
+                func_name, func_name
+            ),
         )
 
         if dtype in {np.complex64, np.complex128}:
@@ -95,7 +97,14 @@ MPMath functions using multi-precision arithmetic.
         else:
             samples = fa.utils.real_samples(size * size, dtype=dtype, include_subnormal=not flush_subnormals).flatten()
         matches_with_reference, ulp_stats = fa.utils.validate_function(
-            func, reference, samples, dtype, verbose=False, flush_subnormals=flush_subnormals, enable_progressbar=True
+            func,
+            reference,
+            samples,
+            dtype,
+            verbose=False,
+            flush_subnormals=flush_subnormals,
+            enable_progressbar=True,
+            workers=None,
         )
         # assert matches_with_reference, (func_name, dtype, ulp_stats)
 
@@ -118,7 +127,6 @@ MPMath functions using multi-precision arithmetic.
             cols.append(f"-")
         print(row_prefix + " | ".join(cols) + " |", file=f)
         f.flush()
-
     print(f"Created {target_file}")
 
 

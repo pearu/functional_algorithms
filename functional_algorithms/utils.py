@@ -1,5 +1,7 @@
 import numpy
 import mpmath
+import multiprocessing
+import os
 import warnings
 from collections import defaultdict
 
@@ -9,15 +11,22 @@ except ImportError:
     tqdm = lambda seq: seq
 
 
-class UNSPECIFIED:
+class _UNSPECIFIED:
+
+    _singleton = None
+
+    def __new__(cls):
+        if cls._singleton is None:
+            cls._singleton = object.__new__(cls)
+        return cls._singleton
 
     def __str__(self):
-        return type(self).__name__
+        return "UNSPECIFIED"
 
     __repr__ = __str__
 
 
-UNSPECIFIED = UNSPECIFIED()
+UNSPECIFIED = _UNSPECIFIED()
 default_flush_subnormals = False
 
 
@@ -29,13 +38,7 @@ class vectorize_with_mpmath(numpy.vectorize):
     )
     map_complex_to_float = {v: k for k, v in map_float_to_complex.items()}
 
-    float_prec = dict(
-        # float16=11,
-        float32=24,
-        float64=53,
-        # float128=113,
-        # longdouble=113
-    )
+    float_prec = dict(float16=11, float32=24, float64=53, float128=113, longdouble=113)
 
     float_subexp = dict(float16=-23, float32=-148, float64=-1073, float128=-16444)
     float_minexp = dict(float16=-13, float32=-125, float64=-1021, float128=-16381)
@@ -52,17 +55,48 @@ class vectorize_with_mpmath(numpy.vectorize):
         self.extra_prec = kwargs.pop("extra_prec", 0)
         flush_subnormals = kwargs.pop("flush_subnormals", UNSPECIFIED)
         self.flush_subnormals = flush_subnormals if flush_subnormals is UNSPECIFIED else default_flush_subnormals
-        self.contexts = dict()
-        self.contexts_inv = dict()
+        self._contexts = None
+        self._contexts_inv = None
+        super().__init__(*args, **kwargs)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_contexts"]
+        del state["_contexts_inv"]
+        return state
+
+    def __setstate__(self, state):
+        self._contexts = None
+        self._contexts_inv = None
+        self.__dict__.update(state)
+
+    def _make_contexts(self):
+        contexts = dict()
+        contexts_inv = dict()
         for fp_format, prec in self.float_prec.items():
             ctx = mpmath.mp.clone()
             ctx.prec = prec
-            self.contexts[fp_format] = ctx
-            self.contexts_inv[ctx] = fp_format
+            contexts[fp_format] = ctx
+            contexts_inv[ctx] = fp_format
+        return contexts, contexts_inv
 
-        super().__init__(*args, **kwargs)
+    @property
+    def contexts(self):
+        if self._contexts is None:
+            self._contexts, self._contexts_inv = self._make_contexts()
+        return self._contexts
+
+    @property
+    def contexts_inv(self):
+        if self._contexts_inv is None:
+            self._contexts, self._contexts_inv = self._make_contexts()
+        return self._contexts_inv
 
     def get_context(self, x):
+        if isinstance(x, tuple):
+            for x_ in x:
+                if isinstance(x_, (numpy.ndarray, numpy.floating, numpy.complexfloating)):
+                    return self.get_context(x_)
         if isinstance(x, (numpy.ndarray, numpy.floating, numpy.complexfloating)):
             fp_format = str(x.dtype)
             fp_format = self.map_complex_to_float.get(fp_format, fp_format)
@@ -71,7 +105,9 @@ class vectorize_with_mpmath(numpy.vectorize):
 
     def nptomp(self, x):
         """Convert numpy array/scalar to an array/instance of mpmath number type."""
-        if isinstance(x, numpy.ndarray):
+        if isinstance(x, tuple):
+            return tuple(map(self.nptomp, x))
+        elif isinstance(x, numpy.ndarray):
             return numpy.fromiter(map(self.nptomp, x.flatten()), dtype=object).reshape(x.shape)
         elif isinstance(x, numpy.floating):
             ctx = self.get_context(x)
@@ -92,11 +128,15 @@ class vectorize_with_mpmath(numpy.vectorize):
         elif isinstance(x, numpy.complexfloating):
             re, im = self.nptomp(x.real), self.nptomp(x.imag)
             return re.context.make_mpc((re._mpf_, im._mpf_))
+        elif isinstance(x, (str, bool, int, float, complex, dict, list, set)):
+            return x
         raise NotImplementedError(f"convert {type(x).__name__} instance to mpmath number type")
 
     def mptonp(self, x):
         """Convert mpmath instance to numpy array/scalar type."""
-        if isinstance(x, numpy.ndarray) and x.dtype.kind == "O":
+        if isinstance(x, tuple):
+            return tuple(map(self.mptonp, x))
+        elif isinstance(x, numpy.ndarray) and x.dtype.kind == "O":
             x_flat = x.flatten()
             item = x_flat[0]
             ctx = item.context
@@ -137,7 +177,51 @@ class vectorize_with_mpmath(numpy.vectorize):
                     return dtype(numpy.nan)
                 elif ctx.isinf(x):
                     return dtype(-numpy.inf if x._mpf_[0] else numpy.inf)
+        elif isinstance(x, (str, bool, int, float, complex, dict, list, set)):
+            return x
+
         raise NotImplementedError(f"convert {type(x)} instance to numpy floating point type")
+
+    def _eval(self, sample, extraprec):
+        context = self.get_context(sample)
+        sample = self.nptomp(sample)
+        with context.extraprec(extraprec):
+            if isinstance(sample, tuple):
+                result = super().__call__(*sample)
+            else:
+                result = super().__call__(sample)
+        return self.mptonp(result)
+
+    def call(self, samples, workers=None, enable_progressbar=False):
+        """Apply function to samples using concurrency with the given number
+        of workers. When workers is None, use os.cpu_count() workers.
+
+        """
+        if workers is None:
+            workers = min(os.cpu_count(), len(samples))
+
+        if enable_progressbar:
+
+            def progress(iter, total):
+                yield from tqdm(iter, total=total)
+
+        else:
+
+            def progress(iter, total):
+                return iter
+
+        context = self.get_context(samples[0])
+        extraprec = int(context.prec * self.extra_prec_multiplier) + self.extra_prec
+        samples_extraprec = [(s, extraprec) for s in samples]
+        results = []
+        if workers > 1:
+            with multiprocessing.Pool(workers) as p:
+                for result in p.starmap(self._eval, samples_extraprec):
+                    results.append(result)
+        else:
+            for sample, extraprec in progress(samples_extraprec, total=len(samples)):
+                results.append(self._eval(sample, extraprec))
+        return results
 
     def __call__(self, *args, **kwargs):
         mp_args = []
@@ -170,144 +254,70 @@ class vectorize_with_mpmath(numpy.vectorize):
         return result
 
 
-class numpy_with_mpmath:
-    """Namespace of universal functions on numpy arrays that use mpmath
-    backend for evaluation and return numpy arrays as outputs.
+class mpmath_array_api:
+    """Array API interface to mpmath functions including workarounds to
+    mpmath bugs.
     """
 
-    _provides = [
-        "abs",
-        "absolute",
-        "sqrt",
-        "exp",
-        "expm1",
-        "exp2",
-        "log",
-        "log1p",
-        "log10",
-        "log2",
-        "sin",
-        "cos",
-        "tan",
-        "arcsin",
-        "arccos",
-        "arctan",
-        "sinh",
-        "cosh",
-        "tanh",
-        "arcsinh",
-        "arccosh",
-        "arctanh",
-        "square",
-        "positive",
-        "negative",
-        "conjugate",
-        "sign",
-        "sinc",
-        "normalize",
-        "hypot",
-    ]
+    def hypot(self, x, y):
+        return x.context.hypot(x, y)
 
-    _mpmath_names = dict(
-        abs="absmin",
-        absolute="absmin",
-        log="ln",
-        arcsin="asin",
-        arccos="acos",
-        arctan="atan",
-        arcsinh="asinh",
-        arccosh="acosh",
-        arctanh="atanh",
-    )
+    def abs(self, x):
+        return x.context.absmin(x)
 
-    def __init__(self, extra_prec_multiplier=0, extra_prec=0, flush_subnormals=UNSPECIFIED):
+    def absolute(self, x):
+        return x.context.absmin(x)
 
-        for name in self._provides:
-            mp_name = self._mpmath_names.get(name, name)
+    def log(self, x):
+        return x.context.ln(x)
 
-            if hasattr(self, name):
-                op = getattr(self, name)
-            else:
-                if name in {"hypot"}:
-                    # binary ops
-                    def op(x, y, mp_name=mp_name):
-                        return getattr(x.context, mp_name)(x, y)
+    def arcsin(self, x):
+        return x.context.asin(x)
 
-                else:
-                    # unary ops
-                    def op(x, mp_name=mp_name):
-                        return getattr(x.context, mp_name)(x)
+    def arccos(self, x):
+        return x.context.acos(x)
 
-            vop = vectorize_with_mpmath(
-                op, extra_prec_multiplier=extra_prec_multiplier, extra_prec=extra_prec, flush_subnormals=flush_subnormals
-            )
-            setattr(self, name, vop)
-            if not hasattr(self, mp_name):
-                setattr(self, mp_name, vop)
+    def arctan(self, x):
+        return x.context.atan(x)
 
-    # The following function methods operate on mpmath number instances.
-    # The corresponding function names must be listed in
-    # numpy_with_mpmath._provides list.
+    def arcsinh(self, x):
+        return x.context.asinh(x)
 
-    def normalize(self, exact, reference, value):
-        """Normalize reference and value using precision defined by the
-        difference of exact and reference.
-        """
+    def arccosh(self, x):
+        return x.context.acosh(x)
 
-        def worker(ctx, s, e, r, v):
-            ss, sm, se, sbc = s._mpf_
-            es, em, ee, ebc = e._mpf_
-            rs, rm, re, rbc = r._mpf_
-            vs, vm, ve, vbc = v._mpf_
+    def arctanh(self, x):
+        return x.context.atanh(x)
 
-            if not (ctx.isfinite(e) and ctx.isfinite(r) and ctx.isfinite(v)):
-                return r, v
+    def exp(self, x):
+        return x.context.exp(x)
 
-            me = min(se, ee, re, ve)
+    def sin(self, x):
+        return x.context.sin(x)
 
-            # transform mantissa parts to the same exponent base
-            sm_e = sm << (se - me)
-            em_e = em << (ee - me)
-            rm_e = rm << (re - me)
-            vm_e = vm << (ve - me)
+    def cos(self, x):
+        return x.context.cos(x)
 
-            # find matching higher and non-matching lower bits of e and r
-            sm_b = bin(sm_e)[2:] if sm_e else ""
-            em_b = bin(em_e)[2:] if em_e else ""
-            rm_b = bin(rm_e)[2:] if rm_e else ""
-            vm_b = bin(vm_e)[2:] if vm_e else ""
+    def sinh(self, x):
+        return x.context.sinh(x)
 
-            m = max(len(sm_b), len(em_b), len(rm_b), len(vm_b))
-            em_b = "0" * (m - len(em_b)) + em_b
-            rm_b = "0" * (m - len(rm_b)) + rm_b
+    def cosh(self, x):
+        return x.context.cosh(x)
 
-            c1 = 0
-            for b0, b1 in zip(em_b, rm_b):
-                if b0 != b1:
-                    break
-                c1 += 1
-            c0 = m - c1
+    def conjugate(self, x):
+        return x.context.conjugate(x)
 
-            # truncate r and v mantissa
-            rm_m = rm_e >> c0
-            vm_m = vm_e >> c0
+    def sign(self, x):
+        return x.context.sign(x)
 
-            # normalized r and v
-            nr = ctx.make_mpf((rs, rm_m, -c1, len(bin(rm_m)) - 2)) if rm_m else (-ctx.zero if rs else ctx.zero)
-            nv = ctx.make_mpf((vs, vm_m, -c1, len(bin(vm_m)) - 2)) if vm_m else (-ctx.zero if vs else ctx.zero)
+    def sinc(self, x):
+        return x.context.sinc(x)
 
-            return nr, nv
+    def positive(self, x):
+        return x
 
-        ctx = exact.context
-        scale = abs(exact)
-        if isinstance(exact, ctx.mpc):
-            rr, rv = worker(ctx, scale, exact.real, reference.real, value.real)
-            ir, iv = worker(ctx, scale, exact.imag, reference.imag, value.imag)
-            return ctx.make_mpc((rr._mpf_, ir._mpf_)), ctx.make_mpc((rv._mpf_, iv._mpf_))
-        elif isinstance(exact, ctx.mpf):
-            return worker(ctx, scale, exact, reference, value)
-        else:
-            assert 0  # unreachable
+    def negative(self, x):
+        return -x
 
     def square(self, x):
         ctx = x.context
@@ -316,12 +326,6 @@ class numpy_with_mpmath:
                 return ctx.make_mpc((ctx.zero._mpf_, (x.real * x.imag * 2)._mpf_))
             return ctx.make_mpc((((x.real - x.imag) * (x.real + x.imag))._mpf_, (x.real * x.imag * 2)._mpf_))
         return x * x
-
-    def positive(self, x):
-        return x
-
-    def negative(self, x):
-        return -x
 
     def sqrt(self, x):
         ctx = x.context
@@ -465,6 +469,87 @@ class numpy_with_mpmath:
                 # otherwise, mpmath.asin would return complex value
                 return ctx.nan
         return ctx.acos(x)
+
+
+class numpy_with_mpmath:
+    """Namespace of universal functions on numpy arrays that use mpmath
+    backend for evaluation and return numpy arrays as outputs.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin").get(name, name)
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+        if hasattr(mpmath_array_api, name):
+            vfunc = vectorize_with_mpmath(getattr(mpmath_array_api(), name), **self.params)
+            self._vfunc_cache[name] = vfunc
+            return vfunc
+        raise NotImplementedError(f"vectorize_with_mpmath.{name}")
+
+    def normalize(self, exact, reference, value):
+        """Normalize reference and value using precision defined by the
+        difference of exact and reference.
+        """
+
+        def worker(ctx, s, e, r, v):
+            ss, sm, se, sbc = s._mpf_
+            es, em, ee, ebc = e._mpf_
+            rs, rm, re, rbc = r._mpf_
+            vs, vm, ve, vbc = v._mpf_
+
+            if not (ctx.isfinite(e) and ctx.isfinite(r) and ctx.isfinite(v)):
+                return r, v
+
+            me = min(se, ee, re, ve)
+
+            # transform mantissa parts to the same exponent base
+            sm_e = sm << (se - me)
+            em_e = em << (ee - me)
+            rm_e = rm << (re - me)
+            vm_e = vm << (ve - me)
+
+            # find matching higher and non-matching lower bits of e and r
+            sm_b = bin(sm_e)[2:] if sm_e else ""
+            em_b = bin(em_e)[2:] if em_e else ""
+            rm_b = bin(rm_e)[2:] if rm_e else ""
+            vm_b = bin(vm_e)[2:] if vm_e else ""
+
+            m = max(len(sm_b), len(em_b), len(rm_b), len(vm_b))
+            em_b = "0" * (m - len(em_b)) + em_b
+            rm_b = "0" * (m - len(rm_b)) + rm_b
+
+            c1 = 0
+            for b0, b1 in zip(em_b, rm_b):
+                if b0 != b1:
+                    break
+                c1 += 1
+            c0 = m - c1
+
+            # truncate r and v mantissa
+            rm_m = rm_e >> c0
+            vm_m = vm_e >> c0
+
+            # normalized r and v
+            nr = ctx.make_mpf((rs, rm_m, -c1, len(bin(rm_m)) - 2)) if rm_m else (-ctx.zero if rs else ctx.zero)
+            nv = ctx.make_mpf((vs, vm_m, -c1, len(bin(vm_m)) - 2)) if vm_m else (-ctx.zero if vs else ctx.zero)
+
+            return nr, nv
+
+        ctx = exact.context
+        scale = abs(exact)
+        if isinstance(exact, ctx.mpc):
+            rr, rv = worker(ctx, scale, exact.real, reference.real, value.real)
+            ir, iv = worker(ctx, scale, exact.imag, reference.imag, value.imag)
+            return ctx.make_mpc((rr._mpf_, ir._mpf_)), ctx.make_mpc((rv._mpf_, iv._mpf_))
+        elif isinstance(exact, ctx.mpf):
+            return worker(ctx, scale, exact, reference, value)
+        else:
+            assert 0  # unreachable
 
 
 def real_samples(
@@ -749,18 +834,19 @@ def mul(x, y):
         return numpy.multiply(x, y, dtype=x.dtype)
 
 
-def validate_function(func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED, enable_progressbar=False):
+def validate_function(
+    func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED, enable_progressbar=False, workers=None
+):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
-    for sample in tqdm(samples) if enable_progressbar else samples:
+    reference_results = reference.call(samples, workers=workers, enable_progressbar=enable_progressbar)
+    for index in tqdm(range(len(samples))) if enable_progressbar else range(len(samples)):
+        sample = samples[index]
         if isinstance(sample, tuple):
             v1 = func(*sample)
-            v2 = reference(*sample)
         else:
             v1 = func(sample)
-            v2 = reference(sample)
-
-        v2 = v2[()]
+        v2 = reference_results[index][()]
         assert v1.dtype == v2.dtype, (v1, v2)
         ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
         ulp_stats[ulp] += 1

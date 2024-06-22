@@ -13,7 +13,7 @@ MPMath functions using multi-precision arithmetic.
 | absolute | complex64 | 977109 | 24892 | - | - | - | - |
 | absolute | complex128 | 989613 | 12372 | 16 | - | - | - |
 | acos | float32 | 504842 | 488335 | 6599 | 225 | - | - |
-| acos | float64 | 985299 | 13318 | 1376 | 8 | - | - |
+| acos | float64 | 986273 | 12357 | 1366 | 5 | - | - |
 | acos | complex64 | 804838 | 196477 | 680 | 6 | - | - |
 | acos | complex128 | 701506 | 300255 | 238 | 2 | - | - |
 | asin | float32 | 937353 | 61812 | 810 | 26 | - | - |
