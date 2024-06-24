@@ -388,8 +388,8 @@ class Context:
     def floor(self, x):
         return Expr(self, "floor", (x,))
 
-    def copysign(self, x):
-        return Expr(self, "copysign", (x,))
+    def copysign(self, x, y):
+        return Expr(self, "copysign", (x, y))
 
     def round(self, x):
         return Expr(self, "round", (x,))

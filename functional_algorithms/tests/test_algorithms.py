@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "asin", "asinh", "hypot", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "hypot", "square"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "asin", "asinh", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square"])
 def unary_func_name(request):
     return request.param
 
@@ -45,7 +45,7 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     func = targets.numpy.as_function(graph2, debug=0)
 
-    if unary_func_name in {"acos", "asin", "asinh"}:
+    if unary_func_name in {"acos", "asin", "asinh", "acosh"}:
         extra_prec_multiplier = 20
     else:
         extra_prec_multiplier = 1
@@ -54,10 +54,13 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
         unary_func_name,
     )
 
-    size = 31
+    size = 51
     if dtype in {numpy.complex64, numpy.complex128}:
         samples = utils.complex_samples(
-            (size, size), dtype=dtype, include_huge=True, include_subnormal=not flush_subnormals
+            (size, size),
+            dtype=dtype,
+            include_huge=True,
+            include_subnormal=not flush_subnormals,
         ).flatten()
     else:
         samples = utils.real_samples(size * size, dtype=dtype, include_subnormal=not flush_subnormals).flatten()

@@ -526,6 +526,9 @@ class Expr:
     def imag(self):
         return self.context.imag(self)
 
+    def conj(self):
+        return self.context.conj(self)
+
     def __lt__(self, other):
         return self.context.lt(self, other)
 
@@ -653,6 +656,8 @@ class Expr:
             "floor",
             "logical_not",
             "sign",
+            "copysign",
+            "conj",
         }:
             return self.operands[0].get_type()
         elif self.kind in {

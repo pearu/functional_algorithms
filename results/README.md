@@ -16,6 +16,10 @@ MPMath functions using multi-precision arithmetic.
 | acos | float64 | 986273 | 12357 | 1366 | 5 | - | - |
 | acos | complex64 | 804838 | 196477 | 680 | 6 | - | - |
 | acos | complex128 | 701506 | 300255 | 238 | 2 | - | - |
+| acosh | float32 | 989143 | 10829 | 29 | - | - | - |
+| acosh | float64 | 947718 | 52275 | 8 | - | - | - |
+| acosh | complex64 | 804838 | 196477 | 680 | 6 | - | - |
+| acosh | complex128 | 701506 | 300255 | 238 | 2 | - | - |
 | asin | float32 | 937353 | 61812 | 810 | 26 | - | - |
 | asin | float64 | 983317 | 16662 | 22 | - | - | - |
 | asin | complex64 | 808487 | 191878 | 1592 | 44 | - | - |
