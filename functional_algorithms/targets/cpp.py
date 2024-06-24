@@ -19,6 +19,7 @@ trace_arguments = dict(
     absolute=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     acos=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
+    acosh=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     asin=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     asinh=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     # complex_asin=[(":complex", ":complex")],

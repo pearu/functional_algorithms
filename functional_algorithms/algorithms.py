@@ -338,12 +338,6 @@ def real_asinh(ctx, x: float):
 
     This algorithm is based on the StableHLO v1.1.4 function CHLO_AsinhOp.
 
-    To avoid overflow in x * x, we use
-
-      asinh(x) = log(2) + log(x)
-
-    when abs(x) > sqrt(max),
-
     To avoid underflow in 1 + x * x, we'll define z = hypot(1, x) and
     write
 
@@ -359,6 +353,12 @@ def real_asinh(ctx, x: float):
       asinh(x) = log1p(x + x ** 2 / (1 + hypot(1, x)))
 
     It turns out, this is accurate for all abs(x) < sqrt(max).
+
+    To avoid overflow in x ** 2, we'll use
+
+      asinh(x) = log(2) + log(x)
+
+    when abs(x) > sqrt(max),
 
     For x < 0, we'll use
 
@@ -512,3 +512,58 @@ def acos(ctx, z: complex | float):
     if z.is_complex:
         return complex_acos(ctx, z)
     return real_acos(ctx, z)
+
+
+def complex_acosh(ctx, z: complex):
+    """Inverse hyperbolic cosine on complex input:
+
+    acosh(z) = sqrt(z - 1) / sqrt(1 - z) * acos(z)
+             = I * acos(z)               # when z.imag >= 0
+             = -I * acos(z)              # otherwise
+    """
+    w = complex_acos(ctx, z)
+    r = ctx.complex(-w.imag, w.real)
+    return ctx.select(z.imag < 0, -r, r)
+
+
+def real_acosh(ctx, x: float):
+    """Inverse hyperbolic cosine on real input:
+
+    acosh(x) = log(x + sqrt(x * x - 1))
+             = log(x + sqrt(x+1)*sqrt(x-1)))
+             = log(1 + x-1 + sqrt(x+1)*sqrt(x-1)))
+             = log1p(sqrt(x-1) * (sqrt(x+1) + sqrt(x-1)))
+
+    The last expression avoids errors from cancellations when x is
+    close to one. This also ensures the nan result when x < 1 because
+    sqrt(x') returns nan when x' < 0.
+
+    To avoid overflow in multiplication for large x (x > max / 2),
+    we'll use
+
+      acosh(x) = log(2) + log(x)
+
+    """
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+    sqxm1 = ctx.sqrt(x - one)
+    sqxp1 = ctx.sqrt(x + one)
+    a0 = ctx.log(two) + ctx.log(x)
+    a1 = ctx.log1p(sqxm1 * (sqxp1 + sqxm1))
+
+    safe_max_limit_coefficient = ctx.parameters.get("safe_max_limit_coefficient", None)
+    if safe_max_limit_coefficient is None:
+        safe_max_limit = ctx.constant("largest", x) / 2
+    else:
+        safe_max_limit = ctx.constant("largest", x) * safe_max_limit_coefficient
+    return ctx.select(x >= safe_max_limit, a0, a1)
+
+
+def acosh(ctx, z: complex | float):
+    """Inverse hyperbolic cosine on complex and real inputs.
+
+    See complex_acosh and real_acosh for more information.
+    """
+    if z.is_complex:
+        return complex_acosh(ctx, z)
+    return real_acosh(ctx, z)

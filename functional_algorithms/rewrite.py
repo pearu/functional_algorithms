@@ -225,6 +225,24 @@ class Rewriter:
         if x.kind == "negative":
             return x.operands[0]
 
+    def conj(self, expr):
+
+        (x,) = expr.operands
+
+        if x.kind == "constant":
+            value, like = x.operands
+            if isinstance(value, (int, float)):
+                return x
+            if isinstance(value, complex):
+                return x.context.constant(value.conjugate(), like)
+
+        if x.kind == "complex":
+            real, imag = x.operands
+            return x.context.complex(real, -imag)
+
+        if x.kind == "conj":
+            return x
+
     def real(self, expr):
 
         (x,) = expr.operands

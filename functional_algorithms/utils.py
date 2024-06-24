@@ -470,6 +470,33 @@ class mpmath_array_api:
                 return ctx.nan
         return ctx.acos(x)
 
+    def arccosh(self, x):
+        ctx = x.context
+
+        if isinstance(x, ctx.mpc):
+            # Workaround mpmath 1.3 bug in acosh(+-inf+-infj) evaluation
+            # (see mpmath/mpmath#749).
+            pi = ctx.pi
+            inf = ctx.inf
+            zero = ctx.zero
+            if ctx.isinf(x.real):
+                sign_imag = -1 if x.imag < 0 else 1
+                imag = (
+                    (3 if x.real < 0 else 1) * sign_imag * pi / 4
+                    if ctx.isinf(x.imag)
+                    else (sign_imag * pi if x.real < 0 else zero)
+                )
+                return ctx.make_mpc((inf._mpf_, imag._mpf_))
+            elif ctx.isinf(x.imag):
+                sign_imag = -1 if x.imag < 0 else 1
+                imag = sign_imag * pi / 2
+                return ctx.make_mpc((inf._mpf_, imag._mpf_))
+        else:
+            if x < 1:
+                # otherwise, mpmath.acosh would return complex value
+                return ctx.nan
+        return ctx.acosh(x)
+
 
 class numpy_with_mpmath:
     """Namespace of universal functions on numpy arrays that use mpmath
@@ -482,7 +509,7 @@ class numpy_with_mpmath:
         self.params = params
 
     def __getattr__(self, name):
-        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin").get(name, name)
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh").get(name, name)
         if name in self._vfunc_cache:
             return self._vfunc_cache[name]
         if hasattr(mpmath_array_api, name):
@@ -847,7 +874,7 @@ def validate_function(
         else:
             v1 = func(sample)
         v2 = reference_results[index][()]
-        assert v1.dtype == v2.dtype, (v1, v2)
+        assert v1.dtype == v2.dtype, (sample, v1, v2)
         ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
         ulp_stats[ulp] += 1
         if ulp > 2 and verbose:

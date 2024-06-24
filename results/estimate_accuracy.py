@@ -13,6 +13,12 @@ def get_inputs():
         ("acos", np.float64, {}),
         ("acos", np.complex64, {}),
         ("acos", np.complex128, {}),
+        ("acosh", np.float32, {}),
+        # *(("acosh", np.float32, dict(safe_max_limit_coefficient=v)) for v in [0.51, 0.5]),
+        # *(("acosh", np.float64, dict(safe_max_limit_coefficient=v)) for v in [0.51, 0.5]),
+        ("acosh", np.float64, {}),
+        ("acosh", np.complex64, {}),
+        ("acosh", np.complex128, {}),
         ("asin", np.float32, {}),
         ("asin", np.float64, {}),
         ("asin", np.complex64, {}),
@@ -79,7 +85,7 @@ MPMath functions using multi-precision arithmetic.
         graph2 = graph.implement_missing(fa.targets.numpy).simplify()
         func = fa.targets.numpy.as_function(graph2, debug=0)
 
-        if func_name in {"asin", "asinh", "acos"}:
+        if func_name in {"asin", "asinh", "acos", "acosh"}:
             extra_prec_multiplier = 20
         else:
             extra_prec_multiplier = 1
@@ -126,6 +132,7 @@ MPMath functions using multi-precision arithmetic.
         else:
             cols.append(f"-")
         print(row_prefix + " | ".join(cols) + " |", file=f)
+        print(row_prefix + " | ".join(cols) + " |")
         f.flush()
     print(f"Created {target_file}")
 
