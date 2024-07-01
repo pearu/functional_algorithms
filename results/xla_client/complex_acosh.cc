@@ -12,8 +12,6 @@
 template <typename FloatType>
 XlaOp complex_acosh_0(XlaOp z) {
   XlaOp signed_y = Imag(z);
-  FloatType zero_ = 0;
-  XlaOp zero = ScalarLike(signed_x, zero_);
   XlaOp y = Abs(signed_y);
   XlaOp signed_x = Real(z);
   XlaOp x = Abs(signed_x);
@@ -28,6 +26,8 @@ XlaOp complex_acosh_0(XlaOp z) {
   XlaOp safe_max = ScalarLike(signed_x, safe_max_);
   FloatType two_ = 2;
   XlaOp half = ScalarLike(signed_x, 0.5);
+  FloatType zero_ = 0;
+  XlaOp zero = ScalarLike(signed_x, zero_);
   XlaOp xoy = Select(
       And(y_gt_safe_max_opt,
           Not(Eq(y, ScalarLike(signed_y,
@@ -78,21 +78,18 @@ XlaOp complex_acosh_0(XlaOp z) {
   XlaOp am1 = Select(logical_and_lt_y_safe_min_lt_x_one,
                      Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XlaOp sq = Sqrt(Mul(am1, ap1));
-  XlaOp imag = Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
-                      Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
-                          Mul(half, Log1p(Mul(xoy, xoy)))),
-                      Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
-                             Log1p(Add(am1, sq))));
   XlaOp half_apx = Mul(half, Add(a, x));
-  XlaOp acos_real = Atan2(
+  XlaOp imag = Atan2(
       Select(Ge(Max(x, y), safe_max), y,
              Select(Le(x, one), Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
                     Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
                                     Div(half_apx, spxm1)))))),
       signed_x);
-  XlaOp complex_negative_acos_signed_imag_acos_real =
-      Complex(Neg(Select(Lt(signed_y, zero), imag, Neg(imag))), acos_real);
-  return Select(Lt(signed_y, ScalarLike(signed_y, zero_)),
-                Neg(complex_negative_acos_signed_imag_acos_real),
-                complex_negative_acos_signed_imag_acos_real);
+  return Complex(
+      Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
+             Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
+                 Mul(half, Log1p(Mul(xoy, xoy)))),
+             Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
+                    Log1p(Add(am1, sq)))),
+      Select(Lt(signed_y, ScalarLike(signed_y, zero_)), Neg(imag), imag));
 }

@@ -9,7 +9,6 @@ import sys
 
 def acosh_0(z: complex) -> complex:
     signed_y: float = (z).imag
-    zero: float = 0
     y: float = abs(signed_y)
     signed_x: float = (z).real
     x: float = abs(signed_x)
@@ -19,6 +18,7 @@ def acosh_0(z: complex) -> complex:
     mx: float = (y) if (y_gt_safe_max_opt) else (x)
     two: float = 2
     half: float = 0.5
+    zero: float = 0
     xoy: float = ((x) / (y)) if ((y_gt_safe_max_opt) and (not ((y) == (math.inf)))) else (zero)
     one: float = 1
     logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4))) and ((x) < (one))
@@ -70,13 +70,8 @@ def acosh_0(z: complex) -> complex:
     )
     am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
     sq: float = math.sqrt((am1) * (ap1))
-    imag: float = (
-        (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
-        if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-        else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
-    )
     half_apx: float = (half) * ((a) + (x))
-    acos_real: float = math.atan2(
+    imag: float = math.atan2(
         (
             (y)
             if ((max(x, y)) >= (safe_max))
@@ -88,13 +83,13 @@ def acosh_0(z: complex) -> complex:
         ),
         signed_x,
     )
-    complex_negative_acos_signed_imag_acos_real: complex = complex(
-        -((imag) if ((signed_y) < (zero)) else (-(imag))), acos_real
-    )
-    return (
-        (-(complex_negative_acos_signed_imag_acos_real))
-        if ((signed_y) < (0))
-        else (complex_negative_acos_signed_imag_acos_real)
+    return complex(
+        (
+            (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
+            if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
+            else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
+        ),
+        (-(imag)) if ((signed_y) < (0)) else (imag),
     )
 
 

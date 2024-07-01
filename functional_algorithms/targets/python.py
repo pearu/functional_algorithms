@@ -17,6 +17,9 @@ import sys
 
 trace_arguments = dict(
     absolute=[(":complex",)],
+    asin_acos_kernel=[
+        (":complex",),
+    ],
     acos=[(":complex",), (":float",)],
     acosh=[(":complex",), (":float",)],
     asin=[(":complex",), (":float",)],

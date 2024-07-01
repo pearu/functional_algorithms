@@ -41,6 +41,7 @@ def normalize_like(expr):
             "hypot",
             "sqrt",
             "square",
+            "asin_acos_kernel",
         }:
             expr = expr.operands[0]
         elif expr.kind == "abs" and not expr.operands[0].is_complex:
@@ -658,6 +659,7 @@ class Expr:
             "sign",
             "copysign",
             "conj",
+            "asin_acos_kernel",
         }:
             return self.operands[0].get_type()
         elif self.kind in {

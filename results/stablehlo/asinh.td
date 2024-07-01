@@ -31,11 +31,20 @@ def : Pat<(asinh_0 NonComplexElementType:$z),
 
 def : Pat<(asinh_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
-    (StableHLO_ImagOp
-      (CHLO_AsinOp:$w
-        (StableHLO_ComplexOp
-          (StableHLO_NegOp
-            (StableHLO_ImagOp $z)),
-          (StableHLO_RealOp $z)))),
-    (StableHLO_NegOp
+    (StableHLO_SelectOp
+      (StableHLO_CompareOp
+       (StableHLO_RealOp:$signed_x $z),
+       (StableHLO_ConstantLike<"0"> $signed_x),
+        StableHLO_ComparisonDirectionValue<"LT">,
+        (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+      (StableHLO_NegOp
+        (StableHLO_ImagOp:$imag_w
+          (CHLO_AsinAcosKernelOp:$w
+            (StableHLO_ComplexOp
+              (StableHLO_NegOp
+                (StableHLO_ImagOp:$signed_y $z)),
+              $signed_x)))),
+      $imag_w),
+    (StableHLO_Atan2Op
+      $signed_y,
       (StableHLO_RealOp $w)))>;

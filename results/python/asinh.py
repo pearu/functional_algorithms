@@ -8,18 +8,17 @@ import sys
 
 
 def asinh_0(z: complex) -> complex:
-    signed_y: float = (z).real
-    zero: float = 0
-    y: float = abs(signed_y)
-    imag_z: float = (z).imag
-    signed_x: float = -(imag_z)
-    x: float = abs(signed_x)
+    _asin_acos_kernel_1_signed_y: float = (z).real
+    y: float = abs(_asin_acos_kernel_1_signed_y)
+    signed_y: float = (z).imag
+    x: float = abs(-(signed_y))
     safe_max: float = (math.sqrt(sys.float_info.max)) / (8)
     safe_max_opt: float = ((safe_max) * (1e-06)) if ((x) < ((safe_max) * (1000000000000.0))) else ((safe_max) * (100.0))
     y_gt_safe_max_opt: bool = (y) >= (safe_max_opt)
     mx: float = (y) if (y_gt_safe_max_opt) else (x)
     two: float = 2
     half: float = 0.5
+    zero: float = 0
     xoy: float = ((x) / (y)) if ((y_gt_safe_max_opt) and (not ((y) == (math.inf)))) else (zero)
     one: float = 1
     logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4))) and ((x) < (one))
@@ -64,32 +63,34 @@ def asinh_0(z: complex) -> complex:
     divide_half_yy_rpxp1: float = (half_yy) / (rpxp1)
     spxm1: float = (s) + (xm1)
     smxm1: float = (s) - (xm1)
-    _asin_2_x_ge_1_or_not: float = (
+    x_ge_1_or_not: float = (
         ((divide_half_yy_rpxp1) + ((half) * (spxm1)))
         if ((x) >= (one))
         else (((divide_half_yy_rpxp1) + ((half_yy) / (smxm1))) if ((a) <= (1.5)) else ((a) - (one)))
     )
-    am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (_asin_2_x_ge_1_or_not)
+    am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
     sq: float = math.sqrt((am1) * (ap1))
-    imag: float = (
+    _asin_acos_kernel_1_imag: float = (
         (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
         if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
         else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
     )
     half_apx: float = (half) * ((a) + (x))
-    real: float = math.atan2(
-        signed_x,
-        (
-            (y)
-            if ((max(x, y)) >= (safe_max))
-            else (
-                (math.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                if ((x) <= (one))
-                else ((y) * (math.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
-            )
+    return complex(
+        (-(_asin_acos_kernel_1_imag)) if ((_asin_acos_kernel_1_signed_y) < (0)) else (_asin_acos_kernel_1_imag),
+        math.atan2(
+            signed_y,
+            (
+                (y)
+                if ((max(x, y)) >= (safe_max))
+                else (
+                    (math.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
+                    if ((x) <= (one))
+                    else ((y) * (math.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
+                )
+            ),
         ),
     )
-    return complex((-(imag)) if ((signed_y) < (zero)) else (imag), -(real))
 
 
 def asinh_1(z: float) -> float:

@@ -93,6 +93,78 @@ def absolute(ctx, z: float | complex):
     return ctx(abs(z))
 
 
+def asin_acos_kernel(ctx, z: complex):
+    """A kernel for evaluating asin and acos functions on complex inputs.
+
+    If
+        w = asin_acos_kernel(z)
+    then
+        asin(z) = complex(atan2(z.real, w.real), sign(z.imag) * w.imag)
+    and
+        acos(z) = complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
+
+    See asin and acos for the description of asin_acos_kernel algorithm.
+    """
+    signed_x = z.real
+    signed_y = z.imag
+    x = ctx.abs(signed_x)
+    y = ctx.abs(signed_y)
+
+    zero = ctx.constant(0, signed_x)
+    half = ctx.constant(0.5, signed_x)
+    one = ctx.constant(1, signed_x)
+    one_and_half = ctx.constant(1.5, signed_x)
+    two = ctx.constant(2, signed_x)
+    log2 = ctx.log(two)
+    smallest = ctx.constant("smallest", signed_x)
+    largest = ctx.constant("largest", signed_x)
+
+    safe_min = ctx.sqrt(smallest) * 4
+    safe_max = ctx.sqrt(largest) / 8
+    safe_max_m6 = safe_max * 1e-6
+    safe_max_p12 = safe_max * 1e12
+    safe_max_p2 = safe_max * 1e2
+    safe_max_opt = ctx.select(x < safe_max_p12, safe_max_m6, safe_max_p2)
+
+    xp1 = x + one
+    xm1 = x - one
+    r = ctx.hypot(xp1, y)
+    s = ctx.hypot(xm1, y)
+    a = half * (r + s)
+    ap1 = a + one
+    rpxp1 = r + xp1
+    spxm1 = s + xm1
+    smxm1 = s - xm1
+    yy = y * y
+    apx = a + x
+    half_yy = half * yy
+    half_apx = half * apx
+    y1 = ctx.select(
+        ctx.max(x, y) >= safe_max,
+        y,  # C5
+        ctx.select(
+            x <= one, ctx.sqrt(half_apx * (yy / rpxp1 + smxm1)), y * ctx.sqrt(half_apx / rpxp1 + half_apx / spxm1)  # R2  # R3
+        ),
+    )
+
+    x_ge_1_or_not = ctx.select(
+        x >= one,
+        half_yy / rpxp1 + half * spxm1,  # I3
+        ctx.select(a <= one_and_half, half_yy / rpxp1 + half_yy / smxm1, a - one),  # I2  # I1
+    ).reference()
+
+    am1 = ctx.select(ctx.And(y < safe_min, x < one), -((xp1 * xm1) / ap1), x_ge_1_or_not)  # C123_LT1
+    mx = ctx.select((y >= safe_max_opt).reference("y_gt_safe_max_opt"), y, x)
+    sq = ctx.sqrt(am1 * ap1)
+    xoy = ctx.select(ctx.And(y >= safe_max_opt, ctx.Not(y.is_posinf)), x / y, zero)
+    imag = ctx.select(
+        mx >= ctx.select(y >= safe_max_opt, safe_max_opt, safe_max),
+        log2 + ctx.log(mx) + half * ctx.log1p(xoy * xoy),  # C5 & C123_INF
+        ctx.select(ctx.And(y < safe_min, x < one), y / sq, ctx.log1p(am1 + sq)),  # C123_LT1  # I1 & I2 & I3
+    )
+    return ctx(ctx.complex(y1, imag))
+
+
 def complex_asin(ctx, z: complex):
     # fmt: off
     """Arcus sine on complex input.
@@ -224,9 +296,24 @@ def complex_asin(ctx, z: complex):
     implementations these would just increase the number of branches
     with no gain in accuracy.
 
+    The above algorithm is implemented in asin_acos_kernel function so
+    that we'll have
+
+      asin(z) = complex(atan2(z.real, w.real), sign(z.imag) * w.imag)
+
+    where
+
+      w = asin_acos_kernel(z).
     """
     # fmt: on
-    return asin(ctx, z)
+    signed_x = z.real.reference("signed_x", force=True)
+    signed_y = z.imag.reference("signed_y", force=True)
+    w = ctx.asin_acos_kernel(z)
+    w_imag = w.imag
+    zero = ctx.constant(0, w_imag)
+    real = ctx.atan2(signed_x, w.real).reference("real")
+    imag = ctx.select(signed_y < zero, -w_imag, w_imag)
+    return ctx.complex(real, imag)
 
 
 def real_asin(ctx, x: float):
@@ -251,84 +338,37 @@ def asin(ctx, z: complex | float):
     """
     if not z.is_complex:
         return real_asin(ctx, z)
-    return complex_asin_acos(ctx, z)[0]
-
-
-def complex_asin_acos(ctx, z: complex):
-
-    signed_x = z.real
-    signed_y = z.imag
-    x = ctx.abs(signed_x)
-    y = ctx.abs(signed_y)
-
-    zero = ctx.constant(0, signed_x)
-    half = ctx.constant(0.5, signed_x)
-    one = ctx.constant(1, signed_x)
-    one_and_half = ctx.constant(1.5, signed_x)
-    two = ctx.constant(2, signed_x)
-    log2 = ctx.log(two)
-    smallest = ctx.constant("smallest", signed_x)
-    largest = ctx.constant("largest", signed_x)
-
-    safe_min = ctx.sqrt(smallest) * 4
-    safe_max = ctx.sqrt(largest) / 8
-    safe_max_m6 = safe_max * 1e-6
-    safe_max_p12 = safe_max * 1e12
-    safe_max_p2 = safe_max * 1e2
-    safe_max_opt = ctx.select(x < safe_max_p12, safe_max_m6, safe_max_p2)
-
-    xp1 = x + one
-    xm1 = x - one
-    r = ctx.hypot(xp1, y)
-    s = ctx.hypot(xm1, y)
-    a = half * (r + s)
-    ap1 = a + one
-    rpxp1 = r + xp1
-    spxm1 = s + xm1
-    smxm1 = s - xm1
-    yy = y * y
-    apx = a + x
-    half_yy = half * yy
-    half_apx = half * apx
-    y1 = ctx.select(
-        ctx.max(x, y) >= safe_max,
-        y,  # C5
-        ctx.select(
-            x <= one, ctx.sqrt(half_apx * (yy / rpxp1 + smxm1)), y * ctx.sqrt(half_apx / rpxp1 + half_apx / spxm1)  # R2  # R3
-        ),
-    )
-    real = ctx.atan2(signed_x, y1).reference()
-    acos_real = ctx.atan2(y1, signed_x).reference()
-
-    am1 = ctx.select(
-        ctx.And(y < safe_min, x < one),
-        -((xp1 * xm1) / ap1),  # C123_LT1
-        ctx.select(
-            x >= one,
-            half_yy / rpxp1 + half * spxm1,  # I3
-            ctx.select(a <= one_and_half, half_yy / rpxp1 + half_yy / smxm1, a - one),  # I2  # I1
-        ).reference("x_ge_1_or_not"),
-    )
-    mx = ctx.select((y >= safe_max_opt).reference("y_gt_safe_max_opt"), y, x)
-    sq = ctx.sqrt(am1 * ap1)
-    xoy = ctx.select(ctx.And(y >= safe_max_opt, ctx.Not(y.is_posinf)), x / y, zero)
-    imag = ctx.select(
-        mx >= ctx.select(y >= safe_max_opt, safe_max_opt, safe_max),
-        log2 + ctx.log(mx) + half * ctx.log1p(xoy * xoy),  # C5 & C123_INF
-        ctx.select(ctx.And(y < safe_min, x < one), y / sq, ctx.log1p(am1 + sq)),  # C123_LT1  # I1 & I2 & I3
-    )
-
-    signed_imag = ctx.select(signed_y < zero, -imag, imag)
-    acos_signed_imag = ctx.select(signed_y < zero, imag, -imag)
-    return ctx(ctx.complex(real, signed_imag)), ctx(ctx.complex(acos_real, acos_signed_imag))
+    return complex_asin(ctx, z)
 
 
 def complex_asinh(ctx, z: complex):
     """Inverse hyperbolic sine on complex input:
 
-    asinh(z) = -I * asin(I * z)
+      asinh(z) = -I * asin(I * z)
+
+    where
+
+      asin(z') = complex(atan2(z'.real, w.real), sign(z'.imag) * w.imag)
+      w = asin_acos_kernel(z')
+      z' = I * z
+
+    Let's find
+
+      asinh(z) = -I * asin(z')
+               = -I * complex(atan2(z'.real, w.real), sign(z'.imag) * w.imag)
+               = complex(sign(z'.imag) * w.imag, -atan2(z'.real, w.real))
+               [z'.imag = z.real, z'.real = -z.imag]
+               = complex(sign(z.real) * w.imag, atan2(z.imag, w.real))
+    where
+
+      w = asin_acos_kernel(complex(-z.imag, z.real))
     """
-    return asinh(ctx, z)
+    signed_x = z.real.reference("signed_x", force=True)
+    signed_y = z.imag.reference("signed_y", force=True)
+    w = ctx.asin_acos_kernel(ctx.complex(-signed_y, signed_x))
+    real = ctx.select(signed_x < 0, -w.imag, w.imag)
+    imag = ctx.atan2(signed_y, w.real)
+    return ctx(ctx.complex(real, imag))
 
 
 def real_asinh(ctx, x: float):
@@ -445,12 +485,7 @@ def asinh(ctx, z: complex | float):
     """
     if not z.is_complex:
         return real_asinh(ctx, z)
-
-    # i * z = i * (x + i * y) = -y + i * x
-    w = ctx.asin(ctx.complex(-z.imag, z.real))
-    # w = ctx.asin(ctx.complex(-z.imag, z.real))
-    # -i * w = -i * (a + i * b) = b - i * a
-    return ctx(ctx.complex(w.imag, -w.real))
+    return complex_asinh(ctx, z)
 
 
 def real_acos(ctx, x: float):
@@ -469,7 +504,7 @@ def real_acos(ctx, x: float):
 
 
 def complex_acos(ctx, z: complex):
-    """Arcus cosine on complex input:
+    """Arcus cosine on complex input
 
     Here we well use a modified version of the [Hull et
     al]((https://dl.acm.org/doi/10.1145/275323.275324) algorithm with
@@ -497,11 +532,24 @@ def complex_acos(ctx, z: complex):
 
       real(arccos(z)) = argtan2(q, p),
 
-    and we have identity
+    and we have the following identity
 
        imag(arccos(z)) = -imag(arcsin(z)).
+
+    With the above notes, we'll have
+
+      acos(z) = complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
+
+    where
+
+      w = asin_acos_kernel(z)
     """
-    return complex_asin_acos(ctx, z)[1]
+    signed_x = z.real.reference("signed_x", force=True)
+    signed_y = z.imag.reference("signed_y", force=True)
+    w = ctx.asin_acos_kernel(z)
+    real = ctx.atan2(w.real, signed_x)
+    imag = ctx.select(signed_y < 0, w.imag, -w.imag)
+    return ctx.complex(real, imag)
 
 
 def acos(ctx, z: complex | float):
@@ -520,10 +568,33 @@ def complex_acosh(ctx, z: complex):
     acosh(z) = sqrt(z - 1) / sqrt(1 - z) * acos(z)
              = I * acos(z)               # when z.imag >= 0
              = -I * acos(z)              # otherwise
+
+    where
+
+      w = asin_acos_kernel(z)
+      acos(z) = complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
+
+    For `z.imag >= 0`, we'll have `sign(z.imag) = 1` and
+
+      acosh(z) = I * complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
+               = complex(w.imag, atan2(w.real, z.real))
+
+    For `z.imag < 0`, we'll have `sign(z.imag) = -1` and
+
+      acosh(z) = -I * complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
+               = -I * complex(atan2(w.real, z.real),  w.imag)
+               = complex(w.imag, -atan2(w.real, z.real))
+
+    So, for any `z.imag`, we'll have
+
+      acosh(z) = complex(w.imag, sign(z.imag) * atan2(w.real, z.real))
+
     """
-    w = complex_acos(ctx, z)
-    r = ctx.complex(-w.imag, w.real)
-    return ctx.select(z.imag < 0, -r, r)
+    signed_x = z.real.reference("signed_x", force=True)
+    signed_y = z.imag.reference("signed_y", force=True)
+    w = ctx.asin_acos_kernel(z)
+    imag = ctx.atan2(w.real, signed_x)
+    return ctx(ctx.complex(w.imag, ctx.select(signed_y < 0, -imag, imag)))
 
 
 def real_acosh(ctx, x: float):

@@ -19,7 +19,6 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.complex128(z)
         signed_y: numpy.float64 = (z).imag
-        zero: numpy.float64 = numpy.float64(0)
         y: numpy.float64 = numpy.abs(signed_y)
         signed_x: numpy.float64 = (z).real
         x: numpy.float64 = numpy.abs(signed_x)
@@ -33,6 +32,7 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         mx: numpy.float64 = (y) if (y_gt_safe_max_opt) else (x)
         two: numpy.float64 = numpy.float64(2)
         half: numpy.float64 = numpy.float64(0.5)
+        zero: numpy.float64 = numpy.float64(0)
         xoy: numpy.float64 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.float64(numpy.inf)), dtype=numpy.bool_))))
@@ -90,13 +90,8 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         )
         am1: numpy.float64 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float64 = numpy.sqrt((am1) * (ap1))
-        imag: numpy.float64 = (
-            (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
-            if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-            else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
-        )
         half_apx: numpy.float64 = (half) * ((a) + (x))
-        acos_real: numpy.float64 = numpy.arctan2(
+        imag: numpy.float64 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -108,13 +103,13 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
             ),
             signed_x,
         )
-        complex_negative_acos_signed_imag_acos_real: numpy.complex128 = make_complex(
-            -((imag) if ((signed_y) < (zero)) else (-(imag))), acos_real
-        )
-        result = (
-            (-(complex_negative_acos_signed_imag_acos_real))
-            if ((signed_y) < (numpy.float64(0)))
-            else (complex_negative_acos_signed_imag_acos_real)
+        result = make_complex(
+            (
+                (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+                if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
+                else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
+            ),
+            (-(imag)) if ((signed_y) < (numpy.float64(0))) else (imag),
         )
         return result
 
@@ -123,7 +118,6 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.complex64(z)
         signed_y: numpy.float32 = (z).imag
-        zero: numpy.float32 = numpy.float32(0)
         y: numpy.float32 = numpy.abs(signed_y)
         signed_x: numpy.float32 = (z).real
         x: numpy.float32 = numpy.abs(signed_x)
@@ -137,6 +131,7 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         mx: numpy.float32 = (y) if (y_gt_safe_max_opt) else (x)
         two: numpy.float32 = numpy.float32(2)
         half: numpy.float32 = numpy.float32(0.5)
+        zero: numpy.float32 = numpy.float32(0)
         xoy: numpy.float32 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.float32(numpy.inf)), dtype=numpy.bool_))))
@@ -194,13 +189,8 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         )
         am1: numpy.float32 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float32 = numpy.sqrt((am1) * (ap1))
-        imag: numpy.float32 = (
-            (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
-            if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-            else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
-        )
         half_apx: numpy.float32 = (half) * ((a) + (x))
-        acos_real: numpy.float32 = numpy.arctan2(
+        imag: numpy.float32 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -212,13 +202,13 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
             ),
             signed_x,
         )
-        complex_negative_acos_signed_imag_acos_real: numpy.complex64 = make_complex(
-            -((imag) if ((signed_y) < (zero)) else (-(imag))), acos_real
-        )
-        result = (
-            (-(complex_negative_acos_signed_imag_acos_real))
-            if ((signed_y) < (numpy.float32(0)))
-            else (complex_negative_acos_signed_imag_acos_real)
+        result = make_complex(
+            (
+                (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+                if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
+                else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
+            ),
+            (-(imag)) if ((signed_y) < (numpy.float32(0))) else (imag),
         )
         return result
 

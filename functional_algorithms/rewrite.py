@@ -96,6 +96,9 @@ class Rewriter:
     def apply(self, expr):
         pass
 
+    def asin_acos_kernel(self, expr):
+        pass
+
     def acos(self, expr):
         pass
 

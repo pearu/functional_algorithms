@@ -28,7 +28,8 @@ XlaOp complex_acos_0(XlaOp z) {
   XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(two_));
   XlaOp _hypot_1_r = Square(Div(mn, _hypot_1_mx));
   XlaOp sqa = Sqrt(Add(one, _hypot_1_r));
-  XlaOp zero = ScalarLike(signed_x, 0);
+  FloatType zero_ = 0;
+  XlaOp zero = ScalarLike(signed_x, zero_);
   XlaOp two = ScalarLike(signed_x, two_);
   XlaOp r =
       Select(Eq(_hypot_1_mx, mn), Mul(sqrt_two, _hypot_1_mx),
@@ -52,12 +53,6 @@ XlaOp complex_acos_0(XlaOp z) {
   XlaOp rpxp1 = Add(r, xp1);
   XlaOp smxm1 = Sub(s, xm1);
   XlaOp spxm1 = Add(s, xm1);
-  XlaOp acos_real = Atan2(
-      Select(Ge(Max(x, y), safe_max), y,
-             Select(Le(x, one), Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
-                    Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
-                                    Div(half_apx, spxm1)))))),
-      signed_x);
   XlaOp safe_max_opt =
       Select(Lt(x, ScalarLike(signed_x, (safe_max_) * (1000000000000.0))),
              ScalarLike(signed_x, (safe_max_) * (1e-06)),
@@ -89,5 +84,12 @@ XlaOp complex_acos_0(XlaOp z) {
                           Mul(half, Log1p(Mul(xoy, xoy)))),
                       Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
                              Log1p(Add(am1, sq))));
-  return Complex(acos_real, Select(Lt(signed_y, zero), imag, Neg(imag)));
+  return Complex(
+      Atan2(Select(Ge(Max(x, y), safe_max), y,
+                   Select(Le(x, one),
+                          Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
+                          Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
+                                          Div(half_apx, spxm1)))))),
+            signed_x),
+      Select(Lt(signed_y, ScalarLike(signed_y, zero_)), imag, Neg(imag)));
 }

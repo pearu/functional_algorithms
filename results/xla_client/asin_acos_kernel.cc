@@ -10,15 +10,7 @@
 
 
 template <typename FloatType>
-XlaOp acos_0(XlaOp z) {
-  XlaOp one = ScalarLike(z, 1);
-  XlaOp add_one_z = Add(one, z);
-  return Mul(ScalarLike(z, 2),
-             Atan2(Sqrt(Mul(Sub(one, z), add_one_z)), add_one_z));
-}
-
-template <typename FloatType>
-XlaOp acos_1(XlaOp z) {
+XlaOp asin_acos_kernel_0(XlaOp z) {
   XlaOp signed_x = Real(z);
   XlaOp x = Abs(signed_x);
   XlaOp signed_y = Imag(z);
@@ -36,8 +28,7 @@ XlaOp acos_1(XlaOp z) {
   XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(two_));
   XlaOp _hypot_1_r = Square(Div(mn, _hypot_1_mx));
   XlaOp sqa = Sqrt(Add(one, _hypot_1_r));
-  FloatType zero_ = 0;
-  XlaOp zero = ScalarLike(signed_x, zero_);
+  XlaOp zero = ScalarLike(signed_x, 0);
   XlaOp two = ScalarLike(signed_x, two_);
   XlaOp r =
       Select(Eq(_hypot_1_mx, mn), Mul(sqrt_two, _hypot_1_mx),
@@ -87,17 +78,14 @@ XlaOp acos_1(XlaOp z) {
   XlaOp am1 = Select(logical_and_lt_y_safe_min_lt_x_one,
                      Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XlaOp sq = Sqrt(Mul(am1, ap1));
-  XlaOp imag = Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
-                      Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
-                          Mul(half, Log1p(Mul(xoy, xoy)))),
-                      Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
-                             Log1p(Add(am1, sq))));
   return Complex(
-      Atan2(Select(Ge(Max(x, y), safe_max), y,
-                   Select(Le(x, one),
-                          Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
-                          Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
-                                          Div(half_apx, spxm1)))))),
-            signed_x),
-      Select(Lt(signed_y, ScalarLike(signed_y, zero_)), imag, Neg(imag)));
+      Select(Ge(Max(x, y), safe_max), y,
+             Select(Le(x, one), Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
+                    Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
+                                    Div(half_apx, spxm1)))))),
+      Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
+             Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
+                 Mul(half, Log1p(Mul(xoy, xoy)))),
+             Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
+                    Log1p(Add(am1, sq)))));
 }
