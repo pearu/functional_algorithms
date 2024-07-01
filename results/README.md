@@ -26,8 +26,8 @@ MPMath functions using multi-precision arithmetic.
 | asin | complex128 | 694103 | 307326 | 560 | 12 | - | - |
 | asinh | float32 | 922791 | 77144 | 66 | - | - | - |
 | asinh | float64 | 829637 | 170270 | 94 | - | - | - |
-| asinh | complex64 | 767789 | 233968 | 244 | - | - | - |
-| asinh | complex128 | 850261 | 151496 | 244 | - | - | - |
+| asinh | complex64 | 808487 | 191878 | 1592 | 44 | - | - |
+| asinh | complex128 | 694103 | 307326 | 560 | 12 | - | - |
 | square | float32 | 997293 | 2708 | - | - | - | - |
 | square | float64 | 999649 | 352 | - | - | - | - |
 | square | complex64 | 974577 | 27424 | - | - | - | - |

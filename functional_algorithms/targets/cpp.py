@@ -18,6 +18,7 @@ trace_arguments = dict(
     square=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     absolute=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
+    asin_acos_kernel=[(":complex64",), (":complex128",)],
     acos=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     acosh=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     asin=[(":float32",), (":float64",), (":complex64",), (":complex128",)],

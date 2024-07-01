@@ -34,12 +34,13 @@ following math functions:
 - `acos(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `acos`,
+- `acosh(z: complex | float)`, using the relation `acosh(z) = sign(z.imag) * I * acos(z)`,
 - `asin(z: complex | float)`, using modified [Hull et
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`,
-- `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`.
+- `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`,
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
-- `square(z: complex | float)`,
+- `square(z: complex | float)`.
 
 ## Supported targets
 

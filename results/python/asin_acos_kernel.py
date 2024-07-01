@@ -7,7 +7,7 @@ import math
 import sys
 
 
-def acos_0(z: complex) -> complex:
+def asin_acos_kernel_0(z: complex) -> complex:
     signed_x: float = (z).real
     x: float = abs(signed_x)
     signed_y: float = (z).imag
@@ -71,29 +71,19 @@ def acos_0(z: complex) -> complex:
     )
     am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
     sq: float = math.sqrt((am1) * (ap1))
-    imag: float = (
-        (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
-        if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-        else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
-    )
     return complex(
-        math.atan2(
-            (
-                (y)
-                if ((max(x, y)) >= (safe_max))
-                else (
-                    (math.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                    if ((x) <= (one))
-                    else ((y) * (math.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
-                )
-            ),
-            signed_x,
+        (
+            (y)
+            if ((max(x, y)) >= (safe_max))
+            else (
+                (math.sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
+                if ((x) <= (one))
+                else ((y) * (math.sqrt(((half_apx) / (rpxp1)) + ((half_apx) / (spxm1)))))
+            )
         ),
-        (imag) if ((signed_y) < (0)) else (-(imag)),
+        (
+            (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
+            if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
+            else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
+        ),
     )
-
-
-def acos_1(z: float) -> float:
-    one: float = 1
-    add_one_z: float = (one) + (z)
-    return (2) * (math.atan2(math.sqrt(((one) - (z)) * (add_one_z)), add_one_z))

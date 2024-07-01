@@ -23,6 +23,7 @@ trace_arguments = dict(
     complex_asinh=[(":complex", ":complex")],
     real_asinh=[(":float", ":float")],
     square=[(":float", ":float"), (":complex", ":complex")],
+    asin_acos_kernel=[(":complex", ":complex")],
     acos=[(":float", ":float"), (":complex", ":complex")],
     acosh=[(":float", ":float"), (":complex", ":complex")],
     asin=[(":float", ":float"), (":complex", ":complex")],

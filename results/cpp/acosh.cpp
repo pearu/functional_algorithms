@@ -35,7 +35,6 @@ double acosh_1(double z) {
 
 std::complex<float> acosh_2(std::complex<float> z) {
   float signed_y = (z).imag();
-  float zero = 0;
   float y = std::abs(signed_y);
   float signed_x = (z).real();
   float x = std::abs(signed_x);
@@ -47,6 +46,7 @@ std::complex<float> acosh_2(std::complex<float> z) {
   float mx = ((y_gt_safe_max_opt) ? (y) : (x));
   float two = 2;
   float half = 0.5;
+  float zero = 0;
   float xoy = (((y_gt_safe_max_opt) &&
                 (!((y) == (std::numeric_limits<float>::infinity()))))
                    ? ((x) / (y))
@@ -99,14 +99,8 @@ std::complex<float> acosh_2(std::complex<float> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   float sq = std::sqrt((am1) * (ap1));
-  float imag = (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-                    ? (((std::log(two)) + (std::log(mx))) +
-                       ((half) * (std::log1p((xoy) * (xoy)))))
-                    : (((logical_and_lt_y_safe_min_lt_x_one)
-                            ? ((y) / (sq))
-                            : (std::log1p((am1) + (sq))))));
   float half_apx = (half) * ((a) + (x));
-  float acos_real = std::atan2(
+  float imag = std::atan2(
       (((std::max(x, y)) >= (safe_max))
            ? (y)
            : ((((x) <= (one))
@@ -114,16 +108,18 @@ std::complex<float> acosh_2(std::complex<float> z) {
                    : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
                                        ((half_apx) / (spxm1)))))))),
       signed_x);
-  std::complex<float> complex_negative_acos_signed_imag_acos_real =
-      std::complex<float>(-((((signed_y) < (zero)) ? (imag) : (-(imag)))),
-                          acos_real);
-  return (((signed_y) < (0)) ? (-(complex_negative_acos_signed_imag_acos_real))
-                             : (complex_negative_acos_signed_imag_acos_real));
+  return std::complex<float>(
+      (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(mx))) +
+              ((half) * (std::log1p((xoy) * (xoy)))))
+           : (((logical_and_lt_y_safe_min_lt_x_one)
+                   ? ((y) / (sq))
+                   : (std::log1p((am1) + (sq)))))),
+      (((signed_y) < (0)) ? (-(imag)) : (imag)));
 }
 
 std::complex<double> acosh_3(std::complex<double> z) {
   double signed_y = (z).imag();
-  double zero = 0;
   double y = std::abs(signed_y);
   double signed_x = (z).real();
   double x = std::abs(signed_x);
@@ -135,6 +131,7 @@ std::complex<double> acosh_3(std::complex<double> z) {
   double mx = ((y_gt_safe_max_opt) ? (y) : (x));
   double two = 2;
   double half = 0.5;
+  double zero = 0;
   double xoy = (((y_gt_safe_max_opt) &&
                  (!((y) == (std::numeric_limits<double>::infinity()))))
                     ? ((x) / (y))
@@ -187,14 +184,8 @@ std::complex<double> acosh_3(std::complex<double> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   double sq = std::sqrt((am1) * (ap1));
-  double imag = (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-                     ? (((std::log(two)) + (std::log(mx))) +
-                        ((half) * (std::log1p((xoy) * (xoy)))))
-                     : (((logical_and_lt_y_safe_min_lt_x_one)
-                             ? ((y) / (sq))
-                             : (std::log1p((am1) + (sq))))));
   double half_apx = (half) * ((a) + (x));
-  double acos_real = std::atan2(
+  double imag = std::atan2(
       (((std::max(x, y)) >= (safe_max))
            ? (y)
            : ((((x) <= (one))
@@ -202,9 +193,12 @@ std::complex<double> acosh_3(std::complex<double> z) {
                    : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
                                        ((half_apx) / (spxm1)))))))),
       signed_x);
-  std::complex<double> complex_negative_acos_signed_imag_acos_real =
-      std::complex<double>(-((((signed_y) < (zero)) ? (imag) : (-(imag)))),
-                           acos_real);
-  return (((signed_y) < (0)) ? (-(complex_negative_acos_signed_imag_acos_real))
-                             : (complex_negative_acos_signed_imag_acos_real));
+  return std::complex<double>(
+      (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(mx))) +
+              ((half) * (std::log1p((xoy) * (xoy)))))
+           : (((logical_and_lt_y_safe_min_lt_x_one)
+                   ? ((y) / (sq))
+                   : (std::log1p((am1) + (sq)))))),
+      (((signed_y) < (0)) ? (-(imag)) : (imag)));
 }

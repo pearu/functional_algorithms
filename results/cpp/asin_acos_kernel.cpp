@@ -11,19 +11,7 @@
 #include <limits>
 
 
-float acos_0(float z) {
-  float one = 1;
-  float add_one_z = (one) + (z);
-  return (2) * (std::atan2(std::sqrt(((one) - (z)) * (add_one_z)), add_one_z));
-}
-
-double acos_1(double z) {
-  double one = 1;
-  double add_one_z = (one) + (z);
-  return (2) * (std::atan2(std::sqrt(((one) - (z)) * (add_one_z)), add_one_z));
-}
-
-std::complex<float> acos_2(std::complex<float> z) {
+std::complex<float> asin_acos_kernel_0(std::complex<float> z) {
   float signed_x = (z).real();
   float x = std::abs(signed_x);
   float signed_y = (z).imag();
@@ -90,25 +78,22 @@ std::complex<float> acos_2(std::complex<float> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   float sq = std::sqrt((am1) * (ap1));
-  float imag = (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-                    ? (((std::log(two)) + (std::log(mx))) +
-                       ((half) * (std::log1p((xoy) * (xoy)))))
-                    : (((logical_and_lt_y_safe_min_lt_x_one)
-                            ? ((y) / (sq))
-                            : (std::log1p((am1) + (sq))))));
   return std::complex<float>(
-      std::atan2(
-          (((std::max(x, y)) >= (safe_max))
-               ? (y)
-               : ((((x) <= (one))
-                       ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                       : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
-                                           ((half_apx) / (spxm1)))))))),
-          signed_x),
-      (((signed_y) < (0)) ? (imag) : (-(imag))));
+      (((std::max(x, y)) >= (safe_max))
+           ? (y)
+           : ((((x) <= (one))
+                   ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
+                   : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
+                                       ((half_apx) / (spxm1)))))))),
+      (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(mx))) +
+              ((half) * (std::log1p((xoy) * (xoy)))))
+           : (((logical_and_lt_y_safe_min_lt_x_one)
+                   ? ((y) / (sq))
+                   : (std::log1p((am1) + (sq)))))));
 }
 
-std::complex<double> acos_3(std::complex<double> z) {
+std::complex<double> asin_acos_kernel_1(std::complex<double> z) {
   double signed_x = (z).real();
   double x = std::abs(signed_x);
   double signed_y = (z).imag();
@@ -175,20 +160,17 @@ std::complex<double> acos_3(std::complex<double> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   double sq = std::sqrt((am1) * (ap1));
-  double imag = (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-                     ? (((std::log(two)) + (std::log(mx))) +
-                        ((half) * (std::log1p((xoy) * (xoy)))))
-                     : (((logical_and_lt_y_safe_min_lt_x_one)
-                             ? ((y) / (sq))
-                             : (std::log1p((am1) + (sq))))));
   return std::complex<double>(
-      std::atan2(
-          (((std::max(x, y)) >= (safe_max))
-               ? (y)
-               : ((((x) <= (one))
-                       ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
-                       : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
-                                           ((half_apx) / (spxm1)))))))),
-          signed_x),
-      (((signed_y) < (0)) ? (imag) : (-(imag))));
+      (((std::max(x, y)) >= (safe_max))
+           ? (y)
+           : ((((x) <= (one))
+                   ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
+                   : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
+                                       ((half_apx) / (spxm1)))))))),
+      (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(mx))) +
+              ((half) * (std::log1p((xoy) * (xoy)))))
+           : (((logical_and_lt_y_safe_min_lt_x_one)
+                   ? ((y) / (sq))
+                   : (std::log1p((am1) + (sq)))))));
 }

@@ -325,6 +325,9 @@ class Context:
 
     min = minimum
 
+    def asin_acos_kernel(self, x):
+        return Expr(self, "asin_acos_kernel", (x,))
+
     def acos(self, x):
         return Expr(self, "acos", (x,))
 

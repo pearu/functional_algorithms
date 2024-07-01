@@ -10,6 +10,7 @@ source_file_header = ""
 
 trace_arguments = dict(
     absolute=[(":complex",)],
+    asin_acos_kernel=[(":complex",)],
     acos=[(":float",), (":complex",)],
     acosh=[(":float",), (":complex",)],
     asin=[(":float",), (":complex",)],
@@ -56,6 +57,7 @@ kind_to_target = dict(
     bitwise_right_shift=NotImplemented,
     maximum="StableHLO_MaxOp",
     minimum="StableHLO_MinOp",
+    asin_acos_kernel="CHLO_AsinAcosKernelOp",
     acos="CHLO_AcosOp",
     acosh="CHLO_AcoshOp",
     asin="CHLO_AsinOp",
