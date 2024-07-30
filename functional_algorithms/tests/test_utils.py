@@ -11,9 +11,16 @@ def dtype(request):
 
 
 def _check_real_samples(
-    r, include_infinity=None, include_zero=None, include_subnormal=None, include_nan=None, nonnegative=None, include_huge=None
+    r,
+    include_infinity=None,
+    include_zero=None,
+    include_subnormal=None,
+    include_nan=None,
+    nonnegative=None,
+    include_huge=None,
 ):
     fi = numpy.finfo(r.dtype)
+    size = r.size
     if nonnegative:
         if include_zero:
             assert r[0] == 0
@@ -30,27 +37,27 @@ def _check_real_samples(
         if include_nan:
             assert numpy.isnan(r[-1])
             if include_infinity:
-                if include_huge and r.size > 9:
+                if include_huge and size > 9:
                     assert numpy.nextafter(r[-4], numpy.inf, dtype=r.dtype) == fi.max
                 assert r[-3] == fi.max
                 assert numpy.isposinf(r[-2])
             else:
                 assert r[-2] == fi.max
-                if include_huge and r.size > 9:
+                if include_huge and size > 9:
                     assert numpy.nextafter(r[-3], numpy.inf, dtype=r.dtype) == fi.max
-            for i in range(r.size - 2):
+            for i in range(size - 2):
                 assert r[i] < r[i + 1]
         else:
             if include_infinity:
-                if include_huge and r.size > 8:
+                if include_huge and size > 8:
                     assert numpy.nextafter(r[-3], numpy.inf, dtype=r.dtype) == fi.max
                 assert r[-2] == fi.max
                 assert numpy.isposinf(r[-1])
             else:
                 assert r[-1] == fi.max
-                if include_huge and r.size > 8:
+                if include_huge and size > 8:
                     assert numpy.nextafter(r[-2], numpy.inf, dtype=r.dtype) == fi.max
-            for i in range(r.size - 1):
+            for i in range(size - 1):
                 assert r[i] < r[i + 1]
     else:
         if include_infinity:
@@ -74,20 +81,7 @@ def _check_real_samples(
             for i in range(r.size - 1):
                 assert r[i] < r[i + 1]
         if include_zero:
-            size = r.size
-            if include_nan:
-                size -= 1
-            if include_infinity:
-                if include_huge:
-                    loc = (size - 1) // 2
-                else:
-                    loc = (size - 1) // 2
-            else:
-                if include_huge:
-                    loc = (size - 1) // 2
-                else:
-                    loc = (size - 1) // 2
-            assert r[loc] == 0, (include_nan, include_infinity, include_huge)
+            loc = numpy.where(r == 0)[0][0]
             if include_subnormal:
                 assert r[loc + 1] == fi.smallest_subnormal
                 assert r[loc - 1] == -fi.smallest_subnormal
@@ -97,9 +91,14 @@ def _check_real_samples(
 
 
 def _iter_samples_parameters():
-    for include_huge, include_subnormal, include_infinity, include_zero, include_nan, nonnegative in itertools.product(
-        *(([False, True],) * 6)
-    ):
+    for (
+        include_huge,
+        include_subnormal,
+        include_infinity,
+        include_zero,
+        include_nan,
+        nonnegative,
+    ) in itertools.product(*(([False, True],) * 6)):
         yield dict(
             include_huge=include_huge,
             include_subnormal=include_subnormal,

@@ -579,6 +579,40 @@ class numpy_with_mpmath:
             assert 0  # unreachable
 
 
+def extra_samples(name, dtype):
+    """Return a list of samples that are special to a given function.
+
+    Parameters
+    ----------
+    name: str
+      The name of a function
+    dtype:
+      Floating-point or complex dtype
+
+    Returns
+    -------
+    values: list
+      Values of function inputs.
+    """
+    is_complex = "complex" in str(dtype)
+    is_float = "float" in str(dtype)
+    assert is_float or is_complex, dtype
+    values = []
+    # Notice that real/complex_samples already include special values
+    # such as 0, -inf, inf, smallest subnormals or normals, so don't
+    # specify these here.
+    if is_float:
+        if name in {"acos", "asin"}:
+            for v in [-1, 1]:
+                values.append(numpy.nextafter(v, v - 1, dtype=dtype))
+                values.append(v)
+                values.append(numpy.nextafter(v, v + 1, dtype=dtype))
+    if is_complex:
+        if name == "absolute":
+            values.append(1.0011048e35 + 3.4028235e38j)
+    return numpy.array(values, dtype=dtype)
+
+
 def real_samples(
     size=10,
     dtype=numpy.float32,
@@ -615,31 +649,52 @@ def real_samples(
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
     assert dtype in {numpy.float32, numpy.float64}, dtype
+    utype = {numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
     fi = numpy.finfo(dtype)
-    start = fi.minexp + fi.negep + 1 if include_subnormal else fi.minexp
-    end = fi.maxexp
     num = size // 2 if not nonnegative else size
     if include_infinity:
         num -= 1
-    with warnings.catch_warnings(action="ignore"):
-        finite_positive = numpy.logspace(start, end, base=2, num=num, dtype=dtype)
+    min_value = dtype(fi.smallest_subnormal if include_subnormal else fi.smallest_normal)
+    max_value = dtype(fi.max)
+    if 1:
+        # The following method gives a sample distibution that is
+        # uniform with respect to ULP distance between positive
+        # neighboring samples
+        finite_positive = numpy.linspace(min_value.view(utype), max_value.view(utype), num=num, dtype=utype).view(dtype)
+    else:
+        start = fi.minexp + fi.negep + 1 if include_subnormal else fi.minexp
+        end = fi.maxexp
+        with warnings.catch_warnings(action="ignore"):
+            # Note that logspace gives samples distribution that is
+            # approximately uniform with respect to ULP distance between
+            # neighboring normal samples. For subnormal samples, logspace
+            # produces repeated samples that will be eliminated below via
+            # numpy.unique.
+            finite_positive = numpy.logspace(start, end, base=2, num=num, dtype=dtype)
+    finite_positive[-1] = max_value
 
-    finite_positive[-1] = fi.max
-    if include_huge and size > 7:
-        finite_positive[-2] = -numpy.nextafter(-fi.max, numpy.inf, dtype=dtype)
+    if include_huge and num > 3:
+        huge = -numpy.nextafter(-max_value, numpy.inf, dtype=dtype)
+        finite_positive[-2] = huge
+
     parts = []
+    extra = []
     if not nonnegative:
         if include_infinity:
-            parts.append(numpy.array([-numpy.inf], dtype=dtype))
+            extra.append(-numpy.inf)
         parts.append(-finite_positive[::-1])
     if include_zero:
-        parts.append(numpy.array([0], dtype=dtype))
+        extra.append(0)
     parts.append(finite_positive)
     if include_infinity:
-        parts.append(numpy.array([numpy.inf], dtype=dtype))
+        extra.append(numpy.inf)
     if include_nan:
-        parts.append(numpy.array([numpy.nan], dtype=dtype))
-    return numpy.concatenate(parts)
+        extra.append(numpy.nan)
+    parts.append(numpy.array(extra, dtype=dtype))
+
+    # Using unique because logspace produces repeated subnormals when
+    # size is large
+    return numpy.unique(numpy.concatenate(parts))
 
 
 def complex_samples(
@@ -777,8 +832,8 @@ def complex_pair_samples(
         include_zero=include_zero,
         include_subnormal=include_subnormal,
         include_nan=include_nan,
-        nonnegative=nonnegative,
         include_huge=include_huge,
+        nonnegative=nonnegative,
     )
     s2 = complex_samples(
         size=size[1],
@@ -787,8 +842,8 @@ def complex_pair_samples(
         include_zero=include_zero,
         include_subnormal=include_subnormal,
         include_nan=include_nan,
-        nonnegative=nonnegative,
         include_huge=include_huge,
+        nonnegative=nonnegative,
     )
     shape1 = s1.shape
     shape2 = s2.shape
