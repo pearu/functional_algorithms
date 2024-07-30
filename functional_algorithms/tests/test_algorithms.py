@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "hypot", "square", "sqrt"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "hypot", "square", "sqrt", "angle"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square", "sqrt"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square", "sqrt", "angle"])
 def unary_func_name(request):
     return request.param
 
@@ -37,6 +37,9 @@ def flush_subnormals(request):
 
 
 def test_unary(dtype_name, unary_func_name, flush_subnormals):
+    if dtype_name.startswith("float") and unary_func_name in {"angle"}:
+        pytest.skip(reason=f"{unary_func_name} does not support {dtype_name} inputs")
+
     dtype = getattr(numpy, dtype_name)
     ctx = Context(paths=[algorithms])
 

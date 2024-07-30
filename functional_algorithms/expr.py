@@ -557,6 +557,10 @@ class Expr:
         return self == self.context.constant("neginf", self)
 
     @property
+    def is_inf(self):
+        return self.context.logical_or(self.is_posinf, self.is_neginf)
+
+    @property
     def is_complex(self):
         if self.kind in {"symbol", "constant", "select"}:
             return self.operands[1].is_complex

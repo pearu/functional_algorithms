@@ -648,3 +648,7 @@ def acosh(ctx, z: complex | float):
 
 def sqrt(ctx, z: complex | float):
     return ctx.sqrt(z)
+
+
+def angle(ctx, z: complex):
+    return ctx.atan2(z.imag, z.real)

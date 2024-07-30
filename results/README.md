@@ -36,3 +36,5 @@ MPMath functions using multi-precision arithmetic.
 | sqrt | float64 | 1000001 | - | - | - | - | - |
 | sqrt | complex64 | 639749 | 362152 | 100 | - | - | - |
 | sqrt | complex128 | 653493 | 348492 | 16 | - | - | - |
+| angle | complex64 | 940281 | 61338 | 378 | 4 | - | - |
+| angle | complex128 | 989725 | 12276 | - | - | - | - |
