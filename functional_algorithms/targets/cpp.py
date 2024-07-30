@@ -119,6 +119,8 @@ constant_to_target = dict(
     largest="std::numeric_limits<{type}>::max()",
     posinf="std::numeric_limits<{type}>::infinity()",
     neginf="-std::numeric_limits<{type}>::infinity()",
+    pi="M_PI",
+    nan="NAN",
 )
 
 

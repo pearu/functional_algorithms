@@ -218,7 +218,11 @@ def acos_2(z: numpy.float64) -> numpy.float64:
         z = numpy.float64(z)
         one: numpy.float64 = numpy.float64(1)
         add_one_z: numpy.float64 = (one) + (z)
-        result = (numpy.float64(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z))
+        result = (
+            ((numpy.float64(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z)))
+            if ((z) != (numpy.float64(-1)))
+            else (numpy.float64(numpy.float64(numpy.pi)))
+        )
         return result
 
 
@@ -227,5 +231,9 @@ def acos_3(z: numpy.float32) -> numpy.float32:
         z = numpy.float32(z)
         one: numpy.float32 = numpy.float32(1)
         add_one_z: numpy.float32 = (one) + (z)
-        result = (numpy.float32(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z))
+        result = (
+            ((numpy.float32(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z)))
+            if ((z) != (numpy.float32(-1)))
+            else (numpy.float32(numpy.float32(numpy.pi)))
+        )
         return result

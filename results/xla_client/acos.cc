@@ -13,8 +13,10 @@ template <typename FloatType>
 XlaOp acos_0(XlaOp z) {
   XlaOp one = ScalarLike(z, 1);
   XlaOp add_one_z = Add(one, z);
-  return Mul(ScalarLike(z, 2),
-             Atan2(Sqrt(Mul(Sub(one, z), add_one_z)), add_one_z));
+  return Select(Ne(z, ScalarLike(z, -1)),
+                Mul(ScalarLike(z, 2),
+                    Atan2(Sqrt(Mul(Sub(one, z), add_one_z)), add_one_z)),
+                ScalarLike(z, M_PI));
 }
 
 template <typename FloatType>

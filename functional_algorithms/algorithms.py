@@ -496,11 +496,17 @@ def real_acos(ctx, x: float):
     To avoid cancellation errors at abs(x) close to 1, we'll use
 
       1 - x * x == (1 - x) * (1 + x)
+
+    At x == -1, we have arctan2(0, 0) and the above expression will
+    evaluate to 0 instead of expected pi. Therefore, we explicitly
+    define that arccos(-1) == pi.
     """
     one = ctx.constant(1, x)
+    none = ctx.constant(-1, x)
     two = ctx.constant(2, x)
     sq = ctx.sqrt((one - x) * (one + x))
-    return ctx(two * ctx.atan2(sq, one + x))
+    r = two * ctx.atan2(sq, one + x)
+    return ctx(ctx.select(x != none, r, ctx.constant("pi", x)))
 
 
 def complex_acos(ctx, z: complex):

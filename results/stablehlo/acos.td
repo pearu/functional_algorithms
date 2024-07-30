@@ -6,16 +6,23 @@
 
 
 def : Pat<(acos_0 NonComplexElementType:$z),
-  (StableHLO_MulOp
-    (StableHLO_ConstantLike<"2"> $z),
-    (StableHLO_Atan2Op
-      (StableHLO_SqrtOp
-        (StableHLO_MulOp
-          (StableHLO_SubtractOp
-            (StableHLO_ConstantLike<"1">:$one $z),
-            $z),
-          (StableHLO_AddOp:$add_one_z $one, $z))),
-      $add_one_z))>;
+  (StableHLO_SelectOp
+    (StableHLO_CompareOp
+     $z,
+     (StableHLO_ConstantLike<"-1"> $z),
+      StableHLO_ComparisonDirectionValue<"NE">,
+      (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+    (StableHLO_MulOp
+      (StableHLO_ConstantLike<"2"> $z),
+      (StableHLO_Atan2Op
+        (StableHLO_SqrtOp
+          (StableHLO_MulOp
+            (StableHLO_SubtractOp
+              (StableHLO_ConstantLike<"1">:$one $z),
+              $z),
+            (StableHLO_AddOp:$add_one_z $one, $z))),
+        $add_one_z)),
+    (StableHLO_ConstantLike<"M_PI"> $z))>;
 
 def : Pat<(acos_1 ComplexElementType:$z),
   (StableHLO_ComplexOp

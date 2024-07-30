@@ -101,7 +101,9 @@ kind_to_target = dict(
     ne="({0}) != ({1})",
 )
 
-constant_to_target = dict(smallest="sys.float_info.min", largest="sys.float_info.max", posinf="math.inf", neginf="-math.inf")
+constant_to_target = dict(
+    smallest="sys.float_info.min", largest="sys.float_info.max", posinf="math.inf", neginf="-math.inf", pi="math.pi"
+)
 
 type_to_target = dict(integer="int", float="float", complex="complex", boolean="bool")
 
