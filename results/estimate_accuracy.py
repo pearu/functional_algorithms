@@ -39,6 +39,8 @@ def get_inputs():
         ("sqrt", np.float64, {}),
         ("sqrt", np.complex64, {}),
         ("sqrt", np.complex128, {}),
+        ("angle", np.complex64, {}),
+        ("angle", np.complex128, {}),
     ]:
         if parameters:
             params = "[" + ", ".join(f"{k}={v}" for k, v in parameters.items()) + "]"

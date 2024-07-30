@@ -510,6 +510,25 @@ class mpmath_array_api:
                 return ctx.nan
         return ctx.sqrt(x)
 
+    def arctan2(self, y, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpf) and isinstance(y, ctx.mpf):
+            if ctx.isinf(x) and ctx.isinf(y):
+                # Workaround mpmath 1.3 bug in atan2(+-inf, +-inf)
+                # evaluation (see mpmath/mpmath#825)
+                pi = ctx.pi
+                if x > 0:
+                    return pi / 4 if y > 0 else -pi / 4
+                return 3 * pi / 4 if y > 0 else -3 * pi / 4
+            return ctx.atan2(y, x)
+        return ctx.nan
+
+    def angle(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            return self.arctan2(x.imag, x.real)
+        return ctx.nan
+
 
 class numpy_with_mpmath:
     """Namespace of universal functions on numpy arrays that use mpmath

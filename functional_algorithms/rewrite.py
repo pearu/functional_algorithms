@@ -211,6 +211,17 @@ class Rewriter:
                 if isinstance(value, bool):
                     return y_ if value else ctx.constant(False, ctx.symbol(None, "boolean"))
 
+    def logical_or(self, expr):
+        x, y = expr.operands
+        ctx = x.context
+        for x_, y_ in [(x, y), (y, x)]:
+            if x_.kind == "constant":
+                value, like = x_.operands
+                if isinstance(value, bool):
+                    if value:
+                        return ctx.constant(True, ctx.symbol(None, "boolean"))
+                    return y_
+
     def logical_not(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":
