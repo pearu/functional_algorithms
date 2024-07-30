@@ -12,21 +12,13 @@
 
 
 float acos_0(float z) {
-  float one = 1;
-  float add_one_z = (one) + (z);
-  return (((z) != (-1))
-              ? ((2) * (std::atan2(std::sqrt(((one) - (z)) * (add_one_z)),
-                                   add_one_z)))
-              : (M_PI));
+  float constant_1 = 1;
+  return std::atan2(std::sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z);
 }
 
 double acos_1(double z) {
-  double one = 1;
-  double add_one_z = (one) + (z);
-  return (((z) != (-1))
-              ? ((2) * (std::atan2(std::sqrt(((one) - (z)) * (add_one_z)),
-                                   add_one_z)))
-              : (M_PI));
+  double constant_1 = 1;
+  return std::atan2(std::sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z);
 }
 
 std::complex<float> acos_2(std::complex<float> z) {

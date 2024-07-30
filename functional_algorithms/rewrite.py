@@ -1,3 +1,4 @@
+import math
 from . import expr as _expr
 
 
@@ -284,8 +285,13 @@ class Rewriter:
             xvalue, xlike = x.operands
             yvalue, ylike = y.operands
 
-            if isinstance(xvalue, (int, float)) and isinstance(yvalue, (int, float)):
+            if isinstance(yvalue, str):
+                if yvalue == "posinf":
+                    yvalue = math.inf
+                if yvalue == "neginf":
+                    yvalue = -math.inf
 
+            if isinstance(xvalue, (int, float)) and isinstance(yvalue, (int, float)):
                 r = relop(xvalue, yvalue)
                 ctx = expr.context
                 return ctx.constant(r, ctx.symbol(None, "boolean"))

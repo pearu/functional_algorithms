@@ -93,6 +93,22 @@ def absolute(ctx, z: float | complex):
     return ctx(abs(z))
 
 
+def real_asin_acos_kernel(ctx, x: float):
+    """A kernel for evaluating asin and acos functions on real inputs.
+
+    This is a stripped-down version of asin_acos_kernel(complex(x, 0)).
+    """
+    ax = ctx.abs(x)
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+    largest = ctx.constant("largest", x)
+    safe_max = ctx.sqrt(largest) / 8
+    xm1 = ax - one
+    sq = ctx.sqrt((one + ax) * abs(xm1))
+    im = ctx.select(ax >= safe_max, ctx.log(two) + ctx.log(ax), ctx.log1p(xm1 + sq))
+    return ctx.select(ax <= one, sq, im)
+
+
 def asin_acos_kernel(ctx, z: complex):
     """A kernel for evaluating asin and acos functions on complex inputs.
 
@@ -492,21 +508,16 @@ def real_acos(ctx, x: float):
     """Arcus cosine on real input:
 
     arccos(x) = 2 * arctan2(sqrt(1 - x * x), 1 + x)
+              [to avoid undefined value at x == -1]
+              = arctan2(sqrt(1 - x * x), x)
 
     To avoid cancellation errors at abs(x) close to 1, we'll use
 
       1 - x * x == (1 - x) * (1 + x)
-
-    At x == -1, we have arctan2(0, 0) and the above expression will
-    evaluate to 0 instead of expected pi. Therefore, we explicitly
-    define that arccos(-1) == pi.
     """
     one = ctx.constant(1, x)
-    none = ctx.constant(-1, x)
-    two = ctx.constant(2, x)
     sq = ctx.sqrt((one - x) * (one + x))
-    r = two * ctx.atan2(sq, one + x)
-    return ctx(ctx.select(x != none, r, ctx.constant("pi", x)))
+    return ctx.atan2(sq, x)
 
 
 def complex_acos(ctx, z: complex):

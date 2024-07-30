@@ -94,6 +94,5 @@ def acos_0(z: complex) -> complex:
 
 
 def acos_1(z: float) -> float:
-    one: float = 1
-    add_one_z: float = (one) + (z)
-    return ((2) * (math.atan2(math.sqrt(((one) - (z)) * (add_one_z)), add_one_z))) if ((z) != (-1)) else (math.pi)
+    constant_1: float = 1
+    return math.atan2(math.sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z)

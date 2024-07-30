@@ -216,24 +216,14 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
 def acos_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
-        one: numpy.float64 = numpy.float64(1)
-        add_one_z: numpy.float64 = (one) + (z)
-        result = (
-            ((numpy.float64(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z)))
-            if ((z) != (numpy.float64(-1)))
-            else (numpy.float64(numpy.float64(numpy.pi)))
-        )
+        constant_1: numpy.float64 = numpy.float64(1)
+        result = numpy.arctan2(numpy.sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z)
         return result
 
 
 def acos_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
-        one: numpy.float32 = numpy.float32(1)
-        add_one_z: numpy.float32 = (one) + (z)
-        result = (
-            ((numpy.float32(2)) * (numpy.arctan2(numpy.sqrt(((one) - (z)) * (add_one_z)), add_one_z)))
-            if ((z) != (numpy.float32(-1)))
-            else (numpy.float32(numpy.float32(numpy.pi)))
-        )
+        constant_1: numpy.float32 = numpy.float32(1)
+        result = numpy.arctan2(numpy.sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z)
         return result
