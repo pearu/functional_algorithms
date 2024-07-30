@@ -32,3 +32,7 @@ MPMath functions using multi-precision arithmetic.
 | square | float64 | 999593 | 408 | - | - | - | - |
 | square | complex64 | 976809 | 25192 | - | - | - | - |
 | square | complex128 | 995833 | 6168 | - | - | - | - |
+| sqrt | float32 | 1000001 | - | - | - | - | - |
+| sqrt | float64 | 1000001 | - | - | - | - | - |
+| sqrt | complex64 | 639749 | 362152 | 100 | - | - | - |
+| sqrt | complex128 | 653493 | 348492 | 16 | - | - | - |

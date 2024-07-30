@@ -497,6 +497,19 @@ class mpmath_array_api:
                 return ctx.nan
         return ctx.acosh(x)
 
+    def sqrt(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            # Workaround mpmath 1.3 bug in sqrt(a+-infj) evaluation
+            # (see mpmath/mpmath#776)
+            if ctx.isinf(x.imag):
+                return ctx.make_mpc((ctx.inf._mpf_, x.imag._mpf_))
+        else:
+            if x < 0:
+                # otherwise, mpmath.sqrt would return complex value
+                return ctx.nan
+        return ctx.sqrt(x)
+
 
 class numpy_with_mpmath:
     """Namespace of universal functions on numpy arrays that use mpmath

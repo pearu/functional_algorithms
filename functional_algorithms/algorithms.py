@@ -644,3 +644,7 @@ def acosh(ctx, z: complex | float):
     if z.is_complex:
         return complex_acosh(ctx, z)
     return real_acosh(ctx, z)
+
+
+def sqrt(ctx, z: complex | float):
+    return ctx.sqrt(z)
