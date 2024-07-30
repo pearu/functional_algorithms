@@ -105,6 +105,7 @@ constant_to_target = dict(
     smallest="StableHLO_ConstantLikeSmallestNormalizedValue",
     posinf="StableHLO_ConstantLikePosInfValue",
     neginf="StableHLO_ConstantLikeNegInfValue",
+    pi='StableHLO_ConstantLike<"M_PI">',
 )
 
 
