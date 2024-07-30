@@ -16,12 +16,12 @@ def dtype_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "hypot", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "hypot", "square", "sqrt"])
 def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square", "sqrt"])
 def unary_func_name(request):
     return request.param
 
