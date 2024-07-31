@@ -6,16 +6,16 @@
 
 
 def : Pat<(asin_0 NonComplexElementType:$z),
-  (StableHLO_MulOp
-    (StableHLO_ConstantLike<"2"> $z),
-    (StableHLO_Atan2Op
+  (StableHLO_AddOp
+    (StableHLO_Atan2Op:$ta
       $z,
       (StableHLO_AddOp
         (StableHLO_ConstantLike<"1">:$one $z),
         (StableHLO_SqrtOp
           (StableHLO_MulOp
             (StableHLO_SubtractOp $one, $z),
-            (StableHLO_AddOp $one, $z))))))>;
+            (StableHLO_AddOp $one, $z))))),
+    $ta)>;
 
 def : Pat<(asin_1 ComplexElementType:$z),
   (StableHLO_ComplexOp

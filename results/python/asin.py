@@ -93,4 +93,5 @@ def asin_0(z: complex) -> complex:
 
 def asin_1(z: float) -> float:
     one: float = 1
-    return (2) * (math.atan2(z, (one) + (math.sqrt(((one) - (z)) * ((one) + (z))))))
+    ta: float = math.atan2(z, (one) + (math.sqrt(((one) - (z)) * ((one) + (z)))))
+    return (ta) + (ta)

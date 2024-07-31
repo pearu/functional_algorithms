@@ -335,16 +335,25 @@ def complex_asin(ctx, z: complex):
 def real_asin(ctx, x: float):
     """Arcus sine on real input:
 
-    arcsin(x) = 2 * arctan2(x, (1 + sqrt(1 - x * x)))
+    arcsin(x) = 2 * arctan2(x, 1 + sqrt(1 - x * x))
 
     To avoid cancellation errors at abs(x) close to 1, we'll use
 
       1 - x * x == (1 - x) * (1 + x)
     """
+    # Alternative formulas:
+    #
+    #   (i)  arcsin(x) = pi/2 - arccos(x)
+    #   (ii) arcsin(x) = arctan2(x, sqrt(1 - x * x))
+    #   (iii) arcsin(x) = arccos(1 - 2 * x * x) * sign(x) / 2
+    #
+    # (i) has cancellation errors for small abs(x)
+    # (ii) is slightly less accurate than 2 * arctan2(x, (1 + sqrt(1 - x * x)))
+    # (iii) is inaccurate for small abs(x)
     one = ctx.constant(1, x)
-    two = ctx.constant(2, x)
     sq = ctx.sqrt((one - x) * (one + x))
-    return ctx(two * ctx.atan2(x, one + sq))
+    ta = ctx.atan2(x, one + sq)
+    return ctx(ta + ta)
 
 
 def asin(ctx, z: complex | float):
