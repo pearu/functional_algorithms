@@ -12,8 +12,8 @@
 template <typename FloatType>
 XlaOp asin_0(XlaOp z) {
   XlaOp one = ScalarLike(z, 1);
-  return Mul(ScalarLike(z, 2),
-             Atan2(z, Add(one, Sqrt(Mul(Sub(one, z), Add(one, z))))));
+  XlaOp ta = Atan2(z, Add(one, Sqrt(Mul(Sub(one, z), Add(one, z)))));
+  return Add(ta, ta);
 }
 
 template <typename FloatType>

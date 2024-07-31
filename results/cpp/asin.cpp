@@ -13,14 +13,14 @@
 
 float asin_0(float z) {
   float one = 1;
-  return (2) *
-         (std::atan2(z, (one) + (std::sqrt(((one) - (z)) * ((one) + (z))))));
+  float ta = std::atan2(z, (one) + (std::sqrt(((one) - (z)) * ((one) + (z)))));
+  return (ta) + (ta);
 }
 
 double asin_1(double z) {
   double one = 1;
-  return (2) *
-         (std::atan2(z, (one) + (std::sqrt(((one) - (z)) * ((one) + (z))))));
+  double ta = std::atan2(z, (one) + (std::sqrt(((one) - (z)) * ((one) + (z)))));
+  return (ta) + (ta);
 }
 
 std::complex<float> asin_2(std::complex<float> z) {

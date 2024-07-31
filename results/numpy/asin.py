@@ -213,7 +213,8 @@ def asin_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
         one: numpy.float64 = numpy.float64(1)
-        result = (numpy.float64(2)) * (numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z))))))
+        ta: numpy.float64 = numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z)))))
+        result = (ta) + (ta)
         return result
 
 
@@ -221,5 +222,6 @@ def asin_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
         one: numpy.float32 = numpy.float32(1)
-        result = (numpy.float32(2)) * (numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z))))))
+        ta: numpy.float32 = numpy.arctan2(z, (one) + (numpy.sqrt(((one) - (z)) * ((one) + (z)))))
+        result = (ta) + (ta)
         return result
