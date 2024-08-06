@@ -21,7 +21,7 @@ def func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square", "sqrt", "angle"])
+@pytest.fixture(scope="function", params=["absolute", "acos", "acosh", "asin", "asinh", "square", "sqrt", "angle", "log1p"])
 def unary_func_name(request):
     return request.param
 
@@ -50,6 +50,8 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     if unary_func_name in {"acos", "asin", "asinh", "acosh"}:
         extra_prec_multiplier = 20
+    elif unary_func_name in {"log1p", "sqrt"}:
+        extra_prec_multiplier = 2
     else:
         extra_prec_multiplier = 1
     reference = getattr(

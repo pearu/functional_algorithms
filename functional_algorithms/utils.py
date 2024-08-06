@@ -344,15 +344,25 @@ class mpmath_array_api:
             # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
             if ctx.isinf(x.real) and ctx.isinf(x.imag):
                 pi = ctx.pi
-            if x.real > 0 and x.imag > 0:
-                return ctx.make_mpc((x.real._mpf_, (pi / 4)._mpf_))
-            if x.real > 0 and x.imag < 0:
-                return ctx.make_mpc((x.real._mpf_, (-pi / 4)._mpf_))
-            if x.real < 0 and x.imag < 0:
-                return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
-            if x.real < 0 and x.imag > 0:
-                return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
-        return ctx.log1p(x)
+                if x.real > 0 and x.imag > 0:
+                    return ctx.make_mpc((x.real._mpf_, (pi / 4)._mpf_))
+                if x.real > 0 and x.imag < 0:
+                    return ctx.make_mpc((x.real._mpf_, (-pi / 4)._mpf_))
+                if x.real < 0 and x.imag < 0:
+                    return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
+                if x.real < 0 and x.imag > 0:
+                    return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
+        else:
+            if x < -1:
+                # otherwise, mpmath.log1p returns a complex value
+                return ctx.nan
+
+        r = ctx.log1p(x)
+        if isinstance(x, ctx.mpc):
+            if isinstance(r, ctx.mpf):
+                # Workaround log1p(0j) -> 0
+                r = ctx.make_mpc((r._mpf_, ctx.zero._mpf_))
+        return r
 
     def tan(self, x):
         ctx = x.context

@@ -672,3 +672,50 @@ def sqrt(ctx, z: complex | float):
 
 def angle(ctx, z: complex):
     return ctx.atan2(z.imag, z.real)
+
+
+def complex_log1p(ctx, z: complex):
+    """Logarithm of 1 + z on complex input:
+
+      log1p(x + I * y) = 0.5 * log((x+1)**2 + y**2) + I * arctan2(y, x + 1)
+
+    where
+
+      x and y are real and imaginary parts of the input to log1p, and
+      I is imaginary unit.
+
+    Let's define
+
+      mx = max(abs(x + 1), abs(y))
+      mn = min(abs(x + 1), abs(y))
+
+    then the real part of log1p result reads
+
+      real(log(x + I * y)) = log(hypot(x + 1, y))
+        = log(mx * sqrt(1 + (mn / mx) ** 2))
+        = log(mx) + 0.5 * log1p((mn / mx) ** 2)
+
+    where
+
+      log(mx) = log(max(abs(x + 1), abs(b)))
+              = log1p(max(abs(x + 1) - 1, abs(b) - 1))
+              = log1p(max(abs(x + 1) - 1, abs(b) - 1))
+              = log1p(select(x + 1 >= abs(y), x, mx - 1))
+    """
+    x = z.real
+    y = z.imag
+    one = ctx.constant(1, x)
+    half = ctx.constant(0.5, x)
+    axp1 = abs(x + one)
+    ay = abs(y)
+    mx = ctx.maximum(axp1, ay)
+    mn = ctx.minimum(axp1, ay)
+    re = ctx.log1p(ctx.select(x + one >= ay, x, mx - one)) + half * ctx.log1p(ctx.select(ctx.eq(mn, mx), one, (mn / mx) ** 2))
+    im = ctx.atan2(y, x + one)
+    return ctx.complex(re, im)
+
+
+def log1p(ctx, z: complex | float):
+    if z.is_complex:
+        return complex_log1p(ctx, z)
+    return ctx.log1p(z)
