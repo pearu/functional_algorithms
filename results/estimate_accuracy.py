@@ -41,6 +41,8 @@ def get_inputs():
         ("sqrt", np.complex128, {}),
         ("angle", np.complex64, {}),
         ("angle", np.complex128, {}),
+        ("log1p", np.complex64, {}),
+        ("log1p", np.complex128, {}),
     ]:
         if parameters:
             params = "[" + ", ".join(f"{k}={v}" for k, v in parameters.items()) + "]"
@@ -95,6 +97,8 @@ MPMath functions using multi-precision arithmetic.
             extra_prec_multiplier = 20
         elif func_name in {"sqrt"}:
             extra_prec_multiplier = 2
+        elif func_name in {"log1p"}:
+            extra_prec_multiplier = 10
         else:
             extra_prec_multiplier = 1
         reference = getattr(
