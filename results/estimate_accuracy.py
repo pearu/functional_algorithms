@@ -95,8 +95,10 @@ MPMath functions using multi-precision arithmetic.
 
         if func_name in {"asin", "asinh", "acos", "acosh"}:
             extra_prec_multiplier = 20
-        elif func_name in {"sqrt", "log1p"}:
+        elif func_name in {"sqrt"}:
             extra_prec_multiplier = 2
+        elif func_name in {"log1p"}:
+            extra_prec_multiplier = 10
         else:
             extra_prec_multiplier = 1
         reference = getattr(

@@ -38,5 +38,5 @@ MPMath functions using multi-precision arithmetic.
 | sqrt | complex128 | 653493 | 348492 | 16 | - | - | - |
 | angle | complex64 | 940281 | 61338 | 378 | 4 | - | - |
 | angle | complex128 | 989725 | 12276 | - | - | - | - |
-| log1p | complex64 | 902293 | 97834 | 1582 | 102 | 190 | - |
-| log1p | complex128 | 801442 | 200039 | 78 | 8 | 434 | - |
+| log1p | complex64 | 902287 | 97840 | 1582 | 102 | 190 | - |
+| log1p | complex128 | 801864 | 200067 | 64 | 6 | - | - |
