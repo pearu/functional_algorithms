@@ -31,6 +31,7 @@ trace_arguments = dict(
     acosh=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     asin=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     asinh=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
+    log1p=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     square=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
 )
