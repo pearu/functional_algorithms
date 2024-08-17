@@ -17,6 +17,7 @@ source_file_header = """
 trace_arguments = dict(
     square=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     absolute=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
+    log1p=[(":float32",), (":float64",), (":complex64",), (":complex128",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     asin_acos_kernel=[(":complex64",), (":complex128",)],
     acos=[(":float32",), (":float64",), (":complex64",), (":complex128",)],

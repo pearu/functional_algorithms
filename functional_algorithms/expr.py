@@ -1,3 +1,4 @@
+import struct
 import warnings
 from .utils import UNSPECIFIED
 from . import algorithms
@@ -96,6 +97,24 @@ def normalize(context, operands):
     return tuple(new_operands)
 
 
+def toidentifier(value):
+    if isinstance(value, bool):
+        return str(value)
+    elif isinstance(value, int):
+        if value < 0:
+            return "neg" + str(-value)
+        return str(value)
+    elif isinstance(value, float):
+        return "f" + hex(struct.unpack("<I", struct.pack("<f", value))[0])[1:]
+    elif isinstance(value, complex):
+        return "c" + toidentifier(value.real) + toidentifier(value.imag)
+    elif isinstance(value, str):
+        assert value.isidentifier(), value
+        return value
+    else:
+        raise NotImplementedError(type(value))
+
+
 def make_ref(expr):
     ref = expr.props.get("ref", UNSPECIFIED)
     if ref is not UNSPECIFIED:
@@ -105,7 +124,7 @@ def make_ref(expr):
     if expr.kind == "constant":
         if isinstance(expr.operands[0], Expr):
             return f"{expr.kind}_{make_ref(expr.operands[0])}"
-        return f"{expr.kind}_{expr.operands[0]}"
+        return f"{expr.kind}_{toidentifier(expr.operands[0])}"
     lst = [expr.kind] + list(map(make_ref, expr.operands))
     return "_".join(lst)
 

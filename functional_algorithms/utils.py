@@ -1,3 +1,4 @@
+import itertools
 import numpy
 import mpmath
 import multiprocessing
@@ -221,6 +222,8 @@ class vectorize_with_mpmath(numpy.vectorize):
         else:
             for sample, extraprec in progress(samples_extraprec, total=len(samples)):
                 results.append(self._eval(sample, extraprec))
+        if results and isinstance(results[0], (numpy.number, numpy.ndarray)):
+            return numpy.array(results)
         return results
 
     def __call__(self, *args, **kwargs):
@@ -352,6 +355,7 @@ class mpmath_array_api:
                     return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
                 if x.real < 0 and x.imag > 0:
                     return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
+
         else:
             if x < -1:
                 # otherwise, mpmath.log1p returns a complex value
@@ -649,9 +653,34 @@ def extra_samples(name, dtype):
                 values.append(numpy.nextafter(v, v - 1, dtype=dtype))
                 values.append(v)
                 values.append(numpy.nextafter(v, v + 1, dtype=dtype))
+        if name == "log1p":
+            for v in [-1, 1]:
+                values.append(numpy.nextafter(v, v - 1, dtype=dtype))
+                values.append(v)
+                values.append(numpy.nextafter(v, v + 1, dtype=dtype))
     if is_complex:
+        fdtype = {numpy.complex64: numpy.float32, numpy.complex128: numpy.float64}[dtype]
         if name == "absolute":
             values.append(1.0011048e35 + 3.4028235e38j)
+        if name == "log1p":
+            # samples z=x+I*y satisfying
+            #   x = -0.5 * y**2
+            #   abs(y) < 1
+            # cause catastrophic cancellation errors
+            # when evaluating the real part of complex log1p(z):
+            #   0.5*log1p(2*x + x**2 + y**2)
+            #
+            # The following samples are close to these problematic
+            # samples:
+            mnexp, mxexp = -8, 2
+            for y in numpy.logspace(mnexp, mxexp, num=(mxexp - mnexp + 1), dtype=fdtype):
+                x = -fdtype(0.5) * y * y
+                values.append(complex(x, y))
+                values.append(complex(numpy.nextafter(x, fdtype(-1)), y))
+                values.append(complex(numpy.nextafter(x, fdtype(1)), y))
+
+            values.append(-0.24246988 - 0.49096385j)
+
     return numpy.array(values, dtype=dtype)
 
 
@@ -936,6 +965,9 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
             diff_ulp(x.real, y.real, flush_subnormals=flush_subnormals),
             diff_ulp(x.imag, y.imag, flush_subnormals=flush_subnormals),
         )
+    elif isinstance(x, numpy.ndarray) and isinstance(y, numpy.ndarray):
+        return numpy.array([diff_ulp(x_, y_, flush_subnormals=flush_subnormals) for x_, y_ in zip(x, y)])
+
     raise NotImplementedError(type(x))
 
 
@@ -958,28 +990,213 @@ def mul(x, y):
         return numpy.multiply(x, y, dtype=x.dtype)
 
 
+def left_right_sample_functions(sample):
+    if isinstance(sample, numpy.floating):
+        inf = type(sample)(numpy.inf)
+
+        def left(sample):
+            if numpy.isneginf(sample):
+                return sample
+            with warnings.catch_warnings(action="ignore"):
+                return numpy.nextafter(sample, -inf)
+
+        def right(sample):
+            if numpy.isposinf(sample):
+                return sample
+            with warnings.catch_warnings(action="ignore"):
+                return numpy.nextafter(sample, inf)
+
+    elif isinstance(sample, float):
+
+        def left(sample):
+            return math.nextafter(sample, -math.inf)
+
+        def right(sample):
+            return math.nextafter(sample, math.inf)
+
+    elif isinstance(sample, numpy.ndarray) and issubclass(sample.dtype.type, numpy.floating):
+        inf = sample.dtype.type(numpy.inf)
+
+        def left(sample):
+            with warnings.catch_warnings(action="ignore"):
+                return numpy.nextafter(sample, -inf)
+
+        def right(sample):
+            with warnings.catch_warnings(action="ignore"):
+                return numpy.nextafter(sample, inf)
+
+    else:
+        raise TypeError(f"not implemented for {type(sample)}")
+
+    return left, right
+
+
+def sample_surrounding(sample, ulps=1):
+    """Sample iterator of sample surroundings."""
+    if isinstance(sample, numpy.complexfloating):
+        for i, re in enumerate(sample_surrounding(sample.real, ulps=ulps)):
+            for j, im in enumerate(sample_surrounding(sample.imag, ulps=ulps)):
+                u = abs(i - ulps) + abs(j - ulps)
+                if u <= ulps:
+                    r = numpy.empty((1,), dtype=type(sample))
+                    r.real = re
+                    r.imag = im
+                    yield r[0]
+    elif isinstance(sample, complex):
+        for i, re in enumerate(sample_surrounding(sample.real, ulps=ulps)):
+            for j, im in enumerate(sample_surrounding(sample.imag, ulps=ulps)):
+                u = abs(i - ulps) + abs(j - ulps)
+                if u <= ulps:
+                    yield complex(re, im)
+    elif isinstance(sample, tuple):
+        samples = tuple(list(sample_surrounding(s, ulps=ulps)) for s in sample)
+        yield from itertools.product(*samples)
+    elif isinstance(sample, numpy.ndarray) and issubclass(sample.dtype.type, numpy.complexfloating):
+        for i, re in enumerate(sample_surrounding(sample.real, ulps=ulps)):
+            for j, im in enumerate(sample_surrounding(sample.imag, ulps=ulps)):
+                u = abs(i - ulps) + abs(j - ulps)
+                if u <= ulps:
+                    z = re.astype(sample.dtype.type)
+                    z.imag = im
+                    yield z
+    elif isinstance(sample, list):
+        yield from zip(*[list(sample_surrounding(s, ulps=ulps)) for s in sample])
+    else:
+        left, right = left_right_sample_functions(sample)
+        samples = [sample]
+        left_sample = sample
+        right_sample = sample
+        for i in range(ulps):
+            left_sample = left(left_sample)
+            right_sample = right(right_sample)
+            samples.insert(0, left_sample)
+            samples.append(right_sample)
+        yield from samples
+
+
+def function_bounds(func, samples, ulps=1, enable_progressbar=False, workers=None):
+    """Return the bounds of a function on the samples surroundings.
+
+    If
+      lower, upper = function_bounds(func, sample, ulps)
+    then
+      lower <= func(s) <= upper
+    for all s such that
+      diff_ulp(sample, s) <= ulps
+
+    For complex values, `a <= b` is defined as `a.real <= b.real and
+    a.imag <= b.imag`.
+    """
+    lower, upper, is_complex = None, None, None
+    for samples_ in sample_surrounding(samples, ulps=ulps):
+        result = func.call(samples_, workers=workers, enable_progressbar=enable_progressbar)
+        if lower is None:
+            lower = result.copy()
+            upper = result.copy()
+            is_complex = issubclass(result.dtype.type, numpy.complexfloating)
+        elif is_complex:
+            lower.real = numpy.minimum(lower.real, result.real)
+            upper.real = numpy.maximum(upper.real, result.real)
+            lower.imag = numpy.minimum(lower.imag, result.imag)
+            upper.imag = numpy.maximum(upper.imag, result.imag)
+        else:
+            lower = numpy.minimum(lower, result)
+            upper = numpy.maximum(upper, result)
+    return lower, upper
+
+
+def is_within_bounds(value, lower, upper):
+    if isinstance(value, (complex, numpy.complexfloating)):
+        return is_within_bounds(value.real, lower.real, upper.real) and is_within_bounds(value.imag, lower.imag, upper.imag)
+    return lower <= value and value <= upper
+
+
 def validate_function(
-    func, reference, samples, dtype, verbose=True, flush_subnormals=UNSPECIFIED, enable_progressbar=False, workers=None
+    func,
+    reference,
+    samples,
+    dtype,
+    verbose=True,
+    flush_subnormals=UNSPECIFIED,
+    enable_progressbar=False,
+    workers=None,
+    max_valid_ulp_count=3,
+    max_bound_ulp_width=1,
 ):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
+    outrange_stats = defaultdict(int)
+
     reference_results = reference.call(samples, workers=workers, enable_progressbar=enable_progressbar)
+    if max_bound_ulp_width:
+        lower, upper = function_bounds(
+            reference, samples, ulps=max_bound_ulp_width, workers=workers, enable_progressbar=enable_progressbar
+        )
+
     for index in tqdm(range(len(samples))) if enable_progressbar else range(len(samples)):
-        sample = samples[index]
-        if isinstance(sample, tuple):
-            v1 = func(*sample)
-        else:
-            v1 = func(sample)
+        min_ulp, min_v1 = None, None
+        min_ulp3, min_v3 = None, None
         v2 = reference_results[index][()]
+        sample = samples[index]
+        v1 = func(*sample) if isinstance(sample, tuple) else func(sample)
         assert v1.dtype == v2.dtype, (sample, v1, v2)
         ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
         ulp_stats[ulp] += 1
-        if ulp > 2 and verbose:
-            print(f"--> {sample, v1, v2, ulp=}")
-        if ulp >= 3:
-            print(f"--> {sample, v1, v2, ulp=}")
 
-    return ulp_stats[-1] == 0 and max(ulp_stats) <= 3, ulp_stats
+        if max_bound_ulp_width:
+            within_bounds = is_within_bounds(v1, lower[index], upper[index])
+            if not within_bounds:
+                if ulp > max_valid_ulp_count:
+                    ulp_stats[-1] += 1
+                outrange_stats[ulp] += 1
+            if ulp > max_valid_ulp_count and not within_bounds and verbose:
+                print(f"--> {sample, v1, v2, ulp, within_bounds, lower[index], upper[index]=}")
+        else:
+            if ulp > max_valid_ulp_count:
+                ulp_stats[-1] += 1
+            if ulp > max_valid_ulp_count and verbose:
+                print(f"--> {sample, v1, v2, ulp=}")
+    return ulp_stats[-1] == 0, dict(ulp=ulp_stats, outrange=outrange_stats)
+
+
+def function_validation_parameters(func_name, dtype):
+    if isinstance(dtype, str):
+        dtype_name = dtype
+    elif isinstance(dtype, numpy.dtype):
+        dtype_name = dtype.type.__name__
+    else:
+        dtype_name = dtype.__name__
+
+    # ulp_diff(func(sample), reference(sample)) <= max_valid_ulp_count
+    max_valid_ulp_count = 3
+
+    # func(sample) is within interval [lower, upper] where
+    #
+    #   lower = min(reference(s) for s in surrounding(sample) if diff_ulp(s, sample) <= max_bound_ulp_width)
+    #   upper = max(reference(s) for s in surrounding(sample) if diff_ulp(s, sample) <= max_bound_ulp_width)
+    #
+    # By default, we'll skip out-of-ulp-range tests to speed-up function validation:
+    max_bound_ulp_width = 0
+
+    # mpmath does not guarantee the accuracy of function evaluation to
+    # the given precision. If there are mismatches between functions
+    # defined in algorithms.py and mpmath, we'll increase the
+    # precision of mpmath to improve the accurancy of reference
+    # values:
+    extra_prec_multiplier = 1
+    if func_name in {"acos", "asin", "asinh", "acosh"}:
+        extra_prec_multiplier = 20
+    elif func_name == "sqrt":
+        extra_prec_multiplier = 2
+    elif func_name == "log1p":
+        extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
+        max_bound_ulp_width = dict(complex64=3, complex128=3).get(dtype_name, max_bound_ulp_width)
+
+    return dict(
+        extra_prec_multiplier=extra_prec_multiplier,
+        max_valid_ulp_count=max_valid_ulp_count,
+        max_bound_ulp_width=max_bound_ulp_width,
+    )
 
 
 def format_python(code):

@@ -48,17 +48,19 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     func = targets.numpy.as_function(graph2, debug=0)
 
-    if unary_func_name in {"acos", "asin", "asinh", "acosh"}:
-        extra_prec_multiplier = 20
-    elif unary_func_name in {"log1p", "sqrt"}:
-        extra_prec_multiplier = 2
-    else:
-        extra_prec_multiplier = 1
+    params = utils.function_validation_parameters(unary_func_name, dtype_name)
+    max_valid_ulp_count = params["max_valid_ulp_count"]
+    max_bound_ulp_width = params["max_bound_ulp_width"]
+    extra_prec_multiplier = params["extra_prec_multiplier"]
+
     reference = getattr(
         utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=flush_subnormals),
         unary_func_name,
     )
 
+    # samples consist of log-uniform grid of the complex plane plus
+    # any extra samples that cover the special regions for the given
+    # function.
     size = 51
     if dtype in {numpy.complex64, numpy.complex128}:
         samples = utils.complex_samples(
@@ -76,19 +78,41 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
 
     samples = numpy.concatenate((samples, utils.extra_samples(unary_func_name, dtype)))
 
-    matches_with_reference, ulp_stats = utils.validate_function(
-        func, reference, samples, dtype, flush_subnormals=flush_subnormals
+    matches_with_reference, stats = utils.validate_function(
+        func,
+        reference,
+        samples,
+        dtype,
+        flush_subnormals=flush_subnormals,
+        max_valid_ulp_count=max_valid_ulp_count,
+        max_bound_ulp_width=max_bound_ulp_width,
     )
     if not matches_with_reference:
         print("Samples:")
         gt3_ulp_total = 0
+        gt3_outrange = 0
+        ulp_stats = stats["ulp"]
         for ulp in sorted(ulp_stats):
-            if ulp in {0, 1, 2, 3}:
-                print(f"  dULP={ulp}: {ulp_stats[ulp]}")
+            if ulp >= 0 and ulp <= max_valid_ulp_count:
+                outrange = stats["outrange"][ulp]
+                if outrange:
+                    print(f"  dULP={ulp}: {ulp_stats[ulp]} ({outrange=})")
+                else:
+                    print(f"  dULP={ulp}: {ulp_stats[ulp]}")
             elif ulp > 0:
                 gt3_ulp_total += ulp_stats[ulp]
+                gt3_outrange += stats["outrange"][ulp]
+            elif ulp == -1:
+                c = ulp_stats[ulp]
+                if c:
+                    print(f"  total number of mismatches: {c}")
+            else:
+                assert 0, ulp  # unreachable
         else:
-            print(f"  dULP>3: {gt3_ulp_total}")
+            if gt3_outrange:
+                print(f"  dULP>{max_valid_ulp_count}: {gt3_ulp_total} (outrange={gt3_outrange})")
+            else:
+                print(f"  dULP>{max_valid_ulp_count}: {gt3_ulp_total}")
 
     assert matches_with_reference  # warning: also reference may be wrong
 

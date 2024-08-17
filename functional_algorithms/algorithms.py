@@ -674,6 +674,30 @@ def angle(ctx, z: complex):
     return ctx.atan2(z.imag, z.real)
 
 
+def kahan3(ctx, x1: float, x2: float, x3: float):
+    """Kahan sum of three floating-point numbers"""
+    s = x1 + x2
+    c = (s - x1) - x2
+    y3 = x3 - c
+    return s + y3
+
+
+def kahan4(ctx, x1: float, x2: float, x3: float, x4: float):
+    """Kahan sum of four floating-point numbers"""
+    t2 = x1 + x2
+    c2 = (t2 - x1) - x2
+    y3 = x3 - c2
+    t3 = t2 + y3
+    c3 = (t3 - t2) - y3
+    y4 = x4 - c3
+    return t3 + y4
+
+
+def fma(ctx, x, y, z):
+    """Evaluate x * y + z"""
+    return x * y + z
+
+
 def complex_log1p(ctx, z: complex):
     """Logarithm of 1 + z on complex input:
 
@@ -689,7 +713,7 @@ def complex_log1p(ctx, z: complex):
       mx = max(abs(x + 1), abs(y))
       mn = min(abs(x + 1), abs(y))
 
-    then the real part of log1p result reads
+    then the real part of the complex log1p value reads
 
       real(log(x + I * y)) = log(hypot(x + 1, y))
         = log(mx * sqrt(1 + (mn / mx) ** 2))
@@ -697,25 +721,49 @@ def complex_log1p(ctx, z: complex):
 
     where
 
-      log(mx) = log(max(abs(x + 1), abs(b)))
-              = log1p(max(abs(x + 1) - 1, abs(b) - 1))
-              = log1p(max(abs(x + 1) - 1, abs(b) - 1))
+      log(mx) = log(max(abs(x + 1), abs(y)))
+              = log1p(max(abs(x + 1) - 1, abs(y) - 1))
               = log1p(select(x + 1 >= abs(y), x, mx - 1))
+
+    To handle mn == mx == inf case, we'll use
+
+      log1p((mn / mx) ** 2) = log1p(select(mn == mx, one, (mn / mx) ** 2))
+
+    Problematic regions
+    -------------------
+
+    Notice that when abs(y) < 1 and abs(x + 0.5 * y ** 2) is small,
+    catastrophic cancellation errors occur in evaluating the real part
+    of complex log1p:
+
+      log(hypot(x + 1, y)) = 0.5 * log1p(2 * x + y * y + x * x)
+
+    where the magnitude of the correct value `x * x` is smaller than
+    the rounding errors occurring from addition `2 * x + y * y`,
+    especially when using FP32. A similar phenomenon is expected when
+    x is close to -2 and abs(y) is small so that rounding errors from
+    `2 * x + x ** 2` dominate over `y ** 2`.
     """
     x = z.real
     y = z.imag
     one = ctx.constant(1, x)
     half = ctx.constant(0.5, x)
-    axp1 = abs(x + one)
+    xp1 = x + one
+    axp1 = abs(xp1)
     ay = abs(y)
     mx = ctx.maximum(axp1, ay)
     mn = ctx.minimum(axp1, ay)
-    re = ctx.log1p(ctx.select(x + one >= ay, x, mx - one)) + half * ctx.log1p(ctx.select(ctx.eq(mn, mx), one, (mn / mx) ** 2))
-    im = ctx.atan2(y, x + one)
-    return ctx.complex(re, im)
+    r = mn / mx
+    re = ctx.log1p(ctx.select(xp1 >= ay, x, mx - one)) + half * ctx.log1p(ctx.select(ctx.eq(mn, mx), one, r * r))
+    im = ctx.atan2(y, xp1)
+    return ctx(ctx.complex(re, im))
 
 
 def log1p(ctx, z: complex | float):
+    """log(1 + z)
+
+    See complex_log1p for more information.
+    """
     if z.is_complex:
         return complex_log1p(ctx, z)
     return ctx.log1p(z)
