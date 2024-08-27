@@ -779,3 +779,177 @@ def log1p(ctx, z: complex | float):
     if z.is_complex:
         return complex_log1p(ctx, z)
     return ctx.log1p(z)
+
+
+def atanh_imag_is_half_pi(ctx, x: float):
+    """Return smallest positive x such that imag(atanh(I*x)) == pi/2
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+    largest = ctx.constant("largest", x)
+    # see tools/tune_atanh.py for computing the following constants:
+    fp64 = ctx.constant(5805358775541310.0, x)
+    fp32 = ctx.constant(62919776.0, x)
+    fp16 = ctx.constant(1028.0, x)
+    return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
+
+
+def inverse_fp_negeps(ctx, x: float):
+    """Return smallest positive x such that x + 1.0 == x
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+    import numpy
+
+    largest = ctx.constant("largest", x)
+
+    def get_value(dtype):
+        return float(numpy.nextafter(dtype(1 / numpy.finfo(dtype).epsneg), dtype(numpy.inf)))
+
+    fp64 = ctx.constant(get_value(numpy.float64), x)
+    fp32 = ctx.constant(get_value(numpy.float32), x)
+    fp16 = ctx.constant(get_value(numpy.float16), x)
+    return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
+
+
+def complex_atanh(ctx, z: complex):
+    """Inverse hyperbolic tangent on complex inputs:
+
+    atanh(z) = (log1p(z) - log1p(-z)) / 2
+
+    Algorithm derivation
+    --------------------
+
+    We have
+
+      log1p(x + I * y) = log((x + 1)**2 + y ** 2) / 2 + I * atan2(y, x + 1)
+
+    where
+
+      x and y are real and imaginary parts of the input to log1p, and
+      I is imaginary unit.
+
+    The real part
+    -------------
+
+    We have
+
+      real(atanh(x + I * y)) = (log((x + 1)**2 + y ** 2) - log((x - 1)**2 + y ** 2)) / 4
+        = log(((x + 1)**2 + y ** 2) / ((x - 1)**2 + y ** 2)) / 4
+        = log1p(((x + 1)**2 + y ** 2) / ((x - 1)**2 + y ** 2) - 1) / 4
+        = log1p(4 * x / ((x - 1)**2 + y ** 2)) / 4
+        = sign(x) * log1p(4 * abs(x) / ((abs(x) - 1)**2 + y ** 2)) / 4      Eq 2.3.
+
+    However, when abs(x) is large so that (~= denotes equality between
+    floating point numbers)
+
+      abs(x) + 1 ~= abs(x)
+
+    or equivalently,
+
+      abs(x) > 1 / epsneg ** 2
+
+    where
+
+      epsneg = 1 - nextafter(1, 0)
+
+    we'll find
+
+      real(atanh(x + I * y))
+        = sign(x) * log1p(4 * x / (x * y * (x / y + y / x))) / 4
+        = log1p(4 / y / (x / y + y / x)) / 4                                Eq 5.
+
+    If abs(y) is not large, so that
+
+      x / y + y / x ~= x / y
+
+    or equivalently,
+
+      (x / y) ** 2 + 1 ~= (x / y) ** 2
+      (x / y) ** 2 > 1 / epsneg ** 2
+      abs(y) < abs(x) * epsneg
+
+    then we'll use
+
+      real(atanh(x + I * y)) = log1p(4 / x) / 4                             Eq 4.
+
+    The imaginary part
+    ------------------
+
+      imag(atanh(x + I * y)) = (atan2(y, x + 1) - atan2(y, x - 1)) / 2
+        = atan2(y * (1/(x+1) - 1/(x-1)), 1 + y ** 2 / (x ** 2 - 1))
+        = atan2(-2 * y, x ** 2 + y ** 2 - 1)
+        = atan2(-2 * y, (x + 1) * (x - 1) + y * y)
+
+    For large values of abs(x) or abs(y), that is, when
+
+      x ** 2 + y ** 2 > 1 / epsneg ** 2
+
+    we have
+
+        imag(atanh(x + I * y)) = sign(y) * pi / 2
+    """
+    x = z.real
+    y = z.imag
+
+    zero = ctx.constant(0.0, x)
+    one = ctx.constant(1.0, x)
+    four = ctx.constant(4.0, x)
+    two = ctx.constant(2.0, x)
+    half = ctx.constant(0.5, x)
+    quarter = ctx.constant(0.25, x)
+    pi = ctx.constant("pi", x)
+    inv_negeps = inverse_fp_negeps(ctx, x)
+    safe_max = inv_negeps * inv_negeps
+
+    ax = abs(x)
+    ay = abs(y)
+    naxm1 = one - ax
+    y2 = y * y
+    sx = ctx.select(x >= 0, one, -one)
+    sy = ctx.select(y >= 0, one, -one)
+    in_safe_region = ctx.And(ax < safe_max, ay < safe_max)
+
+    # real part
+    arg23 = ax / (naxm1 * naxm1 + y2)  # Eq 2.3
+    arg4 = one / ax  # Eq 4
+    arg5 = one / (ax / y + y / ax) / y  # Eq 5.
+    arg5 = ctx.select(ctx.Or(x.is_inf, y.is_inf), zero, arg5)
+    arg = ctx.select(in_safe_region, arg23, ctx.select(ay * inv_negeps < ax, arg4, arg5))
+    real = sx * ctx.log1p(four * arg) * quarter
+
+    # imaginary part
+    imag = ctx.select(in_safe_region, ctx.atan2(y + y, naxm1 * (one + ax) - y2), sy * pi) * half
+
+    return ctx.complex(real, imag)
+
+
+def atanh(ctx, z: complex):
+    """Inverse hyperbolic tangent on real and complex inputs:
+
+    See complex_atanh for more information.
+    """
+    if not z.is_complex:
+        return ctx.atanh(z)
+    return complex_atanh(ctx, z)
+
+
+def complex_atan(ctx, z: complex):
+    """Arcus tangent on complex inputs:
+
+    atan(z) = -I * atanh(I * z)
+    """
+    w = complex_atanh(ctx, ctx.complex(-z.imag, z.real))
+    return ctx.complex(w.imag, -w.real)
+
+
+def atan(ctx, z: complex | float):
+    """Arcus tangent on complex and real inputs.
+
+    See complex_atan for more information.
+    """
+    if not z.is_complex:
+        return ctx.atan(z)
+    return complex_atan(ctx, z)

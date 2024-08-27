@@ -107,6 +107,7 @@ kind_to_target = dict(
     ge="({0}) >= ({1})",
     eq="numpy.equal({0}, {1}, dtype=numpy.bool_)",
     ne="({0}) != ({1})",
+    nextafter="numpy.nextafter({0}, {1})",
 )
 
 constant_to_target = dict(

@@ -1,7 +1,6 @@
 import struct
 import warnings
 from .utils import UNSPECIFIED
-from . import algorithms
 from .typesystem import Type
 from .rewrite import rewrite
 
@@ -105,7 +104,7 @@ def toidentifier(value):
             return "neg" + str(-value)
         return str(value)
     elif isinstance(value, float):
-        return "f" + hex(struct.unpack("<I", struct.pack("<f", value))[0])[1:]
+        return "f" + hex(struct.unpack("<Q", struct.pack("<d", value))[0])[1:]
     elif isinstance(value, complex):
         return "c" + toidentifier(value.real) + toidentifier(value.imag)
     elif isinstance(value, str):
@@ -194,7 +193,7 @@ class Expr:
             assert len(operands) == 2 and isinstance(operands[0], str) and isinstance(operands[1], Type), operands
         elif kind == "constant":
             assert len(operands) == 2
-            assert isinstance(operands[0], (int, float, bool, complex, str, Expr))
+            assert isinstance(operands[0], (int, float, bool, complex, str, Expr)), type(operands[0])
             if isinstance(operands[0], Expr):
                 assert operands[0].context is context.alt, operands
             if context.alt is not None and not isinstance(operands[0], Expr):
