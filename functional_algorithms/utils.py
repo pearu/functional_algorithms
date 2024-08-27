@@ -171,6 +171,9 @@ class vectorize_with_mpmath(numpy.vectorize):
                         return -ctx.zero if sign else ctx.zero
                     if exp + bc > self.float_maxexp[fp_format]:
                         return ctx.ninf if sign else ctx.inf
+                    # conversion from mpz to longdouble is buggy, see
+                    # aleaxit/gmpy#507, hence we convert mpz to int:
+                    man = int(man)
                     man = dtype(-man if sign else man)
                     r = numpy.ldexp(man, exp)
                     assert numpy.isfinite(r), (x, r, x._mpf_, man)
@@ -544,6 +547,48 @@ class mpmath_array_api:
             return self.arctan2(x.imag, x.real)
         return ctx.nan
 
+    def arctanh(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            pi = ctx.pi
+            inf = ctx.inf
+            zero = ctx.zero
+            if ctx.isinf(x.real) or ctx.isinf(x.imag):
+                if x.imag < 0:
+                    return ctx.make_mpc((zero._mpf_, (-pi / 2)._mpf_))
+                return ctx.make_mpc((zero._mpf_, (pi / 2)._mpf_))
+        r = ctx.atanh(x)
+        if isinstance(x, ctx.mpc):
+            # The following if-block ensures compatibiliy with
+            # numpy.arctanh.
+            if x.imag == 0 and x.real > 1:
+                return r.conjugate()
+        if isinstance(x, ctx.mpf) and isinstance(r, ctx.mpc):
+            # otherwise, mpmath.atanh would return complex value
+            return ctx.nan
+        return r
+
+    def arctan(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            pi = ctx.pi
+            inf = ctx.inf
+            zero = ctx.zero
+            if ctx.isinf(x.real) or ctx.isinf(x.imag):
+                if x.real < 0:
+                    return ctx.make_mpc(((-pi / 2)._mpf_, zero._mpf_))
+                return ctx.make_mpc(((pi / 2)._mpf_, zero._mpf_))
+        r = ctx.atan(x)
+        if isinstance(x, ctx.mpc):
+            # The following if-block ensures compatibiliy with
+            # numpy.arctan:
+            if x.real == 0 and x.imag < -1:
+                return ctx.make_mpc(((-r.real)._mpf_, r.imag._mpf_))
+        if isinstance(x, ctx.mpf) and isinstance(r, ctx.mpc):
+            # otherwise, mpmath.atan would return complex value
+            return ctx.nan
+        return r
+
 
 class numpy_with_mpmath:
     """Namespace of universal functions on numpy arrays that use mpmath
@@ -556,7 +601,9 @@ class numpy_with_mpmath:
         self.params = params
 
     def __getattr__(self, name):
-        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh").get(name, name)
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
+            name, name
+        )
         if name in self._vfunc_cache:
             return self._vfunc_cache[name]
         if hasattr(mpmath_array_api, name):
@@ -681,7 +728,15 @@ def extra_samples(name, dtype):
                 values.append(complex(numpy.nextafter(x, fdtype(1)), y))
 
             values.append(-0.24246988 - 0.49096385j)
-
+        if name == "atanh":
+            values.extend(
+                [
+                    -0.9939759 - 0.00042062782j,
+                    0.9939759 - 0.00085302145j,
+                    -0.73795176 + 0.0877259j,
+                    315387600000000 + 36880000000000j,
+                ]
+            )
     return numpy.array(values, dtype=dtype)
 
 
@@ -694,6 +749,8 @@ def real_samples(
     include_nan=False,
     include_huge=True,
     nonnegative=False,
+    min_value=None,
+    max_value=None,
 ):
     """Return a 1-D array of real line samples.
 
@@ -717,17 +774,49 @@ def real_samples(
       maximal value.
     nonnegative: bool
       When True, finite samples are all non-negative.
+    min_value, max_value: dtype, None
+      When min_value or max_value is specified, use for constructing
+      uniform samples. Parameters include_infinity, include_nan,
+      include_huge, and nonnegative are silently ignored.
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
     assert dtype in {numpy.float32, numpy.float64}, dtype
     utype = {numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
     fi = numpy.finfo(dtype)
-    num = size // 2 if not nonnegative else size
+    user_specified_bounds = min_value is not None or max_value is not None
+    num = size // 2 if not nonnegative and not user_specified_bounds else size
     if include_infinity:
         num -= 1
-    min_value = dtype(fi.smallest_subnormal if include_subnormal else fi.smallest_normal)
-    max_value = dtype(fi.max)
+
+    min_pos_value = dtype(fi.smallest_subnormal if include_subnormal else fi.smallest_normal)
+    if min_value is None:
+        min_value = min_pos_value
+    else:
+        min_value = dtype(min_value)
+
+    if max_value is None:
+        max_value = dtype(fi.max)
+    else:
+        max_value = dtype(max_value)
+
+    if min_value >= max_value:
+        raise ValueError(f"minimal value (={min_value}) cannot be greater than maximal value (={max_value})")
+
+    if user_specified_bounds:
+        if min_value > 0:
+            return numpy.linspace(min_value.view(utype), max_value.view(utype), num=num, dtype=utype).view(dtype)
+        if max_value < 0:
+            return -numpy.linspace(abs(max_value).view(utype), abs(min_value).view(utype), num=num, dtype=utype).view(dtype)
+        neg_diff = diff_ulp(abs(min_value), min_pos_value)
+        pos_diff = diff_ulp(abs(max_value), min_pos_value)
+        neg_num = int(neg_diff * num / (neg_diff + pos_diff))
+        pos_num = num - neg_num
+        neg_part = -numpy.linspace(abs(min_value).view(utype), min_pos_value.view(utype), num=neg_num, dtype=utype).view(dtype)
+        pos_part = numpy.linspace(min_pos_value.view(utype), max_value.view(utype), num=pos_num, dtype=utype).view(dtype)
+        if include_zero:
+            return numpy.unique(numpy.concatenate([neg_part, numpy.array([0], dtype=dtype), pos_part]))
+        return numpy.unique(numpy.concatenate([neg_part, pos_part]))
     if 1:
         # The following method gives a sample distibution that is
         # uniform with respect to ULP distance between positive
@@ -778,6 +867,10 @@ def complex_samples(
     include_nan=False,
     include_huge=True,
     nonnegative=False,
+    min_real_value=None,
+    max_real_value=None,
+    min_imag_value=None,
+    max_imag_value=None,
 ):
     """Return a 2-D array of complex plane samples.
 
@@ -792,6 +885,7 @@ def complex_samples(
     include_subnormal: bool
     include_nan: bool
     nonnegative: bool
+    min_real_value, max_real_value, min_imag_value, max_imag_value: dtype
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
@@ -805,6 +899,8 @@ def complex_samples(
         include_nan=include_nan,
         include_huge=include_huge,
         nonnegative=nonnegative,
+        min_value=min_real_value,
+        max_value=max_real_value,
     )
     im = real_samples(
         size[1],
@@ -815,6 +911,8 @@ def complex_samples(
         include_nan=include_nan,
         include_huge=include_huge,
         nonnegative=nonnegative,
+        min_value=min_imag_value,
+        max_value=max_imag_value,
     )
     complex_dtype = {numpy.float32: numpy.complex64, numpy.float64: numpy.complex128}[dtype]
     real_part = re.reshape((-1, re.size)).repeat(im.size, 0).astype(complex_dtype)
@@ -1192,7 +1290,8 @@ def function_validation_parameters(func_name, dtype):
     elif func_name == "log1p":
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
         max_bound_ulp_width = dict(complex64=3, complex128=3).get(dtype_name, max_bound_ulp_width)
-
+    elif func_name in {"atanh", "atan"}:
+        extra_prec_multiplier = 20
     return dict(
         extra_prec_multiplier=extra_prec_multiplier,
         max_valid_ulp_count=max_valid_ulp_count,

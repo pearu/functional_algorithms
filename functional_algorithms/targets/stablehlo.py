@@ -98,6 +98,7 @@ kind_to_target = dict(
     ge=None,
     eq=None,
     ne=None,
+    nextafter="CHLO_NextAfterOp",
 )
 
 

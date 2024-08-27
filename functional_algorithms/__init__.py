@@ -1,4 +1,4 @@
-__all__ = ["Constext", "Expr", "targets"]
+__all__ = ["Constext", "Expr", "targets", "TextImage"]
 
 try:
     from ._version import __version__
@@ -13,4 +13,6 @@ except ImportError:
 
 from .expr import Expr
 from .context import Context
+from . import algorithms
 from . import targets
+from .textimage import TextImage

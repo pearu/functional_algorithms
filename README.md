@@ -39,6 +39,8 @@ following math functions:
   al](https://dl.acm.org/doi/10.1145/275323.275324) algorithm for
   complex `asin`,
 - `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`,
+- `atan(z: complex | float)`, using the relation `atan(z) = -I * atanh(z * I)`,
+- `atanh(z: complex | float)`, using a custom algorithm,
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
 - `square(z: complex | float)`.
 

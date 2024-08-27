@@ -280,7 +280,6 @@ class Rewriter:
 
     def _compare(self, expr, relop):
         x, y = expr.operands
-
         if x.kind == "constant" and y.kind == "constant":
             xvalue, xlike = x.operands
             yvalue, ylike = y.operands
@@ -295,6 +294,12 @@ class Rewriter:
                 r = relop(xvalue, yvalue)
                 ctx = expr.context
                 return ctx.constant(r, ctx.symbol(None, "boolean"))
+
+            if isinstance(xvalue, str):
+                if xvalue == "largest":
+                    # cannot rewrite as largest depends on dtype
+                    if isinstance(yvalue, (int, float)):
+                        return
 
             self._todo(expr)
 
