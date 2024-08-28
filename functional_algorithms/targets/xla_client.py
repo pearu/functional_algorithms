@@ -28,6 +28,8 @@ trace_arguments = dict(
     acosh=[(":float", ":float"), (":complex", ":complex")],
     asin=[(":float", ":float"), (":complex", ":complex")],
     asinh=[(":float", ":float"), (":complex", ":complex")],
+    atan=[(":float", ":float"), (":complex", ":complex")],
+    atanh=[(":float", ":float"), (":complex", ":complex")],
     complex_log1p=[(":complex", ":complex")],
 )
 

@@ -795,7 +795,7 @@ def atanh_imag_is_half_pi(ctx, x: float):
     return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
 
 
-def inverse_fp_negeps(ctx, x: float):
+def inverse_fp_negeps(ctx, largest: float):
     """Return smallest positive x such that x + 1.0 == x
 
     Using `largest` to detect the floating point type: float16,
@@ -803,14 +803,12 @@ def inverse_fp_negeps(ctx, x: float):
     """
     import numpy
 
-    largest = ctx.constant("largest", x)
-
     def get_value(dtype):
         return float(numpy.nextafter(dtype(1 / numpy.finfo(dtype).epsneg), dtype(numpy.inf)))
 
-    fp64 = ctx.constant(get_value(numpy.float64), x)
-    fp32 = ctx.constant(get_value(numpy.float32), x)
-    fp16 = ctx.constant(get_value(numpy.float16), x)
+    fp64 = ctx.constant(get_value(numpy.float64), largest)
+    fp32 = ctx.constant(get_value(numpy.float32), largest)
+    fp16 = ctx.constant(get_value(numpy.float16), largest)
     return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
 
 
@@ -894,14 +892,16 @@ def complex_atanh(ctx, z: complex):
     x = z.real
     y = z.imag
 
-    zero = ctx.constant(0.0, x)
-    one = ctx.constant(1.0, x)
-    four = ctx.constant(4.0, x)
-    two = ctx.constant(2.0, x)
+    zero = ctx.constant(0, x)
+    one = ctx.constant(1, x)
+    four = ctx.constant(4, x)
+    two = ctx.constant(2, x)
     half = ctx.constant(0.5, x)
     quarter = ctx.constant(0.25, x)
     pi = ctx.constant("pi", x)
-    inv_negeps = inverse_fp_negeps(ctx, x)
+
+    largest = ctx.constant("largest", x).reference("largest")
+    inv_negeps = inverse_fp_negeps(ctx, largest)
     safe_max = inv_negeps * inv_negeps
 
     ax = abs(x)
@@ -923,7 +923,7 @@ def complex_atanh(ctx, z: complex):
     # imaginary part
     imag = ctx.select(in_safe_region, ctx.atan2(y + y, naxm1 * (one + ax) - y2), sy * pi) * half
 
-    return ctx.complex(real, imag)
+    return ctx(ctx.complex(real, imag))
 
 
 def atanh(ctx, z: complex):
@@ -941,8 +941,8 @@ def complex_atan(ctx, z: complex):
 
     atan(z) = -I * atanh(I * z)
     """
-    w = complex_atanh(ctx, ctx.complex(-z.imag, z.real))
-    return ctx.complex(w.imag, -w.real)
+    w = ctx.atanh(ctx.complex(-z.imag, z.real))
+    return ctx(ctx.complex(w.imag, -w.real))
 
 
 def atan(ctx, z: complex | float):

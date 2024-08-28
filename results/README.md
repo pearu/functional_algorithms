@@ -58,8 +58,8 @@ in complex plane where `ulp_width` needs to be larger to pass the
 | asinh | complex128 | 687179 | 313978 | 844 | - | - |
 | atan | float32 | 957469 | 42532 | - | - | - |
 | atan | float64 | 992077 | 7924 | - | - | - |
-| atan | complex64 | 850741 | 146392 | 4784 | 84 | - |
-| atan | complex128 | 936337 | 65264 | 400 | - | - |
+| atan | complex64 | 903333 | 97028 | 1640 | - | - |
+| atan | complex128 | 957991 | 43914 | 96 | - | - |
 | atanh | float32 | 986261 | 13740 | - | - | - |
 | atanh | float64 | 995895 | 4106 | - | - | - |
 | atanh | complex64 | 850741 | 146392 | 4784 | 84 | - |
