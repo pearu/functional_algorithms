@@ -15,6 +15,8 @@ trace_arguments = dict(
     acosh=[(":float",), (":complex",)],
     asin=[(":float",), (":complex",)],
     asinh=[(":float",), (":complex",)],
+    atan=[(":float",), (":complex",)],
+    atanh=[(":float",), (":complex",)],
     log1p=[(":float",), (":complex",)],
     hypot=[(":float", ":float")],
     square=[(":float",), (":complex",)],
@@ -63,8 +65,8 @@ kind_to_target = dict(
     acosh="CHLO_AcoshOp",
     asin="CHLO_AsinOp",
     asinh="CHLO_AsinhOp",
-    atan=NotImplemented,
-    atanh=NotImplemented,
+    atan="CHLO_AtanOp",
+    atanh="CHLO_AtanhOp",
     atan2="StableHLO_Atan2Op",
     cos=NotImplemented,
     cosh=NotImplemented,
@@ -171,7 +173,7 @@ class Printer:
             if isinstance(value, str):
                 v = constant_to_target.get(value, NotImplemented)
                 if v is not NotImplemented:
-                    return f"{tab}({v} {like_val})"
+                    return f"{tab}({v}{ref} {like_val})"
                 else:
                     warnings.warn(f"Constant `{value}` is not implemented in {this_module.__name__}.constant_to_target")
             return f'{tab}(StableHLO_ConstantLike<"{value}">{ref} {like_val})'
