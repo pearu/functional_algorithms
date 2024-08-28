@@ -941,8 +941,8 @@ def complex_atan(ctx, z: complex):
 
     atan(z) = -I * atanh(I * z)
     """
-    w = complex_atanh(ctx, ctx.complex(-z.imag, z.real))
-    return ctx.complex(w.imag, -w.real)
+    w = ctx.atanh(ctx.complex(-z.imag, z.real))
+    return ctx(ctx.complex(w.imag, -w.real))
 
 
 def atan(ctx, z: complex | float):
