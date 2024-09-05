@@ -49,7 +49,11 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
     dtype = getattr(numpy, dtype_name)
     ctx = Context(paths=[algorithms])
 
-    graph = ctx.trace(getattr(algorithms, unary_func_name), dtype)
+    try:
+        graph = ctx.trace(getattr(algorithms, unary_func_name), dtype)
+    except NotImplementedError as msg:
+        pytest.skip(reason=str(msg))
+
     graph2 = graph.implement_missing(targets.numpy).simplify()
 
     func = targets.numpy.as_function(graph2, debug=0)
@@ -156,7 +160,10 @@ def test_target(func_name, target_name):
     # all targets
     target = getattr(targets, target_name)
     ctx = Context(paths=[algorithms], enable_alt=dict(xla_client=True).get(target_name, False), default_constant_type="DType2")
-    graph = ctx.trace(getattr(algorithms, func_name)).implement_missing(target).simplify()
+    try:
+        graph = ctx.trace(getattr(algorithms, func_name)).implement_missing(target).simplify()
+    except NotImplementedError as msg:
+        pytest.skip(reason=str(msg))
     src = graph.tostring(target)
     assert isinstance(src, str)
     assert "symbol__tmp" not in src

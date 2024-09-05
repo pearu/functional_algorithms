@@ -12,11 +12,96 @@ accurate on the whole complex plane or real line.
 # doc-strings could be provided.
 
 
+import functools
+
+
+class definition:
+    """Decorator for definitions of algorithms.
+
+    Usage
+    -----
+
+    To define an algorithm foo, provide the following three functions
+    decorated with `definition(...)` as follows:
+
+      @definition("foo", domain='real')
+      def real_foo(ctx, ...):
+          '''
+          <explain the real foo algorithm here>
+          '''
+          return ctx(<expression for real foo(...)>)
+
+      @definition("foo", domain='complex')
+      def complex_foo(ctx, ...):
+          '''
+          <explain the complex foo algorithm here>
+          '''
+          return ctx(<expression for complex foo(...)>)
+
+      @definition("foo")
+      def foo(ctx, ...):
+          # nothing to implement here as `definition(...,
+          # domain=None)` implements dispatch to real_foo and
+          # complex_foo based on the arguments domain.
+          assert 0  # unreachable
+    """
+
+    # dict(<domain>=<dict of <native function name>:<definition for domain>>)
+    _registry = {}
+
+    def __init__(self, native_func_name, domain=None):
+        assert domain in {"real", "complex", None}, domain
+        self.domain = domain
+        self.native_func_name = native_func_name
+
+        if domain is not None:
+            if domain not in self._registry:
+                self._registry[domain] = {}
+            self.registry = self._registry[domain]
+
+    def __call__(self, func):
+
+        if self.domain is None:
+
+            @functools.wraps(func)
+            def wrapper(ctx, *args, **kwargs):
+                if ctx.parameters.get(f"use_native_{self.native_func_name}", False):
+                    ctx.parameters["using"].add(f"native {self.native_func_name}")
+                    defn = getattr(type(ctx), self.native_func_name)
+                else:
+                    domain = "complex" if args[0].is_complex else "real"
+                    defn = self._registry[domain].get(self.native_func_name)
+                    if defn is None:
+                        raise NotImplementedError(
+                            f"definition for {domain} {self.native_func_name} is not provided in algorithms"
+                        )
+                return defn(ctx, *args, **kwargs)
+
+            return wrapper
+
+        @functools.wraps(func)
+        def wrapper(ctx, *args, **kwargs):
+            if ctx.parameters.get(f"use_native_{self.native_func_name}", False):
+                ctx.parameters["using"].add(f"native {self.native_func_name}")
+                return getattr(ctx, self.native_func_name)(*args, **kwargs)
+
+            result = func(ctx, *args, **kwargs)
+            if result is NotImplemented:
+                raise NotImplementedError(f"{self.native_func_name} not implemented for {self.domain} domain: {func.__name__}")
+            return result
+
+        self.registry[self.native_func_name] = wrapper
+
+        return wrapper
+
+
+@definition("square", domain="real")
 def real_square(ctx, x: float):
     """Square on real input: x * x"""
-    return square(ctx, x)
+    return ctx(x * x)
 
 
+@definition("square", domain="complex")
 def complex_square(ctx, z: complex):
     """Square on complex input:
 
@@ -26,30 +111,28 @@ def complex_square(ctx, z: complex):
         square(z).real = (z.real - z.imag) * (z.real + z.imag)
     square(z).imag = 2 * (z.real * z.imag)
     """
-    return square(ctx, z)
+    x = z.real
+    y = z.imag
+    # We'll use
+    #   x * x - y * y = (x - y) * (x + y)
+    # but we'll still treat `abs(x) == abs(y)` case separately to
+    # avoid nan real part (e.g. as when taking x = inf and y =
+    # -inf) while it should be 0.
+    #
+    # Notice that 2 * (x * y) is not the same as 2 * x * y when `2
+    # * x` overflows (e.g. take x = finfo(..).max) while `x * y`
+    # doesn't (e.g. take y such that `abs(y) < 1`).
+    z_sq = ctx.complex(ctx.select(abs(x) == abs(y), 0, (x - y) * (x + y)), 2 * (x * y))
+    return ctx(z_sq)
 
 
+@definition("square")
 def square(ctx, z: complex | float):
     """Square on real and complex inputs.
 
     See complex_square and real_square for more information.
     """
-    if z.is_complex:
-        x = z.real
-        y = z.imag
-        # We'll use
-        #   x * x - y * y = (x - y) * (x + y)
-        # but we'll still treat `abs(x) == abs(y)` case separately to
-        # avoid nan real part (e.g. as when taking x = inf and y =
-        # -inf) while it should be 0.
-        #
-        # Notice that 2 * (x * y) is not the same as 2 * x * y when `2
-        # * x` overflows (e.g. take x = finfo(..).max) while `x * y`
-        # doesn't (e.g. take y such that `abs(y) < 1`).
-        z_sq = ctx.complex(ctx.select(abs(x) == abs(y), 0, (x - y) * (x + y)), 2 * (x * y))
-    else:
-        z_sq = z * z
-    return ctx(z_sq)
+    assert 0  # unreachable
 
 
 def hypot(ctx, x: float, y: float):
@@ -86,11 +169,22 @@ def hypot(ctx, x: float, y: float):
     return ctx(ctx.select(mx == mn, h1, h2))
 
 
-def absolute(ctx, z: float | complex):
-    """Absolute value of float and complex inputs."""
-    if z.is_complex:
-        return ctx(hypot(ctx, z.real, z.imag))
+@definition("absolute", domain="complex")
+def complex_absolute(ctx, z: complex):
+    """Absolute value of complex inputs."""
+    return ctx(hypot(ctx, z.real, z.imag))
+
+
+@definition("absolute", domain="real")
+def real_absolute(ctx, z: float | complex):
+    """Absolute value of real inputs."""
     return ctx(abs(z))
+
+
+@definition("absolute")
+def absolute(ctx, z: float | complex):
+    """Absolute value of real and complex inputs."""
+    assert 0  # unreachable
 
 
 def real_asin_acos_kernel(ctx, x: float):
@@ -193,6 +287,7 @@ def asin_acos_kernel(ctx, z: complex):
     return ctx(ctx.complex(y1, imag))
 
 
+@definition("asin", domain="complex")
 def complex_asin(ctx, z: complex):
     # fmt: off
     """Arcus sine on complex input.
@@ -344,6 +439,7 @@ def complex_asin(ctx, z: complex):
     return ctx.complex(real, imag)
 
 
+@definition("asin", domain="real")
 def real_asin(ctx, x: float):
     """Arcus sine on real input:
 
@@ -368,16 +464,16 @@ def real_asin(ctx, x: float):
     return ctx(ta + ta)
 
 
+@definition("asin")
 def asin(ctx, z: complex | float):
     """Arcus sine on complex and real inputs.
 
     See complex_asin and real_asin for more information.
     """
-    if not z.is_complex:
-        return real_asin(ctx, z)
-    return complex_asin(ctx, z)
+    assert 0  # unreachable
 
 
+@definition("asinh", domain="complex")
 def complex_asinh(ctx, z: complex):
     """Inverse hyperbolic sine on complex input:
 
@@ -408,6 +504,7 @@ def complex_asinh(ctx, z: complex):
     return ctx(ctx.complex(real, imag))
 
 
+@definition("asinh", domain="real")
 def real_asinh(ctx, x: float):
     """Inverse hyperbolic sine on real input:
 
@@ -515,16 +612,16 @@ def real_asinh_2(ctx, x: float):
     return ctx(ctx.select(x < 0, -imag, imag))
 
 
+@definition("asinh")
 def asinh(ctx, z: complex | float):
     """Inverse hyperbolic sine on complex and real inputs.
 
     See complex_asinh and real_asinh for more information.
     """
-    if not z.is_complex:
-        return real_asinh(ctx, z)
-    return complex_asinh(ctx, z)
+    assert 0  # unreachable
 
 
+@definition("acos", domain="real")
 def real_acos(ctx, x: float):
     """Arcus cosine on real input:
 
@@ -541,6 +638,7 @@ def real_acos(ctx, x: float):
     return ctx.atan2(sq, x)
 
 
+@definition("acos", domain="complex")
 def complex_acos(ctx, z: complex):
     """Arcus cosine on complex input
 
@@ -590,16 +688,16 @@ def complex_acos(ctx, z: complex):
     return ctx.complex(real, imag)
 
 
+@definition("acos")
 def acos(ctx, z: complex | float):
     """Arcus cosine on complex and real inputs.
 
     See complex_acos and real_acos for more information.
     """
-    if z.is_complex:
-        return complex_acos(ctx, z)
-    return real_acos(ctx, z)
+    assert 0  # unreachable
 
 
+@definition("acosh", domain="complex")
 def complex_acosh(ctx, z: complex):
     """Inverse hyperbolic cosine on complex input:
 
@@ -635,6 +733,7 @@ def complex_acosh(ctx, z: complex):
     return ctx(ctx.complex(w.imag, ctx.select(signed_y < 0, -imag, imag)))
 
 
+@definition("acosh", domain="real")
 def real_acosh(ctx, x: float):
     """Inverse hyperbolic cosine on real input:
 
@@ -668,22 +767,38 @@ def real_acosh(ctx, x: float):
     return ctx.select(x >= safe_max_limit, a0, a1)
 
 
+@definition("acosh")
 def acosh(ctx, z: complex | float):
     """Inverse hyperbolic cosine on complex and real inputs.
 
     See complex_acosh and real_acosh for more information.
     """
-    if z.is_complex:
-        return complex_acosh(ctx, z)
-    return real_acosh(ctx, z)
+    assert 0  # unreachable
 
 
+@definition("sqrt", domain="real")
+def real_sqrt(ctx, z: float):
+    return NotImplemented
+
+
+@definition("sqrt", domain="complex")
+def complex_sqrt(ctx, z: complex):
+    return NotImplemented
+
+
+@definition("sqrt")
 def sqrt(ctx, z: complex | float):
-    return ctx.sqrt(z)
+    assert 0  # unreachable
 
 
+@definition("angle", domain="complex")
 def angle(ctx, z: complex):
     return ctx.atan2(z.imag, z.real)
+
+
+@definition("angle")
+def angle(ctx, z: complex):
+    assert 0  # unreachable
 
 
 def kahan3(ctx, x1: float, x2: float, x3: float):
@@ -710,6 +825,7 @@ def fma(ctx, x, y, z):
     return x * y + z
 
 
+@definition("log1p", domain="complex")
 def complex_log1p(ctx, z: complex):
     """Logarithm of 1 + z on complex input:
 
@@ -771,14 +887,13 @@ def complex_log1p(ctx, z: complex):
     return ctx(ctx.complex(re, im))
 
 
+@definition("log1p")
 def log1p(ctx, z: complex | float):
     """log(1 + z)
 
     See complex_log1p for more information.
     """
-    if z.is_complex:
-        return complex_log1p(ctx, z)
-    return ctx.log1p(z)
+    assert 0  # unreachable
 
 
 def atanh_imag_is_half_pi(ctx, x: float):
@@ -795,8 +910,10 @@ def atanh_imag_is_half_pi(ctx, x: float):
     return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
 
 
-def inverse_fp_negeps(ctx, largest: float):
-    """Return smallest positive x such that x + 1.0 == x
+def when_add_one_is_identity(ctx, largest: float):
+    """Return smallest positive x such that x + 1.0 ~= x
+
+    `~=` denotes floating-point equality.
 
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
@@ -812,6 +929,45 @@ def inverse_fp_negeps(ctx, largest: float):
     return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
 
 
+def when_exp_is_zero(ctx, largest: float):
+    """Return smallest positive x such that 1 - exp(-x) ~= 1.
+
+    `~=` denotes floating-point equality.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+
+    Algorithm
+    ---------
+
+    Within the given floating-point system, we have
+
+      1 - y ~= 1
+
+    whenever y <= epsneg where epsneg = 1 - nextafter(1, 0).
+
+    Hence, the smallest `x` when `1 - exp(-x)` is 1, is
+
+      -log(epsneg)
+    """
+    import numpy
+
+    def get_value(dtype):
+        return float(numpy.nextafter(dtype(-numpy.log(numpy.finfo(dtype).epsneg)), dtype(numpy.inf)))
+
+    fp64 = ctx.constant(get_value(numpy.float64), largest)
+    fp32 = ctx.constant(get_value(numpy.float32), largest)
+    fp16 = ctx.constant(get_value(numpy.float16), largest)
+    return ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
+
+
+@definition("atanh", domain="real")
+def real_atanh(ctx, z: float):
+    """Inverse hyperbolic tangent on real inputs:"""
+    return NotImplemented
+
+
+@definition("atanh", domain="complex")
 def complex_atanh(ctx, z: complex):
     """Inverse hyperbolic tangent on complex inputs:
 
@@ -901,7 +1057,7 @@ def complex_atanh(ctx, z: complex):
     pi = ctx.constant("pi", x)
 
     largest = ctx.constant("largest", x).reference("largest")
-    inv_negeps = inverse_fp_negeps(ctx, largest)
+    inv_negeps = when_add_one_is_identity(ctx, largest)
     safe_max = inv_negeps * inv_negeps
 
     ax = abs(x)
@@ -926,30 +1082,51 @@ def complex_atanh(ctx, z: complex):
     return ctx(ctx.complex(real, imag))
 
 
+@definition("atanh")
 def atanh(ctx, z: complex):
-    """Inverse hyperbolic tangent on real and complex inputs:
-
-    See complex_atanh for more information.
-    """
-    if not z.is_complex:
-        return ctx.atanh(z)
-    return complex_atanh(ctx, z)
+    """Inverse hyperbolic tangent on real and complex inputs."""
+    # the implementation is provided by definition decorator
+    assert 0  # unreachable
 
 
+@definition("atan", domain="real")
+def real_atan(ctx, z: float):
+    """Arcus tangent on real inputs"""
+    return NotImplemented
+
+
+@definition("atan", domain="complex")
 def complex_atan(ctx, z: complex):
     """Arcus tangent on complex inputs:
 
     atan(z) = -I * atanh(I * z)
     """
-    w = ctx.atanh(ctx.complex(-z.imag, z.real))
+    w = complex_atanh(ctx, ctx.complex(-z.imag, z.real))
     return ctx(ctx.complex(w.imag, -w.real))
 
 
+@definition("atan")
 def atan(ctx, z: complex | float):
     """Arcus tangent on complex and real inputs.
 
     See complex_atan for more information.
     """
-    if not z.is_complex:
-        return ctx.atan(z)
-    return complex_atan(ctx, z)
+    assert 0  # unreachable
+
+
+@definition("tan")
+def tan(ctx, z: complex | float):
+    """Tangent on complex and real inputs.
+
+    See complex_atan for more information.
+    """
+    assert 0  # unreachable
+
+
+@definition("tanh")
+def tanh(ctx, z: complex | float):
+    """Hyperbolic tangent on complex and real inputs.
+
+    See complex_atan for more information.
+    """
+    assert 0  # unreachable

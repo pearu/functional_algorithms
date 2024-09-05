@@ -1,74 +1,138 @@
 import os
 import numpy as np
 import functional_algorithms as fa
+from collections import defaultdict
+
+
+class Bucket:
+
+    def __init__(self, samples):
+        """
+        Parameters
+        ----------
+        samples : ndarray
+        Defines the shape of results accumulators.
+        """
+        self.samples = samples
+        self.ulp_count = np.zeros(samples.shape, dtype=np.uint64)
+        self.counts = np.zeros(samples.shape, dtype=np.uint64)
+
+    def add(self, sample, dulp, result, expected):
+        index = tuple(
+            ind[-1] if ind.size else 0
+            for ind in np.where((self.samples.real <= sample.real) & (self.samples.imag <= sample.imag))
+        )
+        self.ulp_count[index] += min(dulp, 1000)
+        self.counts[index] += 1
 
 
 def get_inputs():
+    func_counts = defaultdict(int)
+
     for func_name, dtype, parameters in [
         # ("absolute", np.float32, {}),  # disabling as the result is trivial
         # ("absolute", np.float64, {}),  # disabling as the result is trivial
         ("absolute", np.complex64, {}),
+        ("absolute", np.complex64, dict(use_native_absolute=True)),
         ("absolute", np.complex128, {}),
         ("acos", np.float32, {}),
+        ("acos", np.float32, dict(use_native_acos=True)),
         ("acos", np.float64, {}),
         ("acos", np.complex64, {}),
+        ("acos", np.complex64, dict(use_native_acos=True)),
         ("acos", np.complex128, {}),
         ("acosh", np.float32, {}),
         # *(("acosh", np.float32, dict(safe_max_limit_coefficient=v)) for v in [0.51, 0.5]),
         # *(("acosh", np.float64, dict(safe_max_limit_coefficient=v)) for v in [0.51, 0.5]),
+        ("acosh", np.float32, dict(use_native_acosh=True)),
         ("acosh", np.float64, {}),
         ("acosh", np.complex64, {}),
+        ("acosh", np.complex64, dict(use_native_acosh=True)),
         ("acosh", np.complex128, {}),
         ("asin", np.float32, {}),
+        ("asin", np.float32, dict(use_native_asin=True)),
         ("asin", np.float64, {}),
         ("asin", np.complex64, {}),
+        ("asin", np.complex64, dict(use_native_asin=True)),
         ("asin", np.complex128, {}),
         # *(("real_asinh", np.float32, dict(safe_min_limit=v)) for v in [None, 1, 10, 100, 1000]),
         # *(("real_asinh", np.float64, dict(safe_min_limit=v)) for v in [None, 1, 10, 100, 1000]),
         # *(("real_asinh", np.float32, dict(safe_max_limit_coefficient=v)) for v in [2, 1, 1/2, 1/4, 1/8]),
         # ("real_asinh_2", np.float32, {}),
         ("asinh", np.float32, {}),
+        ("asinh", np.float32, dict(use_native_asinh=True)),
         ("asinh", np.float64, {}),
         ("asinh", np.complex64, {}),
+        ("asinh", np.complex64, dict(use_native_asinh=True)),
         ("asinh", np.complex128, {}),
-        ("atan", np.float32, {}),
-        ("atan", np.float64, {}),
-        ("atan", np.complex64, {}),
+        # ("atan", np.float32, {}),  # real_atan is not implemented
+        # ("atan", np.float64, {}),  # ditto
+        ("atan", np.complex64, dict()),
+        ("atan", np.complex64, dict(use_native_atan=True)),
         ("atan", np.complex128, {}),
-        ("atanh", np.float32, {}),
-        ("atanh", np.float64, {}),
         ("atanh", np.complex64, {}),
+        ("atanh", np.complex64, dict(use_native_atanh=True)),
         ("atanh", np.complex128, {}),
         ("square", np.float32, {}),
+        ("square", np.float32, dict(use_native_square=True)),
         ("square", np.float64, {}),
         ("square", np.complex64, {}),
+        ("square", np.complex64, dict(use_native_square=True)),
         ("square", np.complex128, {}),
-        ("sqrt", np.float32, {}),
-        ("sqrt", np.float64, {}),
-        ("sqrt", np.complex64, {}),
-        ("sqrt", np.complex128, {}),
+        # ("sqrt", np.float32, {}),     # real_sqrt is not implemented
+        ("sqrt", np.float32, dict(use_native_sqrt=True)),
+        # ("sqrt", np.float64, {}),     # real_sqrt is not implemented
+        # ("sqrt", np.complex64, {}),   # complex_sqrt is not implemented
+        ("sqrt", np.complex64, dict(use_native_sqrt=True)),
+        # ("sqrt", np.complex128, {}),  # complex_sqrt is not implemented
         ("angle", np.complex64, {}),
         ("angle", np.complex128, {}),
-        ("log1p", np.float32, {}),
-        ("log1p", np.float64, {}),
+        # ("log1p", np.float32, {}),  # real_log1p is not implemented
+        # ("log1p", np.float64, {}),  # ditto
         ("log1p", np.complex64, {}),
+        ("log1p", np.complex64, dict(use_native_log1p=True)),
         ("log1p", np.complex128, {}),
+        # ("tan", np.float32, dict()),  # real_tan is not implemented
+        ("tan", np.float32, dict(use_native_tan=True)),
+        # ("tan", np.float32, dict(use_upcast_tan=True)),
+        # ("tan", np.float64, {}),  # real_tan is not implemented
+        # ("tan", np.complex64, {}),  # tan is not implemented
+        ("tan", np.complex64, dict(use_native_tan=True)),
+        # ("tan", np.complex128, {}),  # tan is not implemented
+        ("tanh", np.float32, dict(use_native_tanh=True)),
+        # ("tanh", np.float64, {}),  # real_tanh is not implemented
+        # ("tanh", np.complex64, {}),  # tanh is not implemented
+        # ("tanh", np.complex64, dict(use_upcast_tan=True, use_upcast_tanh=True, use_upcast_cos=True)),
+        ("tanh", np.complex64, dict(use_native_tanh=True)),
+        # ("tanh", np.complex128, {}),  # tanh is not implemented
     ]:
         validation_parameters = fa.utils.function_validation_parameters(func_name, dtype)
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]
         if func_name == "log1p" and dtype is np.complex128:
             # the original max_bound_ulp_width value is required for log1p extra samples
             max_bound_ulp_width = 1
+
+        def param2str(parameters):
+            r = []
+            for name, value in parameters.items():
+                if name.startswith("use_"):
+                    # skip use-parameters because these will be
+                    # added to notes
+                    continue
+                r.append(f"{name}={value}")
+            return "[" + ", ".join(r) + "]" if r else ""
+
         for max_bound_ulp_width in range(1 if max_bound_ulp_width else 0, max_bound_ulp_width + 1):
+            func_counts[func_name, dtype] += 1
+            func_count = func_counts[func_name, dtype]
             validation_parameters["max_bound_ulp_width"] = max_bound_ulp_width
-            if parameters:
-                params = "[" + ", ".join(f"{k}={v}" for k, v in parameters.items()) + "]"
-            else:
-                params = ""
-            if max_bound_ulp_width > 0:
-                row_prefix = f"| {func_name}<sup>{max_bound_ulp_width}</sup>{params} | {dtype.__name__} | "
-            else:
-                row_prefix = f"| {func_name}{params} | {dtype.__name__} | "
+            params = param2str(parameters)
+            supscript = (
+                f"<sup>{max_bound_ulp_width}</sup>"
+                if max_bound_ulp_width > 0
+                else (f"<sub>{func_count}</sub>" if func_count > 1 else "")
+            )
+            row_prefix = f"| {func_name}{supscript}{params} | {dtype.__name__} | "
             yield func_name, dtype, parameters, validation_parameters, row_prefix
 
 
@@ -85,6 +149,7 @@ def main():
     f.close()
 
     f = open(target_file, "w")
+    bucket_size = 50
     size = 1000
     flush_subnormals = False
     print(
@@ -125,15 +190,17 @@ limit in general: there may exist function-function dependent regions
 in complex plane where `ulp_width` needs to be larger to pass the
 "out-of-ulp-range counts is zero" test.
 
+Finally, "using native <function?" means "using the corresponding
+numpy <function>".
 """,
         file=f,
     )
 
     print(
-        "| Function | dtype | dULP=0 (exact) | dULP=1 | dULP=2 | dULP=3 | dULP>3 |",
+        "| Function | dtype | dULP=0 (exact) | dULP=1 | dULP=2 | dULP=3 | dULP>3 | Notes |",
         file=f,
     )
-    print("| -------- | ----- | -------------- | ------ | ------ | ------ | ------ |", file=f)
+    print("| -------- | ----- | -------------- | ------ | ------ | ------ | ------ | ----- |", file=f)
 
     for func_name, dtype, parameters, validation_parameters, row_prefix in get_inputs():
         if row_prefix in precomputed:
@@ -145,7 +212,6 @@ in complex plane where `ulp_width` needs to be larger to pass the
         graph = ctx.trace(getattr(fa.algorithms, func_name), dtype)
         graph2 = graph.implement_missing(fa.targets.numpy).simplify()
         func = fa.targets.numpy.as_function(graph2, debug=0)
-
         max_valid_ulp_count = validation_parameters["max_valid_ulp_count"]
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]
         extra_prec_multiplier = validation_parameters["extra_prec_multiplier"]
@@ -160,9 +226,14 @@ in complex plane where `ulp_width` needs to be larger to pass the
         if dtype in {np.complex64, np.complex128}:
             samples = fa.utils.complex_samples(
                 (size, size), dtype=dtype, include_huge=True, include_subnormal=not flush_subnormals
-            ).flatten()
+            )
+            step = size // bucket_size
+            bucket = Bucket(samples[::step, ::step])
+            samples = samples.flatten()
         else:
             samples = fa.utils.real_samples(size * size, dtype=dtype, include_subnormal=not flush_subnormals).flatten()
+            bucket = None
+
         matches_with_reference, stats = fa.utils.validate_function(
             func,
             reference,
@@ -174,6 +245,7 @@ in complex plane where `ulp_width` needs to be larger to pass the
             workers=None,
             max_valid_ulp_count=max_valid_ulp_count,
             max_bound_ulp_width=max_bound_ulp_width,
+            bucket=bucket,
         )
         # assert matches_with_reference, (func_name, dtype, ulp_stats)
 
@@ -198,9 +270,27 @@ in complex plane where `ulp_width` needs to be larger to pass the
             cols.append(t)
         else:
             cols.append("-")
+
+        # notes column
+        using = ctx.parameters.get("using")
+        cols.append(f'using {", ".join(using)}' if using else "-")
+
         print(row_prefix + " | ".join(cols) + " |", file=f)
         print(row_prefix + " | ".join(cols) + " |")
         f.flush()
+
+        if bucket is not None and bucket.ulp_count.sum() > 4:
+            ulp_count = ((10 * bucket.ulp_count) // bucket.counts)[::-1]
+            timage = fa.TextImage()
+            timage.fill(0, 0, ulp_count <= 1000, symbol="C")
+            timage.fill(0, 0, ulp_count <= 500, symbol="B")
+            timage.fill(0, 0, ulp_count <= 100, symbol="A")
+            timage.fill(0, 0, ulp_count == 0, symbol="=")
+            for i in range(1, 10):
+                timage.fill(0, 0, ulp_count == i, symbol=str(i))
+
+            print(timage)
+
     print(f"Created {target_file}")
 
 

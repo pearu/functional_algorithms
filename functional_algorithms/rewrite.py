@@ -121,6 +121,27 @@ class Rewriter:
     def atanh(self, expr):
         pass
 
+    def sin(self, expr):
+        pass
+
+    def sinh(self, expr):
+        pass
+
+    def cos(self, expr):
+        pass
+
+    def cosh(self, expr):
+        pass
+
+    def tan(self, expr):
+        pass
+
+    def tanh(self, expr):
+        pass
+
+    def exp(self, expr):
+        pass
+
     def _binary_op(self, expr, op):
         x, y = expr.operands
 
