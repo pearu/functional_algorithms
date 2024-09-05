@@ -34,6 +34,10 @@ class TestImplementations:
         m = ctx.alt.constant("smallest")
         return ctx.constant(ctx.alt.sqrt(m) / 4, x)
 
+    @staticmethod
+    def upcast_tan(ctx, x):
+        return ctx.downcast(ctx.tan(ctx.upcast(x)))
+
 
 def test_myhypot_stablehlo():
 
@@ -327,4 +331,23 @@ XlaOp safe_min(XlaOp y) {
       y,
       (std::sqrt(std::numeric_limits<MyDType>::min())) / (4));
 }"""
+    )
+
+
+def test_upcast_tan_numpy():
+    import numpy
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.upcast_tan, numpy.float32)
+    graph1 = graph.implement_missing(targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def upcast_tan(x: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        x = numpy.float32(x)
+        result = numpy.float32(numpy.tan(numpy.float64(x)))
+        return result"""
     )

@@ -24,6 +24,44 @@ def make_complex(r, i):
 )
 
 
+def upcast_func(target, expr):
+    assert expr.kind == "upcast", expr.kind
+    (x,) = expr.operands
+    t = target.get_type(x)
+    t_new = {
+        "numpy.float16": "numpy.float32",
+        "numpy.float32": "numpy.float64",
+        "numpy.float64": "numpy.float128",
+        "numpy.complex32": "numpy.complex64",
+        "numpy.complex64": "numpy.complex128",
+        "numpy.complex128": "numpy.complex256",
+        "numpy.int8": "numpy.int16",
+        "numpy.int16": "numpy.int32",
+        "numpy.int32": "numpy.int64",
+    }[t]
+    s = target.tostring(x)
+    return f"{t_new}({s})"
+
+
+def downcast_func(target, expr):
+    assert expr.kind == "downcast", expr.kind
+    (x,) = expr.operands
+    t = target.get_type(x)
+    t_new = {
+        "numpy.float32": "numpy.float16",
+        "numpy.float64": "numpy.float32",
+        "numpy.float128": "numpy.float64",
+        "numpy.complex64": "numpy.complex32",
+        "numpy.complex128": "numpy.complex64",
+        "numpy.complex256": "numpy.complex128",
+        "numpy.int16": "numpy.int8",
+        "numpy.int32": "numpy.int16",
+        "numpy.int64": "numpy.int32",
+    }[t]
+    s = target.tostring(x)
+    return f"{t_new}({s})"
+
+
 trace_arguments = dict(
     absolute=[(":complex128",), (":complex64",)],
     asin_acos_kernel=[(":complex128",), (":complex64",)],
@@ -110,6 +148,8 @@ kind_to_target = dict(
     eq="numpy.equal({0}, {1}, dtype=numpy.bool_)",
     ne="({0}) != ({1})",
     nextafter="numpy.nextafter({0}, {1})",
+    upcast=upcast_func,
+    downcast=downcast_func,
 )
 
 constant_to_target = dict(

@@ -189,6 +189,12 @@ class Rewriter:
     def constant(self, expr):
         pass
 
+    def upcast(self, expr):
+        pass
+
+    def downcast(self, expr):
+        pass
+
     def log(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":
