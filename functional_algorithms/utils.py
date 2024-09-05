@@ -1221,6 +1221,7 @@ def validate_function(
     workers=None,
     max_valid_ulp_count=3,
     max_bound_ulp_width=1,
+    bucket=None,
 ):
     fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
@@ -1241,6 +1242,10 @@ def validate_function(
         assert v1.dtype == v2.dtype, (sample, v1, v2)
         ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
         ulp_stats[ulp] += 1
+
+        if bucket is not None:
+            # collect samples and values to a provide bucket
+            bucket.add(sample, ulp, v1, v2)
 
         if max_bound_ulp_width:
             within_bounds = is_within_bounds(v1, lower[index], upper[index])

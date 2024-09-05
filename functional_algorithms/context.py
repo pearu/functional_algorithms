@@ -39,6 +39,8 @@ class Context:
         self._default_constant_type = default_constant_type
         self._default_like = None
         self.parameters = parameters or {}
+        if "using" not in self.parameters:
+            self.parameters["using"] = set()
 
     @property
     def alt(self):
