@@ -395,7 +395,7 @@ class mpmath_array_api:
                     return ctx.make_mpc((ctx.one._mpf_, ctx.zero._mpf_))
                 return ctx.make_mpc(((-ctx.one)._mpf_, ctx.zero._mpf_))
             elif ctx.isnan(x.real):
-                if y.imag == 0:
+                if x.imag == 0:
                     return ctx.make_mpc((ctx.nan._mpf_, ctx.zero._mpf_))
                 return ctx.make_mpc((ctx.nan._mpf_, ctx.nan._mpf_))
 
