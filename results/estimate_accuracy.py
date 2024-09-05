@@ -94,16 +94,19 @@ def get_inputs():
         ("log1p", np.complex128, {}),
         # ("tan", np.float32, dict()),  # real_tan is not implemented
         ("tan", np.float32, dict(use_native_tan=True)),
-        # ("tan", np.float32, dict(use_upcast_tan=True)),
+        ("tan", np.float32, dict(use_native_tan=True, use_upcast_tan=True)),
         # ("tan", np.float64, {}),  # real_tan is not implemented
         # ("tan", np.complex64, {}),  # tan is not implemented
         ("tan", np.complex64, dict(use_native_tan=True)),
+        ("tan", np.complex64, dict(use_native_tan=True, use_upcast_tan=True)),
         # ("tan", np.complex128, {}),  # tan is not implemented
         ("tanh", np.float32, dict(use_native_tanh=True)),
+        ("tanh", np.float32, dict(use_native_tanh=True, use_upcast_tanh=True)),
         # ("tanh", np.float64, {}),  # real_tanh is not implemented
         # ("tanh", np.complex64, {}),  # tanh is not implemented
         # ("tanh", np.complex64, dict(use_upcast_tan=True, use_upcast_tanh=True, use_upcast_cos=True)),
         ("tanh", np.complex64, dict(use_native_tanh=True)),
+        ("tanh", np.complex64, dict(use_native_tanh=True, use_upcast_tanh=True)),
         # ("tanh", np.complex128, {}),  # tanh is not implemented
     ]:
         validation_parameters = fa.utils.function_validation_parameters(func_name, dtype)
@@ -190,8 +193,11 @@ limit in general: there may exist function-function dependent regions
 in complex plane where `ulp_width` needs to be larger to pass the
 "out-of-ulp-range counts is zero" test.
 
-Finally, "using native <function?" means "using the corresponding
-numpy <function>".
+Finally,
+- "using native <function>" means "using the corresponding numpy <function>",
+- "using upcast <function>" means that the function arguments are
+  upcasted to a dtype with bits doubled, and the function results are
+  downcasted to a dtype with bits split half.
 """,
         file=f,
     )

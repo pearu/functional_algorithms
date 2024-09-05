@@ -75,7 +75,18 @@ class definition:
                         raise NotImplementedError(
                             f"definition for {domain} {self.native_func_name} is not provided in algorithms"
                         )
-                return defn(ctx, *args, **kwargs)
+
+                if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
+                    ctx.parameters["using"].add(f"upcast {self.native_func_name}")
+                    assert len(args) == 1, args
+                    args = (ctx.upcast(args[0]),)
+
+                result = defn(ctx, *args, **kwargs)
+
+                if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
+                    result = ctx.downcast(result)
+
+                return result
 
             return wrapper
 
@@ -83,11 +94,22 @@ class definition:
         def wrapper(ctx, *args, **kwargs):
             if ctx.parameters.get(f"use_native_{self.native_func_name}", False):
                 ctx.parameters["using"].add(f"native {self.native_func_name}")
-                return getattr(ctx, self.native_func_name)(*args, **kwargs)
+                func_ = getattr(type(ctx), self.native_func_name)
+            else:
+                func_ = func
 
-            result = func(ctx, *args, **kwargs)
+            if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
+                ctx.parameters["using"].add(f"upcast {self.native_func_name}")
+                assert len(args) == 1, args
+                args = (ctx.upcast(args[0]),)
+
+            result = func_(ctx, *args, **kwargs)
             if result is NotImplemented:
                 raise NotImplementedError(f"{self.native_func_name} not implemented for {self.domain} domain: {func.__name__}")
+
+            if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
+                return ctx.downcast(result)
+
             return result
 
         self.registry[self.native_func_name] = wrapper
@@ -1112,6 +1134,11 @@ def atan(ctx, z: complex | float):
     See complex_atan for more information.
     """
     assert 0  # unreachable
+
+
+@definition("tan", domain="real")
+def real_tan(ctx, z: complex | float):
+    return NotImplemented
 
 
 @definition("tan")

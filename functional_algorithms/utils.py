@@ -375,25 +375,30 @@ class mpmath_array_api:
     def tan(self, x):
         ctx = x.context
         if isinstance(x, ctx.mpc):
-            # Workaround mpmath 1.3 bug in tan(+-inf+-infj) evaluation (see mpmath/mpmath#781).
-            if ctx.isinf(x.imag) and (ctx.isinf(x.real) or ctx.isfinite(x.real)):
-                if x.imag > 0:
-                    return ctx.make_mpc((ctx.zero._mpf_, ctx.one._mpf_))
-                return ctx.make_mpc((ctx.zero._mpf_, (-ctx.one)._mpf_))
-            if ctx.isinf(x.real) and ctx.isfinite(x.imag):
-                return ctx.make_mpc((ctx.nan._mpf_, ctx.nan._mpf_))
+            if not (ctx.isfinite(x.real) and ctx.isfinite(x.imag)):
+                # tan(z) = -i * std::tanh(i * z)
+                ix = ctx.make_mpc(((-x.imag)._mpf_, x.real._mpf_))
+                w = self.tanh(ix)
+                return ctx.make_mpc((w.imag._mpf_, (-w.real)._mpf_))
         return ctx.tan(x)
 
     def tanh(self, x):
         ctx = x.context
         if isinstance(x, ctx.mpc):
             # Workaround mpmath 1.3 bug in tanh(+-inf+-infj) evaluation (see mpmath/mpmath#781).
-            if ctx.isinf(x.imag) and (ctx.isinf(x.real) or ctx.isfinite(x.real)):
-                if x.imag > 0:
-                    return ctx.make_mpc((ctx.zero._mpf_, ctx.one._mpf_))
-                return ctx.make_mpc((ctx.zero._mpf_, (-ctx.one)._mpf_))
-            if ctx.isinf(x.real) and ctx.isfinite(x.imag):
+            if ctx.isfinite(x.real) and not ctx.isfinite(x.imag):
+                if x.real == 0:
+                    return ctx.make_mpc((ctx.zero._mpf_, ctx.nan._mpf_))
                 return ctx.make_mpc((ctx.nan._mpf_, ctx.nan._mpf_))
+            elif ctx.isinf(x.real):
+                if x.real >= 0:
+                    return ctx.make_mpc((ctx.one._mpf_, ctx.zero._mpf_))
+                return ctx.make_mpc(((-ctx.one)._mpf_, ctx.zero._mpf_))
+            elif ctx.isnan(x.real):
+                if y.imag == 0:
+                    return ctx.make_mpc((ctx.nan._mpf_, ctx.zero._mpf_))
+                return ctx.make_mpc((ctx.nan._mpf_, ctx.nan._mpf_))
+
         return ctx.tanh(x)
 
     def log2(self, x):
@@ -1296,6 +1301,8 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
         max_bound_ulp_width = dict(complex64=3, complex128=3).get(dtype_name, max_bound_ulp_width)
     elif func_name in {"atanh", "atan"}:
+        extra_prec_multiplier = 20
+    elif func_name in {"tanh", "tan"}:
         extra_prec_multiplier = 20
     return dict(
         extra_prec_multiplier=extra_prec_multiplier,

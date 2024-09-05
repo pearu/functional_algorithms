@@ -35,8 +35,11 @@ limit in general: there may exist function-function dependent regions
 in complex plane where `ulp_width` needs to be larger to pass the
 "out-of-ulp-range counts is zero" test.
 
-Finally, "using native <function?" means "using the corresponding
-numpy <function>".
+Finally,
+- "using native <function>" means "using the corresponding numpy <function>",
+- "using upcast <function>" means that the function arguments are
+  upcasted to a dtype with bits doubled, and the function results are
+  downcasted to a dtype with bits split half.
 
 | Function | dtype | dULP=0 (exact) | dULP=1 | dULP=2 | dULP=3 | dULP>3 | Notes |
 | -------- | ----- | -------------- | ------ | ------ | ------ | ------ | ----- |
@@ -91,6 +94,10 @@ numpy <function>".
 | log1p<sup>3</sup> | complex64 | 902287 | 97840<sup>41454</sup> | 1582<sup>44</sup> | 102 | 190 | - |
 | log1p<sup>1</sup> | complex128 | 801864 | 200067<sup>188447</sup> | 64<sup>10</sup> | 6 | - | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
-| tan | complex64 | 817727 | 159602 | 21188 | 2958 | 526 | using upcast tan |
+| tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |
+| tan | complex64 | 783679 | 197584 | 19902 | 776 | 60 | using native tan |
+| tan<sub>2</sub> | complex64 | 1001417 | 584 | - | - | - | using upcast tan, native tan |
 | tanh | float32 | 985109 | 14892 | - | - | - | using native tanh |
-| tanh | complex64 | 779679 | 197584 | 19902 | 776 | 4060 | using native tanh |
+| tanh<sub>2</sub> | float32 | 1000001 | - | - | - | - | using native tanh, upcast tanh |
+| tanh | complex64 | 783679 | 197584 | 19902 | 776 | 60 | using native tanh |
+| tanh<sub>2</sub> | complex64 | 1001417 | 584 | - | - | - | using native tanh, upcast tanh |

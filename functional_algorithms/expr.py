@@ -304,7 +304,10 @@ class Expr:
                 paths = ":".join([m.__name__ for m in self.context._paths])
                 raise NotImplementedError(f'{self.kind} for {target.__name__.split(".")[-1]} target [paths={paths}]')
 
-            result = self.context.call(func, self.operands).implement_missing(target)
+            result = self.context.call(func, self.operands)
+            if self._serialized == result._serialized:
+                return self
+            result = result.implement_missing(target)
         else:
             operands = tuple([operand.implement_missing(target) for operand in self.operands])
             for o1, o2 in zip(operands, self.operands):
