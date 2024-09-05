@@ -203,8 +203,10 @@ class Context:
     # Python operator for naming conventions, logical operator names
     # use also CamelCase
 
-    def abs(self, x):
+    def absolute(self, x):
         return Expr(self, "abs", (x,))
+
+    abs = absolute
 
     def negative(self, x):
         return Expr(self, "negative", (x,))
@@ -426,3 +428,9 @@ class Context:
 
     def select(self, cond, x, y):
         return Expr(self, "select", (cond, x, y))
+
+    def upcast(self, x):
+        return Expr(self, "upcast", (x,))
+
+    def downcast(self, x):
+        return Expr(self, "downcast", (x,))

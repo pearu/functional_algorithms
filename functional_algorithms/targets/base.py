@@ -98,10 +98,13 @@ class PrinterBase:
                 raise NotImplementedError(
                     f"{type(self).__module__}.{type(self).__name__}.kind_to_target does not implement `{expr.kind}`"
                 )
-            m = dict()
-            for i in range(len(expr.operands)):
-                m["typeof_0"] = self.get_type(expr.operands[i])
-            result = tmpl.format(*[self.tostring(operand) for operand in expr.operands], **m)
+            if callable(tmpl):
+                result = tmpl(self, expr)
+            else:
+                m = dict()
+                for i in range(len(expr.operands)):
+                    m["typeof_0"] = self.get_type(expr.operands[i])
+                result = tmpl.format(*[self.tostring(operand) for operand in expr.operands], **m)
 
         assert expr.ref is not None
 

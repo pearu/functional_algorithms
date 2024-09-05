@@ -706,4 +706,10 @@ class Expr:
             t = self.operands[0].get_type().max(self.operands[1].get_type())
             bits = t.bits * 2 if t.bits is not None else None
             return Type(self.context, "complex", bits)
+        elif self.kind == "upcast":
+            t = self.operands[0].get_type()
+            return Type(self.context, t.kind, t.bits * 2 if t.bits is not None else None)
+        elif self.kind == "downcast":
+            t = self.operands[0].get_type()
+            return Type(self.context, t.kind, t.bits // 2 if t.bits is not None else None)
         raise NotImplementedError((self.kind, str(self)))
