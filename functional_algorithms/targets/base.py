@@ -3,6 +3,35 @@ import warnings
 from ..expr import Expr
 
 
+def modifier_base(target, expr):
+    if expr.kind in {"symbol", "constant", "apply"}:
+        pass
+    elif target.kind_to_target.get(expr.kind, NotImplemented) is NotImplemented:
+
+        ctx = expr.context
+        if ctx.parameters.get(f"use_native_{expr.kind}", False):
+            raise NotImplementedError(f'{target.__name__.split(".")[-1]} target does not define native {expr.kind}')
+
+        func = NotImplemented
+        for m in expr.context._paths:
+            func = getattr(m, expr.kind, NotImplemented)
+            if func is not NotImplemented:
+                break
+        if func is NotImplemented:
+            paths = ":".join([m.__name__ for m in expr.context._paths])
+            raise NotImplementedError(f'{expr.kind} for {target.__name__.split(".")[-1]} target [paths={paths}]')
+
+        result = expr.context.call(func, expr.operands)
+        if expr._serialized != result._serialized:
+            # We will call rewrite again because when func result is a
+            # new expression then it needs to be rewritten as
+            # well. However, we don't know what was the user-specifed
+            # deep_first value. FIX ME: call rewrite with
+            # user-specified deep_first value.
+            return result.rewrite(target, deep_first=True)
+    return expr
+
+
 class PrinterBase:
 
     force_cast_arguments = False

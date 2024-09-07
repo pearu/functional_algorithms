@@ -65,50 +65,21 @@ class definition:
 
             @functools.wraps(func)
             def wrapper(ctx, *args, **kwargs):
-                if ctx.parameters.get(f"use_native_{self.native_func_name}", False):
-                    ctx.parameters["using"].add(f"native {self.native_func_name}")
-                    defn = getattr(type(ctx), self.native_func_name)
-                else:
-                    domain = "complex" if args[0].is_complex else "real"
-                    defn = self._registry[domain].get(self.native_func_name)
-                    if defn is None:
-                        raise NotImplementedError(
-                            f"definition for {domain} {self.native_func_name} is not provided in algorithms"
-                        )
+                domain = "complex" if args[0].is_complex else "real"
+                defn = self._registry[domain].get(self.native_func_name)
+                if defn is None:
+                    raise NotImplementedError(f"definition for {domain} {self.native_func_name} is not provided in algorithms")
 
-                if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
-                    ctx.parameters["using"].add(f"upcast {self.native_func_name}")
-                    assert len(args) == 1, args
-                    args = (ctx.upcast(args[0]),)
-
-                result = defn(ctx, *args, **kwargs)
-
-                if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
-                    result = ctx.downcast(result)
-
-                return result
+                return defn(ctx, *args, **kwargs)
 
             return wrapper
 
         @functools.wraps(func)
         def wrapper(ctx, *args, **kwargs):
-            if ctx.parameters.get(f"use_native_{self.native_func_name}", False):
-                ctx.parameters["using"].add(f"native {self.native_func_name}")
-                func_ = getattr(type(ctx), self.native_func_name)
-            else:
-                func_ = func
 
-            if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
-                ctx.parameters["using"].add(f"upcast {self.native_func_name}")
-                assert len(args) == 1, args
-                args = (ctx.upcast(args[0]),)
-
-            result = func_(ctx, *args, **kwargs)
+            result = func(ctx, *args, **kwargs)
             if result is NotImplemented:
                 raise NotImplementedError(f"{self.native_func_name} not implemented for {self.domain} domain: {func.__name__}")
-
-            if ctx.parameters.get(f"use_upcast_{self.native_func_name}", False):
-                return ctx.downcast(result)
 
             return result
 
@@ -1136,8 +1107,23 @@ def atan(ctx, z: complex | float):
     assert 0  # unreachable
 
 
+@definition("sin")
+def sin(ctx, z: float):
+    assert 0  # unreachable
+
+
+@definition("cos")
+def cos(ctx, z: float):
+    assert 0  # unreachable
+
+
 @definition("tan", domain="real")
-def real_tan(ctx, z: complex | float):
+def real_naive_tan(ctx, z: float):
+    return ctx.sin(z) / ctx.cos(z)
+
+
+@definition("tan", domain="real")
+def real_tan(ctx, z: float):
     return NotImplemented
 
 

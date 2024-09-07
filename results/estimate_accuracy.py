@@ -1,3 +1,4 @@
+import functools
 import os
 import numpy as np
 import functional_algorithms as fa
@@ -108,6 +109,8 @@ def get_inputs():
         ("tanh", np.complex64, dict(use_native_tanh=True)),
         ("tanh", np.complex64, dict(use_native_tanh=True, use_upcast_tanh=True)),
         # ("tanh", np.complex128, {}),  # tanh is not implemented
+        ("real_naive_tan", np.float32, dict()),
+        ("real_naive_tan", np.float32, dict(use_upcast_sin=True, use_upcast_cos=True)),
     ]:
         validation_parameters = fa.utils.function_validation_parameters(func_name, dtype)
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]
@@ -215,8 +218,22 @@ Finally,
             continue
         print(f"{row_prefix}")
         ctx = fa.Context(paths=[fa.algorithms], parameters=parameters)
-        graph = ctx.trace(getattr(fa.algorithms, func_name), dtype)
-        graph2 = graph.implement_missing(fa.targets.numpy).simplify()
+
+        impl = getattr(fa.algorithms, func_name)
+
+        if ctx.parameters.get(f"use_native_{func_name}", False):
+            ctx.parameters["using"].add(f"native {func_name}")
+
+            @functools.wraps(impl)
+            def impl(ctx, *args, **kwargs):
+                return getattr(ctx, func_name)(*args, **kwargs)
+
+        graph = ctx.trace(impl, dtype)
+        graph2 = graph.rewrite(
+            fa.targets.numpy,  # implement missing functions
+            ctx,  # applies use_upcast
+            fa.rewrite,  # simplifies
+        )
         func = fa.targets.numpy.as_function(graph2, debug=0)
         max_valid_ulp_count = validation_parameters["max_valid_ulp_count"]
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]
@@ -224,9 +241,15 @@ Finally,
 
         reference = getattr(
             fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=flush_subnormals),
-            dict(real_asinh="asinh", real_asinh_2="asinh", acos="arccos", asin="arcsin", asinh="arcsinh", acosh="arccosh").get(
-                func_name, func_name
-            ),
+            dict(
+                real_asinh="asinh",
+                real_asinh_2="asinh",
+                acos="arccos",
+                asin="arcsin",
+                asinh="arcsinh",
+                acosh="arccosh",
+                real_naive_tan="tan",
+            ).get(func_name, func_name),
         )
 
         if dtype in {np.complex64, np.complex128}:

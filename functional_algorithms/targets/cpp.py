@@ -1,7 +1,7 @@
 import warnings
 
-from . import xla_client as this_module
-from .base import PrinterBase
+from . import cpp as this_module
+from .base import PrinterBase, modifier_base
 from .. import utils
 
 constant_target = this_module
@@ -33,6 +33,10 @@ trace_arguments = dict(
 )
 
 source_file_extension = ".cpp"
+
+
+def __rewrite_modifier__(expr):
+    return modifier_base(this_module, expr)
 
 
 def make_comment(message):

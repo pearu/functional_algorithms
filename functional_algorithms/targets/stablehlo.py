@@ -2,6 +2,7 @@ import warnings
 
 from . import stablehlo as this_module
 from ..expr import Expr
+from .base import modifier_base
 
 constant_target = this_module
 
@@ -24,6 +25,10 @@ trace_arguments = dict(
 
 
 source_file_extension = ".td"
+
+
+def __rewrite_modifier__(expr):
+    return modifier_base(this_module, expr)
 
 
 def make_comment(message):
