@@ -168,6 +168,19 @@ class Context:
         name = self.symbol(func.__name__).reference(ref_name=func.__name__)
         return make_apply(self, name, args, func(self, *args))
 
+    def __rewrite_modifier__(self, expr):
+        """Used to rewrite expressions based on context parameters."""
+        ctx = expr.context
+        if ctx.parameters.get(f"use_upcast_{expr.kind}", False):
+            ctx.parameters["using"].add(f"upcast {expr.kind}")
+            operands = tuple([ctx.upcast(operand) for operand in expr.operands])
+            return self.downcast(Expr(ctx, expr.kind, operands))
+        if ctx.parameters.get(f"use_downcast_{expr.kind}", False):
+            ctx.parameters["using"].add(f"downcast {expr.kind}")
+            operands = tuple([ctx.downcast(operand) for operand in expr.operands])
+            return self.upcast(Expr(ctx, expr.kind, operands))
+        return expr
+
     def symbol(self, name, typ=UNSPECIFIED):
         if typ is UNSPECIFIED:
             like = self.default_like

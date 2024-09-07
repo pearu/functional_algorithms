@@ -5,7 +5,8 @@ import warnings
 
 from .. import utils
 from . import numpy as this_module
-from .base import PrinterBase
+from .base import PrinterBase, modifier_base
+
 
 constant_target = this_module
 
@@ -22,6 +23,10 @@ def make_complex(r, i):
   raise NotImplementedError((r.dtype, i.dtype))
 """
 )
+
+
+def __rewrite_modifier__(expr):
+    return modifier_base(this_module, expr)
 
 
 def upcast_func(target, expr):
@@ -138,7 +143,7 @@ kind_to_target = dict(
     imag="({0}).imag",
     complex="make_complex({0}, {1})",
     hypot=NotImplemented,
-    square=NotImplemented,
+    square="numpy.square({0})",
     sqrt="numpy.sqrt({0})",
     select="({1}) if ({0}) else ({2})",
     lt="({0}) < ({1})",
@@ -170,6 +175,7 @@ type_to_target = dict(
     float32="numpy.float32",
     float64="numpy.float64",
     float="numpy.float64",
+    float128="numpy.float128",
     complex64="numpy.complex64",
     complex128="numpy.complex128",
     complex="numpy.complex128",

@@ -2,7 +2,7 @@ import inspect
 import numpy
 import math
 import cmath
-from functional_algorithms import Context, targets, algorithms, utils
+from functional_algorithms import Context, targets, algorithms, utils, rewrite
 import pytest
 
 
@@ -54,7 +54,7 @@ def test_unary(dtype_name, unary_func_name, flush_subnormals):
     except NotImplementedError as msg:
         pytest.skip(reason=str(msg))
 
-    graph2 = graph.implement_missing(targets.numpy).simplify()
+    graph2 = graph.rewrite(targets.numpy, rewrite)
 
     func = targets.numpy.as_function(graph2, debug=0)
 
@@ -136,7 +136,7 @@ def test_binary(dtype_name, binary_func_name, flush_subnormals):
 
     graph = ctx.trace(getattr(algorithms, binary_func_name), dtype, dtype)
 
-    graph2 = graph.implement_missing(targets.numpy).simplify()
+    graph2 = graph.rewrite(targets.numpy, rewrite)
     func = targets.numpy.as_function(graph2, debug=1)
     reference = getattr(utils.numpy_with_mpmath(extra_prec_multiplier=10, flush_subnormals=flush_subnormals), binary_func_name)
 
@@ -161,7 +161,7 @@ def test_target(func_name, target_name):
     target = getattr(targets, target_name)
     ctx = Context(paths=[algorithms], enable_alt=dict(xla_client=True).get(target_name, False), default_constant_type="DType2")
     try:
-        graph = ctx.trace(getattr(algorithms, func_name)).implement_missing(target).simplify()
+        graph = ctx.trace(getattr(algorithms, func_name)).rewrite(target, rewrite)
     except NotImplementedError as msg:
         pytest.skip(reason=str(msg))
     src = graph.tostring(target)

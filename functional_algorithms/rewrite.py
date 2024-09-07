@@ -211,10 +211,14 @@ class Rewriter:
         pass
 
     def upcast(self, expr):
-        pass
+        (x,) = expr.operands
+        if x.kind == "downcast":
+            return x.operands[0]
 
     def downcast(self, expr):
-        pass
+        (x,) = expr.operands
+        if x.kind == "upcast":
+            return x.operands[0]
 
     def log(self, expr):
         (x,) = expr.operands
@@ -403,3 +407,8 @@ def rewrite(expr):
             break
 
     return last_result
+
+
+def __rewrite_modifier__(expr):
+    result = rewrite(expr)
+    return expr if result is None else result

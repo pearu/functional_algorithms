@@ -3,7 +3,7 @@ import sys
 import math
 from . import python as this_module
 from .. import utils
-from .base import PrinterBase
+from .base import PrinterBase, modifier_base
 
 constant_target = this_module
 
@@ -13,6 +13,10 @@ import math
 import sys
 """
 )
+
+
+def __rewrite_modifier__(expr):
+    return modifier_base(this_module, expr)
 
 
 trace_arguments = dict(

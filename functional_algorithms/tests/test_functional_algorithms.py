@@ -1,4 +1,4 @@
-from functional_algorithms import Context, targets, algorithms, utils
+from functional_algorithms import Context, targets, algorithms, utils, rewrite
 
 
 class TestImplementations:
@@ -38,13 +38,21 @@ class TestImplementations:
     def upcast_tan(ctx, x):
         return ctx.downcast(ctx.tan(ctx.upcast(x)))
 
+    @staticmethod
+    def tan(ctx, x):
+        return ctx.tan(x)
+
+    @staticmethod
+    def naive_tan(ctx, x):
+        return ctx.sin(x) / ctx.cos(x)
+
 
 def test_myhypot_stablehlo():
 
     ctx = Context(paths=[TestImplementations])
 
     graph = ctx.trace(TestImplementations.hypot)
-    graph1 = graph.implement_missing(targets.stablehlo)
+    graph1 = graph.rewrite(targets.stablehlo)
     graph1.props.update(name="CHLO_MyHypot")
 
     hlo = graph1.tostring(targets.stablehlo)
@@ -74,7 +82,7 @@ def test_myhypot_python():
 
     graph = ctx.trace(TestImplementations.hypot)
 
-    graph1 = graph.implement_missing(targets.python)
+    graph1 = graph.rewrite(targets.python)
     graph1.props.update(name="myhypot")
     py = graph1.tostring(targets.python, tab="")
 
@@ -96,7 +104,7 @@ def test_myhypot_xla_client():
 
     graph = ctx.trace(TestImplementations.hypot)
 
-    graph1 = graph.implement_missing(targets.xla_client)
+    graph1 = graph.rewrite(targets.xla_client)
 
     graph1.props.update(name="myhypot")
     py = graph1.tostring(targets.xla_client, tab="")
@@ -119,7 +127,7 @@ def test_myhypot_cpp():
 
     graph = ctx.trace(TestImplementations.hypot)
 
-    graph1 = graph.implement_missing(targets.cpp)
+    graph1 = graph.rewrite(targets.cpp)
     graph1.props.update(name="myhypot")
     py = graph1.tostring(targets.cpp, tab="")
 
@@ -141,7 +149,7 @@ def test_square_python():
 
     graph = ctx.trace(TestImplementations.square, "x")
 
-    graph1 = graph.implement_missing(targets.python)
+    graph1 = graph.rewrite(targets.python)
     py = graph1.tostring(targets.python, tab="")
 
     assert py == utils.format_python(
@@ -157,7 +165,7 @@ def test_complex_square_python():
 
     graph = ctx.trace(TestImplementations.square, complex)
 
-    graph1 = graph.implement_missing(targets.python)
+    graph1 = graph.rewrite(targets.python)
     py = graph1.tostring(targets.python, tab="")
 
     assert py == utils.format_python(
@@ -176,7 +184,7 @@ def test_complex_square_stablehlo():
 
     graph = ctx.trace(TestImplementations.square, complex)
 
-    graph1 = graph.implement_missing(targets.stablehlo)
+    graph1 = graph.rewrite(targets.stablehlo)
     shlo = graph1.tostring(targets.stablehlo, tab="")
 
     assert (
@@ -205,7 +213,7 @@ def test_readme_square_python():
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
 
-    graph1 = graph.implement_missing(targets.python)
+    graph1 = graph.rewrite(targets.python)
     py = graph1.tostring(targets.python, tab="")
 
     assert py == utils.format_python(
@@ -226,7 +234,7 @@ def test_readme_square_numpy_debug_0():
     ctx = Context(paths=[TestImplementations])
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
-    graph1 = graph.implement_missing(targets.numpy)
+    graph1 = graph.rewrite(targets.numpy)
     py = graph1.tostring(targets.numpy, tab="", debug=0)
 
     assert py == utils.format_python(
@@ -250,7 +258,7 @@ def test_readme_square_numpy_debug_1():
     ctx = Context(paths=[TestImplementations])
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
-    graph1 = graph.implement_missing(targets.numpy)
+    graph1 = graph.rewrite(targets.numpy)
     py = graph1.tostring(targets.numpy, tab="", debug=1)
 
     assert py == utils.format_python(
@@ -281,7 +289,7 @@ def test_readme_square_numpy_debug_2():
     ctx = Context(paths=[TestImplementations])
 
     graph = ctx.trace(TestImplementations.readme_square, complex)
-    graph1 = graph.implement_missing(targets.numpy)
+    graph1 = graph.rewrite(targets.numpy)
     py = graph1.tostring(targets.numpy, tab="", debug=2)
 
     assert py == utils.format_python(
@@ -319,7 +327,7 @@ def test_safe_min_xla_client():
 
     ctx = Context(paths=[TestImplementations], enable_alt=True, default_constant_type="MyDType")
     graph = ctx.trace(TestImplementations.safe_min, "y:XlaOp")
-    graph1 = graph.implement_missing(targets.xla_client)
+    graph1 = graph.rewrite(targets.xla_client)
 
     py = graph1.tostring(targets.xla_client, tab="")
 
@@ -340,7 +348,7 @@ def test_upcast_tan_numpy():
     ctx = Context(paths=[TestImplementations])
 
     graph = ctx.trace(TestImplementations.upcast_tan, numpy.float32)
-    graph1 = graph.implement_missing(targets.numpy)
+    graph1 = graph.rewrite(targets.numpy)
     py = graph1.tostring(targets.numpy, tab="", debug=0)
 
     assert py == utils.format_python(
@@ -349,5 +357,71 @@ def upcast_tan(x: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         x = numpy.float32(x)
         result = numpy.float32(numpy.tan(numpy.float64(x)))
+        return result"""
+    )
+
+    # test rewrite: upcast(downcast(x)) -> x
+    ctx = Context(paths=[TestImplementations], parameters=dict(use_downcast_tan=True))
+
+    graph = ctx.trace(TestImplementations.upcast_tan, numpy.float32)
+    graph1 = graph.rewrite(ctx, targets.numpy, rewrite)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def upcast_tan(x: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        x = numpy.float32(x)
+        result = numpy.tan(x)
+        return result"""
+    )
+
+
+def test_tan_numpy():
+    import numpy
+
+    ctx = Context(paths=[TestImplementations], parameters=dict(use_upcast_tan=True))
+
+    graph = ctx.trace(TestImplementations.tan, numpy.float32)
+    graph1 = graph.rewrite(targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def tan(x: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        x = numpy.float32(x)
+        result = numpy.tan(x)
+        return result"""
+    )
+
+    graph1 = graph.rewrite(ctx, targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def tan(x: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        x = numpy.float32(x)
+        result = numpy.float32(numpy.tan(numpy.float64(x)))
+        return result"""
+    )
+
+
+def test_naive_tan_numpy():
+    import numpy
+
+    ctx = Context(paths=[TestImplementations], parameters=dict(use_upcast_sin=True))
+
+    graph = ctx.trace(TestImplementations.naive_tan, numpy.float32)
+    graph1 = graph.rewrite(ctx, targets.numpy)
+    py = graph1.tostring(targets.numpy, tab="", debug=0)
+
+    assert py == utils.format_python(
+        """\
+def naive_tan(x: numpy.float32) -> numpy.float32:
+    with warnings.catch_warnings(action="ignore"):
+        x = numpy.float32(x)
+        result = (numpy.float32(numpy.sin(numpy.float64(x)))) / (numpy.cos(x))
         return result"""
     )

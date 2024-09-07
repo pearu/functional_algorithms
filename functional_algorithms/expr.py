@@ -2,7 +2,6 @@ import struct
 import warnings
 from .utils import UNSPECIFIED
 from .typesystem import Type
-from .rewrite import rewrite
 
 
 def normalize_like(expr):
@@ -278,71 +277,69 @@ class Expr:
         self.props.update(other=other)
         return other
 
-    def implement_missing(self, target):
-        if self.kind == "symbol":
-            return self
+    def rewrite(self, modifier, *modifiers, deep_first=None):
+        """Rewrite expression using modifier callable.
+
+        Parameters
+        ----------
+        modifier: {callable, object}
+          A callable that either returns a new expression or its
+          input. If the object has `__rewrite_modifier__` attribute,
+          then it will be used as the modifier callable.
+        modifiers: tuple
+          Extra modifiers to be applied to the result.
+        deep_first: bool
+          If True, the modifier is first applied to expression
+          operands and then to the expression itself.
+          If False, the modifier is first applied to expression and
+          only when the result is the same expression, the modifier is
+          applied to expression operands.
+
+        """
+        if modifiers:
+            result = self.rewrite(modifier, deep_first=deep_first)
+            for modifier_ in modifiers:
+                result = result.rewrite(modifier_, deep_first=deep_first)
+            return result
+
+        if hasattr(modifier, "__rewrite_modifier__"):
+            modifier = modifier.__rewrite_modifier__
+
+        if deep_first is None:
+            deep_first = True
+
+        result = self if deep_first else modifier(self)
+
+        if result is not self:
+            pass
+        elif self.kind == "symbol":
+            result = self
         elif self.kind == "constant":
-            like = self.operands[1].implement_missing(target)
+            like = self.operands[1].rewrite(modifier, deep_first=deep_first)
             value = self.operands[0]
             if isinstance(value, Expr):
-                value = value.implement_missing(target.constant_target)
+                value = value.rewrite(modifier, deep_first=deep_first)
             if value is self.operands[0] and like is self.operands[1]:
-                return self
-            result = make_constant(self.context, value, like)
-        elif self.kind == "apply":
-            body = self.operands[-1].implement_missing(target)
-            if body is self.operands[-1]:
-                return self
-            result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
-        elif target.kind_to_target.get(self.kind, NotImplemented) is NotImplemented:
-            func = NotImplemented
-            for m in self.context._paths:
-                func = getattr(m, self.kind, NotImplemented)
-                if func is not NotImplemented:
-                    break
-            if func is NotImplemented:
-                paths = ":".join([m.__name__ for m in self.context._paths])
-                raise NotImplementedError(f'{self.kind} for {target.__name__.split(".")[-1]} target [paths={paths}]')
-
-            result = self.context.call(func, self.operands)
-            if self._serialized == result._serialized:
-                return self
-            result = result.implement_missing(target)
-        else:
-            operands = tuple([operand.implement_missing(target) for operand in self.operands])
-            for o1, o2 in zip(operands, self.operands):
-                if o1 is not o2:
-                    break
+                result = self
             else:
-                return self
-            result = Expr(self.context, self.kind, operands)
-        return self._replace(result)
-
-    def simplify(self):
-        if self.kind in {"symbol", "constant"}:
-            return self
-
-        # result = rewrite(self)
-
-        # if result is not None:
-        #    return self._replace(result.simplify())
-        result = self
-
-        if self.kind == "apply":
-            body = self.operands[-1].simplify()
+                result = make_constant(self.context, value, like)
+        elif self.kind == "apply":
+            body = self.operands[-1].rewrite(modifier, deep_first=deep_first)
             if body is not self.operands[-1]:
                 result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
+            else:
+                result = self
         else:
-            operands = tuple([operand.simplify() for operand in self.operands])
-
+            operands = tuple([operand.rewrite(modifier, deep_first=deep_first) for operand in self.operands])
             for o1, o2 in zip(operands, self.operands):
                 if o1 is not o2:
                     result = Expr(self.context, self.kind, operands)
                     break
+            else:
+                result = self
 
-        result_ = rewrite(result)
-        if result_ is not None:
-            result = result_  # call simplify?
+        if deep_first:
+            result = modifier(result)
 
         return self._replace(result)
 
