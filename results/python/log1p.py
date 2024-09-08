@@ -1,14 +1,10 @@
-# This file is generated using functional_algorithms tool (0.4.0), see
+# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
 
 import math
 import sys
-
-
-def log1p_0(z: float) -> float:
-    return math.log1p(z)
 
 
 def log1p_1(z: complex) -> complex:

@@ -94,8 +94,19 @@ def get_inputs():
         ("log1p", np.complex64, dict(use_native_log1p=True)),
         ("log1p", np.complex128, {}),
         # ("tan", np.float32, dict()),  # real_tan is not implemented
-        ("tan", np.float32, dict(use_native_tan=True)),
-        ("tan", np.float32, dict(use_native_tan=True, use_upcast_tan=True)),
+        ("tan", np.float32, dict(use_native_tan=True)),  # tan(x)
+        ("tan", np.float32, dict(use_native_tan=True, use_upcast_tan=True)),  # float(tan(double(x)))
+        ("real_naive_tan", np.float32, dict()),  # sin(x)/cos(x)
+        (
+            "real_naive_tan",
+            np.float32,
+            dict(use_upcast_sin=True, use_upcast_cos=True),
+        ),  # float(sin(double(x))) / float(cos(double(x)))
+        (
+            "real_naive_tan",
+            np.float32,
+            dict(use_upcast_divide=True, use_upcast_sin=True, use_upcast_cos=True),
+        ),  # float(tan(double(x)) / cos(double(x)))
         # ("tan", np.float64, {}),  # real_tan is not implemented
         # ("tan", np.complex64, {}),  # tan is not implemented
         ("tan", np.complex64, dict(use_native_tan=True)),
@@ -109,8 +120,6 @@ def get_inputs():
         ("tanh", np.complex64, dict(use_native_tanh=True)),
         ("tanh", np.complex64, dict(use_native_tanh=True, use_upcast_tanh=True)),
         # ("tanh", np.complex128, {}),  # tanh is not implemented
-        ("real_naive_tan", np.float32, dict()),
-        ("real_naive_tan", np.float32, dict(use_upcast_sin=True, use_upcast_cos=True)),
     ]:
         validation_parameters = fa.utils.function_validation_parameters(func_name, dtype)
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]

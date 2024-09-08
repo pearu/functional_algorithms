@@ -1352,3 +1352,13 @@ def format_cpp(code):
         pathlib.Path(fp.name).unlink(missing_ok=True)
 
     return code
+
+
+_warn_once_cache = set()
+
+
+def warn_once(msg, stacklevel=1):
+    if msg in _warn_once_cache:
+        return
+    _warn_once_cache.add(msg)
+    warnings.warn(msg, stacklevel=stacklevel + 1)

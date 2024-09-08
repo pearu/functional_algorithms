@@ -5,7 +5,7 @@ import typing
 import warnings
 from collections import defaultdict
 from .utils import UNSPECIFIED
-from .expr import Expr, make_constant, make_symbol, make_apply
+from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
 from .typesystem import Type
 
 
@@ -41,6 +41,12 @@ class Context:
         self.parameters = parameters or {}
         if "using" not in self.parameters:
             self.parameters["using"] = set()
+
+        for k in self.parameters:
+            if k.startswith("use_upcast_") or k.startswith("use_downcast_") or k.startswith("use_native_"):
+                kind = k.split("_", 2)[-1]
+                if kind not in known_expression_kinds:
+                    warnings.warn(f"Context parameter with unknown kind: {k}")
 
     @property
     def alt(self):
@@ -219,7 +225,7 @@ class Context:
     # use also CamelCase
 
     def absolute(self, x):
-        return Expr(self, "abs", (x,))
+        return Expr(self, "absolute", (x,))
 
     abs = absolute
 
@@ -251,8 +257,8 @@ class Context:
 
     div = divide
 
-    def reminder(self, x, y):
-        return Expr(self, "reminder", (x, y))
+    def remainder(self, x, y):
+        return Expr(self, "remainder", (x, y))
 
     def floor_divide(self, x, y):
         return Expr(self, "floor_divide", (x, y))
@@ -284,8 +290,10 @@ class Context:
 
     Not = logical_not
 
-    def invert(self):
+    def bitwise_invert(self):
         return Expr(self, "bitwise_invert", (self,))
+
+    invert = bitwise_invert
 
     def bitwise_and(self, x, y):
         return Expr(self, "bitwise_and", (x, y))
@@ -417,11 +425,13 @@ class Context:
     def sign(self, x):
         return Expr(self, "sign", (x,))
 
-    def trunc(self, x):
-        return Expr(self, "trunc", (x,))
+    def truncate(self, x):
+        return Expr(self, "truncate", (x,))
 
-    def conj(self, x):
-        return Expr(self, "conj", (x,))
+    def conjugate(self, x):
+        return Expr(self, "conjugate", (x,))
+
+    conj = conjugate
 
     def real(self, x):
         return Expr(self, "real", (x,))

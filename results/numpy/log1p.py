@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.4.0), see
+# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -52,18 +52,4 @@ def log1p_1(z: numpy.complex64) -> numpy.complex64:
             + ((numpy.float32(0.5)) * (numpy.log1p((one) if (numpy.equal(mn, mx, dtype=numpy.bool_)) else ((r) * (r))))),
             numpy.arctan2(y, xp1),
         )
-        return result
-
-
-def log1p_2(z: numpy.float64) -> numpy.float64:
-    with warnings.catch_warnings(action="ignore"):
-        z = numpy.float64(z)
-        result = numpy.log1p(z)
-        return result
-
-
-def log1p_3(z: numpy.float32) -> numpy.float32:
-    with warnings.catch_warnings(action="ignore"):
-        z = numpy.float32(z)
-        result = numpy.log1p(z)
         return result

@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
+# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -25,8 +25,7 @@ def absolute_0(z: numpy.complex128) -> numpy.float64:
         mn: numpy.float64 = min(abs_x, abs_y)
         constant_2: numpy.float64 = numpy.float64(2)
         constant_1: numpy.float64 = numpy.float64(1)
-        mn_over_mx: numpy.float64 = (mn) / (mx)
-        r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
+        r: numpy.float64 = numpy.square((mn) / (mx))
         sqa: numpy.float64 = numpy.sqrt((constant_1) + (r))
         result = (
             ((numpy.sqrt(constant_2)) * (mx))
@@ -50,8 +49,7 @@ def absolute_1(z: numpy.complex64) -> numpy.float32:
         mn: numpy.float32 = min(abs_x, abs_y)
         constant_2: numpy.float32 = numpy.float32(2)
         constant_1: numpy.float32 = numpy.float32(1)
-        mn_over_mx: numpy.float32 = (mn) / (mx)
-        r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
+        r: numpy.float32 = numpy.square((mn) / (mx))
         sqa: numpy.float32 = numpy.sqrt((constant_1) + (r))
         result = (
             ((numpy.sqrt(constant_2)) * (mx))

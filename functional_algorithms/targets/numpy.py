@@ -90,14 +90,14 @@ def make_comment(message):
 
 
 kind_to_target = dict(
-    abs="numpy.abs({0})",
+    absolute="numpy.abs({0})",
     negative="-({0})",
     positive="+({0})",
     add="({0}) + ({1})",
     subtract="({0}) - ({1})",
     multiply="({0}) * ({1})",
     divide="({0}) / ({1})",
-    reminder="({0}) %% ({1})",
+    remainder="({0}) %% ({1})",
     floor_divide="({0}) // ({1})",
     pow="({0}) ** ({1})",
     logical_and="({0}) and ({1})",
@@ -108,7 +108,6 @@ kind_to_target = dict(
     bitwise_and="({0}) & ({1})",
     bitwise_or="({0}) | ({1})",
     bitwise_xor="({0}) ^ ({1})",
-    bitwise_not="!({0})",
     bitwise_left_shift="({0}) << ({1})",
     bitwise_right_shift="({0}) >> ({1})",
     maximum="max({0}, {1})",
@@ -137,8 +136,8 @@ kind_to_target = dict(
     copysign="numpy.copysign({0}, {1})",
     round=NotImplemented,
     sign="numpy.sign({0})",
-    trunc="numpy.trunc({0})",
-    conj="({0}).conjugate()",
+    truncate="numpy.trunc({0})",
+    conjugate="({0}).conjugate()",
     real="({0}).real",
     imag="({0}).imag",
     complex="make_complex({0}, {1})",
@@ -195,7 +194,7 @@ def as_function(graph, debug=0):
         warnings=warnings,
     )
     np = graph.tostring(this_module, debug=debug)
-    if debug >= 2:
+    if debug >= 2 or 1:
         print(np)
     exec(np, d)
     return d[graph.operands[0].operands[0]]
