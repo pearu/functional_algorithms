@@ -83,10 +83,10 @@ class Rewriter:
     def _notimpl(self, expr):
         print(f'NOTIMPL: rewrite {expr.kind}({", ".join(op.kind for op in expr.operands)})')
 
-    def abs(self, expr):
+    def absolute(self, expr):
         (x,) = expr.operands
 
-        if x.kind == "abs":
+        if x.kind == "absolute":
             return x
 
         if x.kind == "constant":
@@ -271,7 +271,7 @@ class Rewriter:
         if x.kind == "negative":
             return x.operands[0]
 
-    def conj(self, expr):
+    def conjugate(self, expr):
 
         (x,) = expr.operands
 
@@ -286,7 +286,7 @@ class Rewriter:
             real, imag = x.operands
             return x.context.complex(real, -imag)
 
-        if x.kind == "conj":
+        if x.kind == "conjugate":
             return x
 
     def real(self, expr):

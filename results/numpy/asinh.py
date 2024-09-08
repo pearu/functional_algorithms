@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.4.0), see
+# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -48,8 +48,7 @@ def asinh_0(z: numpy.complex128) -> numpy.complex128:
         _hypot_1_mx: numpy.float64 = max(abs_xp1, y)
         mn: numpy.float64 = min(abs_xp1, y)
         sqrt_two: numpy.float64 = numpy.sqrt(two)
-        mn_over_mx: numpy.float64 = (mn) / (_hypot_1_mx)
-        _hypot_1_r: numpy.float64 = (mn_over_mx) * (mn_over_mx)
+        _hypot_1_r: numpy.float64 = numpy.square((mn) / (_hypot_1_mx))
         sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_1_r))
         r: numpy.float64 = (
             ((sqrt_two) * (_hypot_1_mx))
@@ -63,8 +62,7 @@ def asinh_0(z: numpy.complex128) -> numpy.complex128:
         abs_xm1: numpy.float64 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float64 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float64 = min(abs_xm1, y)
-        _hypot_2_mn_over_mx: numpy.float64 = (_hypot_2_mn) / (_hypot_2_mx)
-        _hypot_2_r: numpy.float64 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
+        _hypot_2_r: numpy.float64 = numpy.square((_hypot_2_mn) / (_hypot_2_mx))
         _hypot_2_sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_2_r))
         s: numpy.float64 = (
             ((sqrt_two) * (_hypot_2_mx))
@@ -151,8 +149,7 @@ def asinh_1(z: numpy.complex64) -> numpy.complex64:
         _hypot_1_mx: numpy.float32 = max(abs_xp1, y)
         mn: numpy.float32 = min(abs_xp1, y)
         sqrt_two: numpy.float32 = numpy.sqrt(two)
-        mn_over_mx: numpy.float32 = (mn) / (_hypot_1_mx)
-        _hypot_1_r: numpy.float32 = (mn_over_mx) * (mn_over_mx)
+        _hypot_1_r: numpy.float32 = numpy.square((mn) / (_hypot_1_mx))
         sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_1_r))
         r: numpy.float32 = (
             ((sqrt_two) * (_hypot_1_mx))
@@ -166,8 +163,7 @@ def asinh_1(z: numpy.complex64) -> numpy.complex64:
         abs_xm1: numpy.float32 = numpy.abs(xm1)
         _hypot_2_mx: numpy.float32 = max(abs_xm1, y)
         _hypot_2_mn: numpy.float32 = min(abs_xm1, y)
-        _hypot_2_mn_over_mx: numpy.float32 = (_hypot_2_mn) / (_hypot_2_mx)
-        _hypot_2_r: numpy.float32 = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx)
+        _hypot_2_r: numpy.float32 = numpy.square((_hypot_2_mn) / (_hypot_2_mx))
         _hypot_2_sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_2_r))
         s: numpy.float32 = (
             ((sqrt_two) * (_hypot_2_mx))

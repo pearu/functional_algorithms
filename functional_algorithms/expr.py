@@ -1,7 +1,32 @@
 import struct
 import warnings
-from .utils import UNSPECIFIED
+from .utils import UNSPECIFIED, warn_once
 from .typesystem import Type
+
+
+known_expression_kinds = set(
+    """
+symbol, constant, apply, select,
+negative, positive, add, subtract, multiply, divide,
+minimum, maximum,
+asin, acos, atan, asinh, acosh, atanh, asin_acos_kernel, atan2,
+sin, cos, tan, sinh, cosh, tanh,
+log, log1p, log2, log10,
+exp, expm1, sqrt, square, pow,
+complex, conjugate, real, imag, absolute, hypot,
+lt, gt, le, ge, eq, ne,
+logical_and, logical_or, logical_xor, logical_not,
+bitwise_invert, bitwise_and, bitwise_or, bitwise_xor, bitwise_left_shift, bitwise_right_shift,
+ceil, floor, floor_divide, remainder, round, truncate,
+copysign, sign, nextafter,
+upcast, downcast,
+is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero
+""".replace(
+        " ", ""
+    )
+    .replace("\n", "")
+    .split(",")
+)
 
 
 def normalize_like(expr):
@@ -43,7 +68,7 @@ def normalize_like(expr):
             "asin_acos_kernel",
         }:
             expr = expr.operands[0]
-        elif expr.kind == "abs" and not expr.operands[0].is_complex:
+        elif expr.kind == "absolute" and not expr.operands[0].is_complex:
             expr = expr.operands[0]
         elif expr.kind == "real" and expr.operands[0].kind == "complex":
             expr = expr.operands[0].operands[0]
@@ -123,7 +148,8 @@ def make_ref(expr):
         if isinstance(expr.operands[0], Expr):
             return f"{expr.kind}_{make_ref(expr.operands[0])}"
         return f"{expr.kind}_{toidentifier(expr.operands[0])}"
-    lst = [expr.kind] + list(map(make_ref, expr.operands))
+    # using abs for BC
+    lst = ["abs" if expr.kind == "absolute" else expr.kind] + list(map(make_ref, expr.operands))
     return "_".join(lst)
 
 
@@ -186,6 +212,9 @@ class Printer:
 class Expr:
 
     def __new__(cls, context, kind, operands):
+        if kind not in known_expression_kinds:
+            warnings.warn(f"Constructing an expression with unknown kind: {kind}", stacklevel=2)
+
         obj = object.__new__(cls)
 
         if kind == "symbol":
@@ -276,6 +305,16 @@ class Expr:
         # but self can track to other reference if needed:
         self.props.update(other=other)
         return other
+
+    def implement_missing(self, target):
+        warn_once(f"Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
+        return self.rewrite(target)
+
+    def simplify(self):
+        warn_once(f"Calling `Expr.simplify()` is deprecated. Use `Expr.rewrite(rewrite)` instead.", stacklevel=2)
+        from . import rewrite
+
+        return self.rewrite(rewrite)
 
     def rewrite(self, modifier, *modifiers, deep_first=None):
         """Rewrite expression using modifier callable.
@@ -442,7 +481,7 @@ class Expr:
         return f"{type(self).__name__}({self.kind}, {self.operands}, {self.props})"
 
     def __abs__(self):
-        return self.context.abs(self)
+        return self.context.absolute(self)
 
     def __neg__(self):
         return self.context.negative(self)
@@ -490,10 +529,10 @@ class Expr:
         return self.context.pow(other, self)
 
     def __mod__(self, other):
-        return self.context.reminder(self, other)
+        return self.context.remainder(self, other)
 
     def __rmod__(self, other):
-        return self.context.reminder(other, self)
+        return self.context.remainder(other, self)
 
     def __and__(self, other):
         return self.context.bitwise_and(self, other)
@@ -546,7 +585,7 @@ class Expr:
         return self.context.imag(self)
 
     def conj(self):
-        return self.context.conj(self)
+        return self.context.conjugate(self)
 
     def __lt__(self, other):
         return self.context.lt(self, other)
@@ -591,7 +630,7 @@ class Expr:
             "ne",
             "real",
             "imag",
-            "abs",
+            "absolute",
             "logical_and",
             "logical_or",
             "logical_xor",
@@ -611,7 +650,7 @@ class Expr:
             "remainder",
         }:
             return False
-        elif self.kind in {"complex", "conj"}:
+        elif self.kind in {"complex", "conjugate"}:
             return True
         elif self.kind in {"add", "subtract", "divide", "multiply", "pow"}:
             return self.operands[0].is_complex or self.operands[1].is_complex
@@ -680,7 +719,7 @@ class Expr:
             "logical_not",
             "sign",
             "copysign",
-            "conj",
+            "conjugate",
             "asin_acos_kernel",
         }:
             return self.operands[0].get_type()
@@ -697,7 +736,7 @@ class Expr:
             "atan2",
         }:
             return self.operands[0].get_type().max(self.operands[1].get_type())
-        elif self.kind in {"abs", "real", "imag"}:
+        elif self.kind in {"absolute", "real", "imag"}:
             t = self.operands[0].get_type()
             return t.complex_part if t.is_complex else t
         elif self.kind == "select":

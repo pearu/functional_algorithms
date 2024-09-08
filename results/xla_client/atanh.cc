@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.4.0), see
+// This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -10,18 +10,12 @@
 
 
 template <typename FloatType>
-XlaOp atanh_0(XlaOp z) {
-  return Atanh(z);
-}
-
-template <typename FloatType>
 XlaOp atanh_1(XlaOp z) {
   XlaOp x = Real(z);
   FloatType zero_ = 0;
   XlaOp zero = ScalarLike(x, zero_);
-  FloatType one_ = 1;
-  XlaOp one = ScalarLike(x, one_);
-  XlaOp constant_negative_one_ = ScalarLike(x, -(one_));
+  XlaOp one = ScalarLike(x, 1);
+  XlaOp constant_constant_neg1 = ScalarLike(x, -1);
   XlaOp ax = Abs(x);
   FloatType constant_largest = std::numeric_limits<FloatType>::max();
   FloatType inv_negeps_ =
@@ -39,7 +33,7 @@ XlaOp atanh_1(XlaOp z) {
   XlaOp constant_constant_neginf =
       ScalarLike(x, -std::numeric_limits<FloatType>::infinity());
   return Complex(
-      Mul(Mul(Select(Ge(x, zero), one, constant_negative_one_),
+      Mul(Mul(Select(Ge(x, zero), one, constant_constant_neg1),
               Log1p(Mul(
                   ScalarLike(x, 4),
                   Select(
@@ -57,7 +51,7 @@ XlaOp atanh_1(XlaOp z) {
       Mul(Select(in_safe_region,
                  Atan2(Add(y, y), Sub(Mul(naxm1, Add(one, ax)), y2)),
                  Mul(Select(Ge(y, ScalarLike(y, zero_)), one,
-                            constant_negative_one_),
+                            constant_constant_neg1),
                      ScalarLike(x, M_PI))),
           ScalarLike(x, 0.5)));
 }

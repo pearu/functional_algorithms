@@ -38,7 +38,11 @@ for more information."""
         sources = []
         for i, atypes in enumerate(target.trace_arguments[func_name]):
             ctx = fa.Context(paths=[fa.algorithms], enable_alt=enable_alt, default_constant_type=default_constant_type)
-            graph = ctx.trace(func, *atypes).implement_missing(target).simplify()
+            try:
+                graph = ctx.trace(func, *atypes).implement_missing(target).simplify()
+            except NotImplementedError as msg:
+                print(msg)
+                continue
             graph.props.update(name=f"{func_name}_{i}")
             src = graph.tostring(target)
             sources.append(src)
