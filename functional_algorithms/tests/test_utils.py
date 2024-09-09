@@ -177,3 +177,32 @@ def test_complex_pair_samples(dtype):
                         r = im2[i :: s1[0], j :: s1[1]]
                         for j1 in range(r.shape[1]):
                             _check_real_samples(r[:, j1], **params)
+
+
+def test_periodic_samples(dtype):
+    for period in [1, 3.14, numpy.pi / 2]:
+        for size in [10, 11, 51]:
+            for periods in [4, 5, 13]:
+                samples = utils.periodic_samples(period=period, size=size, dtype=dtype, periods=periods)
+                assert samples.dtype == dtype
+                assert samples.size == size * periods
+                assert numpy.diff(samples).min() >= 0
+                assert numpy.diff(samples).max() > 0
+                for i in range(periods):
+                    samples_per_period = samples[i * size : (i + 1) * size]
+                    d = utils.diff_ulp(samples_per_period[:-1], samples_per_period[1:])
+                    if periods % 2 and i == periods // 2:
+                        # exclude zero:
+                        d1 = d[: size // 2 - 1]
+                        d2 = d[size // 2 + 1 :]
+                        assert numpy.diff(d1).min() >= -1
+                        assert numpy.diff(d1).max() <= 1
+
+                        assert numpy.diff(d2).min() >= -1
+                        assert numpy.diff(d2).max() <= 1
+                    else:
+                        assert numpy.diff(d).min() >= -1
+                        assert numpy.diff(d).max() <= 1
+
+                    p = samples_per_period[-1] - samples_per_period[0]
+                    assert p <= period * size / (size - 1) and p >= period * (size - 1) / size
