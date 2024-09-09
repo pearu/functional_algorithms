@@ -763,7 +763,8 @@ def real_samples(
     ----------
     size : int
       Initial size of the samples array. A minimum value is 6. The
-      actual size of the returned array may differ from size.
+      actual size of the returned array may differ from size, except
+      when both min/max_value are specified with the same sign.
     dtype:
       Floating-point type: float32, float64.
     include_infinity: bool
@@ -783,6 +784,7 @@ def real_samples(
       When min_value or max_value is specified, use for constructing
       uniform samples. Parameters include_infinity, include_nan,
       include_huge, and nonnegative are silently ignored.
+
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
@@ -791,7 +793,7 @@ def real_samples(
     fi = numpy.finfo(dtype)
     user_specified_bounds = min_value is not None or max_value is not None
     num = size // 2 if not nonnegative and not user_specified_bounds else size
-    if include_infinity:
+    if include_infinity and not user_specified_bounds:
         num -= 1
 
     min_pos_value = dtype(fi.smallest_subnormal if include_subnormal else fi.smallest_normal)
@@ -810,18 +812,28 @@ def real_samples(
 
     if user_specified_bounds:
         if min_value > 0:
-            return numpy.linspace(min_value.view(utype), max_value.view(utype), num=num, dtype=utype).view(dtype)
+            start, end = min_value.view(utype), max_value.view(utype)
+            step = int(end - start)
+            r = start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)
+            assert r.size == num
+            return r.view(dtype)
         if max_value < 0:
-            return -numpy.linspace(abs(max_value).view(utype), abs(min_value).view(utype), num=num, dtype=utype).view(dtype)
+            start, end = max_value.view(utype), min_value.view(utype)
+            step = int(end - start)
+            r = start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)
+            assert r.size == num
+            return r[::-1].view(dtype)
         neg_diff = diff_ulp(abs(min_value), min_pos_value)
         pos_diff = diff_ulp(abs(max_value), min_pos_value)
         neg_num = int(neg_diff * num / (neg_diff + pos_diff))
-        pos_num = num - neg_num
-        neg_part = -numpy.linspace(abs(min_value).view(utype), min_pos_value.view(utype), num=neg_num, dtype=utype).view(dtype)
-        pos_part = numpy.linspace(min_pos_value.view(utype), max_value.view(utype), num=pos_num, dtype=utype).view(dtype)
+        pos_num = num - neg_num - int(bool(include_zero))
+
+        neg_part = real_samples(size=neg_num, dtype=dtype, min_value=min_value, max_value=-min_pos_value)
+        pos_part = real_samples(size=pos_num, dtype=dtype, min_value=min_pos_value, max_value=max_value)
         if include_zero:
             return numpy.unique(numpy.concatenate([neg_part, numpy.array([0], dtype=dtype), pos_part]))
         return numpy.unique(numpy.concatenate([neg_part, pos_part]))
+
     if 1:
         # The following method gives a sample distibution that is
         # uniform with respect to ULP distance between positive
@@ -861,6 +873,42 @@ def real_samples(
     # Using unique because logspace produces repeated subnormals when
     # size is large
     return numpy.unique(numpy.concatenate(parts))
+
+
+def periodic_samples(
+    period=1,
+    size=10,
+    dtype=numpy.float32,
+    periods=5,
+    include_subnormal=False,
+):
+    """Return a 1-D array of real line samples that contains intervals of
+    length period distributed ULP-uniformly over the real line.
+    """
+    eps = dtype(numpy.finfo(dtype).epsneg)
+    # The number of floating-point values between x - period and x is
+    #   log2(x / (x-period)) / eps
+    # that must match with size for the largest sample x:
+    #   log2(max_value / (max_value - period)) == size * eps
+    # Hence:
+    max_value = dtype(period / (1 - 2 ** -(eps * size)))
+    left_points = []
+    left_points.extend(real_samples(size=periods // 2, min_value=-max_value, max_value=-period - period, dtype=dtype))
+    if periods % 2:
+        left_points.append(-period / dtype(2))
+    left_points.extend(real_samples(size=periods // 2, min_value=period, max_value=max_value - period, dtype=dtype))
+    return numpy.concatenate(
+        tuple(
+            real_samples(
+                size=size,
+                min_value=left_point,
+                max_value=left_point + period,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+            )
+            for left_point in left_points
+        )
+    )
 
 
 def complex_samples(
