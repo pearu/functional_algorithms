@@ -194,7 +194,7 @@ def as_function(graph, debug=0):
         warnings=warnings,
     )
     np = graph.tostring(this_module, debug=debug)
-    if debug >= 2 or 1:
+    if debug >= 2:
         print(np)
     exec(np, d)
     return d[graph.operands[0].operands[0]]
