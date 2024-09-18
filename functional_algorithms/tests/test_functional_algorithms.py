@@ -240,16 +240,16 @@ def test_readme_square_numpy_debug_0():
     assert py == utils.format_python(
         """\
 def readme_square(z: numpy.complex128) -> numpy.complex128:
-    with warnings.catch_warnings(action="ignore"):
-        z = numpy.complex128(z)
-        real_z: numpy.float64 = (z).real
-        x: numpy.float64 = numpy.abs(real_z)
-        y: numpy.float64 = numpy.abs((z).imag)
-        real_part: numpy.float64 = ((x) - (y)) * ((y) + (y))
-        real: numpy.float64 = (numpy.float64(0)) if (numpy.equal(x, y, dtype=numpy.bool_)) else (real_part)
-        imag: numpy.float64 = (numpy.float64(2)) * ((x) * (y))
-        result = make_complex(real, imag)
-        return result"""
+  with warnings.catch_warnings(action="ignore"):
+    z = numpy.complex128(z)
+    real_z: numpy.float64 = (z).real
+    x: numpy.float64 = numpy.abs(real_z)
+    y: numpy.float64 = numpy.abs((z).imag)
+    real_part: numpy.float64 = ((x) - (y)) * ((y) + (y))
+    real: numpy.float64 = (numpy.float64(0)) if (numpy.equal(x, y, dtype=numpy.bool_)) else (real_part)
+    imag: numpy.float64 = (numpy.float64(2)) * ((x) * (y))
+    result = make_complex(real, imag)
+    return result"""
     )
 
 

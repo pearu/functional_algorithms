@@ -6,6 +6,11 @@ from functional_algorithms import utils
 
 
 @pytest.fixture(scope="function", params=[numpy.float32, numpy.float64])
+def real_dtype(request):
+    return request.param
+
+
+@pytest.fixture(scope="function", params=[numpy.float32, numpy.float64, numpy.complex64, numpy.complex128])
 def dtype(request):
     return request.param
 
@@ -109,35 +114,35 @@ def _iter_samples_parameters():
         )
 
 
-def test_real_samples(dtype):
+def test_real_samples(real_dtype):
     for size in range(6, 20):
         for params in _iter_samples_parameters():
-            r = utils.real_samples(size=size, dtype=dtype, **params)
-            assert r.dtype == dtype
+            r = utils.real_samples(size=size, dtype=real_dtype, **params)
+            assert r.dtype == real_dtype
             _check_real_samples(r, **params)
 
 
-def test_complex_samples(dtype):
+def test_complex_samples(real_dtype):
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
         for params in _iter_samples_parameters():
-            r = utils.complex_samples(size=size, dtype=dtype, **params)
+            r = utils.complex_samples(size=size, dtype=real_dtype, **params)
             re, im = r.real, r.imag
-            assert re.dtype == dtype
-            assert im.dtype == dtype
+            assert re.dtype == real_dtype
+            assert im.dtype == real_dtype
             for i in range(r.shape[0]):
                 _check_real_samples(re[i], **params)
             for j in range(r.shape[1]):
                 _check_real_samples(im[:, j], **params)
 
 
-def test_real_pair_samples(dtype):
+def test_real_pair_samples(real_dtype):
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
         for params in _iter_samples_parameters():
-            s1 = utils.real_samples(size=size[0], dtype=dtype, **params).size
-            s2 = utils.real_samples(size=size[1], dtype=dtype, **params).size
-            r1, r2 = utils.real_pair_samples(size=size, dtype=dtype, **params)
-            assert r1.dtype == dtype
-            assert r2.dtype == dtype
+            s1 = utils.real_samples(size=size[0], dtype=real_dtype, **params).size
+            s2 = utils.real_samples(size=size[1], dtype=real_dtype, **params).size
+            r1, r2 = utils.real_pair_samples(size=size, dtype=real_dtype, **params)
+            assert r1.dtype == real_dtype
+            assert r2.dtype == real_dtype
             assert r1.size == s1 * s2
             assert r2.size == s1 * s2
             for r in r1.reshape(s2, s1):
@@ -146,17 +151,17 @@ def test_real_pair_samples(dtype):
                 _check_real_samples(r, **params)
 
 
-def test_complex_pair_samples(dtype):
+def test_complex_pair_samples(real_dtype):
     for size1 in [(6, 6), (6, 7)]:
         for size2 in [(6, 6), (7, 6)]:
             for params in _iter_samples_parameters():
-                s1 = utils.complex_samples(size=size1, dtype=dtype, **params).shape
-                s2 = utils.complex_samples(size=size2, dtype=dtype, **params).shape
-                r1, r2 = utils.complex_pair_samples(size=(size1, size2), dtype=dtype, **params)
+                s1 = utils.complex_samples(size=size1, dtype=real_dtype, **params).shape
+                s2 = utils.complex_samples(size=size2, dtype=real_dtype, **params).shape
+                r1, r2 = utils.complex_pair_samples(size=(size1, size2), dtype=real_dtype, **params)
                 re1, im1 = r1.real, r1.imag
                 re2, im2 = r2.real, r2.imag
-                assert re1.dtype == dtype
-                assert re2.dtype == dtype
+                assert re1.dtype == real_dtype
+                assert re2.dtype == real_dtype
                 assert r1.shape == (s1[0] * s2[0], s1[1] * s2[1])
                 assert r2.shape == (s1[0] * s2[0], s1[1] * s2[1])
 
@@ -179,12 +184,12 @@ def test_complex_pair_samples(dtype):
                             _check_real_samples(r[:, j1], **params)
 
 
-def test_periodic_samples(dtype):
+def test_periodic_samples(real_dtype):
     for period in [1, 3.14, numpy.pi / 2]:
         for size in [10, 11, 51]:
             for periods in [4, 5, 13]:
-                samples = utils.periodic_samples(period=period, size=size, dtype=dtype, periods=periods)
-                assert samples.dtype == dtype
+                samples = utils.periodic_samples(period=period, size=size, dtype=real_dtype, periods=periods)
+                assert samples.dtype == real_dtype
                 assert samples.size == size * periods
                 assert numpy.diff(samples).min() >= 0
                 assert numpy.diff(samples).max() > 0
@@ -206,3 +211,42 @@ def test_periodic_samples(dtype):
 
                     p = samples_per_period[-1] - samples_per_period[0]
                     assert p <= period * size / (size - 1) and p >= period * (size - 1) / size
+
+
+@pytest.fixture(scope="function", params=["mpmath", "jax"])
+def backend(request):
+    return request.param
+
+
+@pytest.fixture(scope="function", params=["cpu", "cuda"])
+def device(request):
+    return request.param
+
+
+def _square(x):
+    return x * x
+
+
+def test_vectorize_with_backend(backend, dtype, device):
+    pytest.importorskip(backend)
+
+    assert_equal = numpy.testing.assert_equal
+
+    vectorize_with_backend = getattr(utils, f"vectorize_with_{backend}")
+
+    if not vectorize_with_backend.backend_is_available(device):
+        pytest.skip(f"{device} support is unavailable")
+
+    func = vectorize_with_backend(_square, device=device)
+
+    arr = numpy.array([1, 2, 3], dtype=dtype)
+    arr2 = numpy.array([1, 2, 3], dtype=dtype)
+    expected = _square(arr)
+
+    def test(result):
+        assert isinstance(result, numpy.ndarray)
+        assert result.dtype == expected.dtype
+        assert_equal(result, expected)
+
+    test(func(arr))
+    test(func.call(arr, workers=2))
