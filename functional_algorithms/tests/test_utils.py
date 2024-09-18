@@ -240,7 +240,6 @@ def test_vectorize_with_backend(backend, dtype, device):
     func = vectorize_with_backend(_square, device=device)
 
     arr = numpy.array([1, 2, 3], dtype=dtype)
-    arr2 = numpy.array([1, 2, 3], dtype=dtype)
     expected = _square(arr)
 
     def test(result):
@@ -249,4 +248,30 @@ def test_vectorize_with_backend(backend, dtype, device):
         assert_equal(result, expected)
 
     test(func(arr))
-    test(func.call(arr, workers=2))
+    # Using call for JAX backend is slow and unreasonable, so
+    # multiprocessing is disabled for JAX:
+    test(func.call(arr, workers=1 if backend == "jax" else None))
+
+
+def test_numpy_with_backend(backend, dtype, device):
+    pytest.importorskip(backend)
+
+    assert_equal = numpy.testing.assert_equal
+
+    numpy_with_backend = getattr(utils, f"numpy_with_{backend}")(device=device)
+
+    func = numpy_with_backend.square
+
+    if not func.backend_is_available(device):
+        pytest.skip(f"{device} support is unavailable")
+
+    arr = numpy.array([1, 2, 3], dtype=dtype)
+
+    expected = numpy.square(arr)
+
+    def test(result):
+        assert isinstance(result, numpy.ndarray)
+        assert result.dtype == expected.dtype
+        assert_equal(result, expected)
+
+    test(func(arr))

@@ -349,6 +349,9 @@ class mpmath_array_api:
     mpmath bugs.
     """
 
+    def square(self, x):
+        return x * x
+
     def hypot(self, x, y):
         return x.context.hypot(x, y)
 
@@ -759,6 +762,29 @@ class numpy_with_mpmath:
             return worker(ctx, scale, exact, reference, value)
         else:
             assert 0  # unreachable
+
+
+class numpy_with_jax:
+    """Namespace of universal functions on numpy arrays that use jax
+    backend for evaluation and return numpy arrays as outputs.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+        import jax
+
+        vfunc = vectorize_with_jax(getattr(jax.numpy, name), **self.params)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
 
 
 def extra_samples(name, dtype):
