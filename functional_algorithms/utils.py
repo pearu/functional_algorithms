@@ -62,10 +62,11 @@ class vectorize_with_backend(numpy.vectorize):
         context = self.context_from_backend(sample)
         sample = self.numpy_to_backend(sample)
         with self.backend_context(context):
-            if isinstance(sample, tuple):
-                result = super().__call__(*sample)
-            else:
-                result = super().__call__(sample)
+            with warnings.catch_warnings(action="ignore"):
+                if isinstance(sample, tuple):
+                    result = super().__call__(*sample)
+                else:
+                    result = super().__call__(sample)
         return self.numpy_from_backend(result)
 
     def call(self, samples, workers=None, enable_progressbar=False):
@@ -115,7 +116,8 @@ class vectorize_with_backend(numpy.vectorize):
             mp_args.append(a)
 
         with self.backend_context(context):
-            result = super().__call__(*mp_args, **kwargs)
+            with warnings.catch_warnings(action="ignore"):
+                result = super().__call__(*mp_args, **kwargs)
 
         if isinstance(result, tuple):
             lst = []
@@ -222,7 +224,7 @@ class vectorize_with_mpmath(vectorize_with_backend):
                 return ctx.make_mpf(mpmath.libmp.fnan)
             elif numpy.isfinite(x):
                 mantissa, exponent = numpy.frexp(x)
-                man = int(numpy.ldexp(mantissa, prec))
+                man = int(mpmath.ldexp(mantissa, prec))
                 exp = int(exponent - prec)
                 r = ctx.make_mpf(mpmath.libmp.from_man_exp(man, exp, prec, rounding))
                 assert ctx.isfinite(r), r._mpf_
@@ -399,6 +401,8 @@ class mpmath_array_api:
 
     def conjugate(self, x):
         return x.context.conjugate(x)
+
+    conj = conjugate
 
     def sign(self, x):
         return x.context.sign(x)
@@ -787,6 +791,59 @@ class numpy_with_jax:
         return vfunc
 
 
+class numpy_with_numpy:
+    """Namespace of universal functions on numpy arrays that use numpy
+    backend for evaluation and return numpy arrays as outputs.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+        import numpy
+
+        vfunc = numpy.vectorize(getattr(numpy, name), **self.params)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
+
+
+class numpy_with_algorithms:
+    """Namespace of universal functions on numpy arrays that use
+    functional_algorithms definitions of algorithms.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(arcsinh="asinh", arccos="acos", arcsin="asin", arccosh="acosh", arctan="atan", arctanh="atanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+
+        import functional_algorithms as fa
+        import numpy
+
+        dtype = self.params["dtype"]
+        ctx = fa.Context(paths=[fa.algorithms])
+        graph = ctx.trace(getattr(fa.algorithms, name), dtype)
+        graph2 = graph.rewrite(fa.targets.numpy, fa.rewrite)
+        func = fa.targets.numpy.as_function(graph2, debug=0)
+        vfunc = numpy.vectorize(func)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
+
+
 def extra_samples(name, dtype):
     """Return a list of samples that are special to a given function.
 
@@ -923,7 +980,7 @@ def real_samples(
         raise ValueError(f"minimal value (={min_value}) cannot be greater than maximal value (={max_value})")
 
     if user_specified_bounds:
-        if min_value > 0:
+        if min_value >= 0:
             start, end = min_value.view(utype), max_value.view(utype)
             step = int(end - start)
             r = (start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)).view(dtype)
@@ -1446,6 +1503,12 @@ def function_validation_parameters(func_name, dtype):
     else:
         dtype_name = dtype.__name__
 
+    # If a function has symmetries, exclude superfluous samples by
+    # specifying a region of the function domain:
+    samples_limits = dict(
+        min_real_value=-numpy.inf, max_real_value=numpy.inf, min_imag_value=-numpy.inf, max_imag_value=numpy.inf
+    )
+
     # ulp_diff(func(sample), reference(sample)) <= max_valid_ulp_count
     max_valid_ulp_count = 3
 
@@ -1463,7 +1526,7 @@ def function_validation_parameters(func_name, dtype):
     # precision of mpmath to improve the accurancy of reference
     # values:
     extra_prec_multiplier = 1
-    if func_name in {"acos", "asin", "asinh", "acosh"}:
+    if func_name in {"acos", "asin", "asinh", "acosh", "atan", "atanh"}:
         extra_prec_multiplier = 20
     elif func_name == "sqrt":
         extra_prec_multiplier = 2
@@ -1478,6 +1541,7 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier=extra_prec_multiplier,
         max_valid_ulp_count=max_valid_ulp_count,
         max_bound_ulp_width=max_bound_ulp_width,
+        samples_limits=samples_limits,
     )
 
 
@@ -1532,3 +1596,68 @@ def warn_once(msg, stacklevel=1):
         return
     _warn_once_cache.add(msg)
     warnings.warn(msg, stacklevel=stacklevel + 1)
+
+
+class Clusters:
+
+    class Cluster:
+
+        def __init__(self):
+            self.points = set()
+
+        def contains(self, point):
+            for x, y in self.points:
+                for dx in {-1, 0, 1}:
+                    for dy in {-1, 0, 1}:
+                        if point == (x + dx, y + dy):
+                            return True
+            return False
+
+        def add(self, point):
+            self.points.add(point)
+
+        def merge_from(self, other):
+            self.points.update(other.points)
+
+        def __repr__(self):
+            return f"{type(self).__name__}({self.points})"
+
+        def center(self):
+            sx, sy = 0, 0
+            for x, y in self.points:
+                sx += x
+                sy += y
+            return (sx / len(self.points), sy / len(self.points))
+
+        def center_point(self):
+            cx, cy = self.center()
+            lst = []
+            for x, y in self.points:
+                lst.append((abs(x - cx) + abs(y - cy), (x, y)))
+            return sorted(lst)[0][1]
+
+    def __init__(self):
+        self.clusters = []
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.clusters})"
+
+    def add(self, point):
+        matching_clusters = []
+        for index, cluster in enumerate(self.clusters):
+            if cluster.contains(point):
+                matching_clusters.append(index)
+
+        if len(matching_clusters) == 0:
+            self.clusters.append(Clusters.Cluster())
+            self.clusters[-1].add(point)
+        elif len(matching_clusters) == 1:
+            self.clusters[matching_clusters[0]].add(point)
+        else:
+            cluster = self.clusters[matching_clusters[0]]
+            for index in reversed(matching_clusters[1:]):
+                cluster.merge_from(self.clusters[index])
+                del self.clusters[index]
+
+    def __iter__(self):
+        return iter(self.clusters)
