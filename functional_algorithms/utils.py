@@ -32,7 +32,108 @@ UNSPECIFIED = _UNSPECIFIED()
 default_flush_subnormals = False
 
 
-class vectorize_with_mpmath(numpy.vectorize):
+class vectorize_with_backend(numpy.vectorize):
+
+    @classmethod
+    def backend_is_available(cls, device):
+        return device == "cpu"
+
+    def __init__(self, *args, **kwargs):
+        self.device = kwargs.pop("device", "cpu")
+        super().__init__(*args, **kwargs)
+
+    @property
+    def backend_types(self):
+        raise NotImplemented(f"{type(self).__name__}.backend_types")
+
+    def backend_context(self, context):
+        raise NotImplemented(f"{type(self).__name__}.backend_context")
+
+    def numpy_to_backend(self, arr):
+        raise NotImplemented(f"{type(self).__name__}.numpy_to_backend")
+
+    def numpy_from_backend(self, obj):
+        raise NotImplemented(f"{type(self).__name__}.numpy_from_backend")
+
+    def context_from_backend(self, obj):
+        raise NotImplemented(f"{type(self).__name__}.context_from_backend")
+
+    def _call_eval(self, sample):
+        context = self.context_from_backend(sample)
+        sample = self.numpy_to_backend(sample)
+        with self.backend_context(context):
+            with warnings.catch_warnings(action="ignore"):
+                if isinstance(sample, tuple):
+                    result = super().__call__(*sample)
+                else:
+                    result = super().__call__(sample)
+        return self.numpy_from_backend(result)
+
+    def call(self, samples, workers=None, enable_progressbar=False):
+        """Apply function to samples using concurrency with the given number
+        of workers. When workers is None, use os.cpu_count() workers.
+
+        Using this method is unnecessary if the backend already
+        supports multithreading functions evaluations.
+        """
+        if workers is None:
+            workers = min(os.cpu_count(), len(samples))
+
+        if enable_progressbar:
+
+            def progress(iter, total):
+                yield from tqdm(iter, total=total)
+
+        else:
+
+            def progress(iter, total):
+                return iter
+
+        results = []
+        if workers > 1:
+            # cannot use the default `fork` start method with JAX:
+            ctx = multiprocessing.get_context("spawn" if isinstance(self, vectorize_with_jax) else "fork")
+            with ctx.Pool(workers) as p:
+                for result in p.starmap(self._call_eval, [(s,) for s in samples]):
+                    results.append(result)
+        else:
+            for sample in progress(samples, total=len(samples)):
+                results.append(self._call_eval(sample))
+        if results and isinstance(results[0], (numpy.number, numpy.ndarray)):
+            return numpy.array(results)
+        return results
+
+    def __call__(self, *args, **kwargs):
+        mp_args = []
+        context = None
+        for a in args:
+            if isinstance(a, (numpy.ndarray, numpy.floating, numpy.complexfloating)):
+                if context is None:
+                    context = self.context_from_backend(a)  # to be used as a __call__ context below
+                with self.backend_context(self.context_from_backend(a)):
+                    a = self.numpy_to_backend(a)
+                assert self.device.upper() in str(getattr(a, "device", "cpu")).upper()
+            mp_args.append(a)
+
+        with self.backend_context(context):
+            with warnings.catch_warnings(action="ignore"):
+                result = super().__call__(*mp_args, **kwargs)
+
+        if isinstance(result, tuple):
+            lst = []
+            for r in result:
+                if (isinstance(r, numpy.ndarray) and r.dtype.kind == "O") or isinstance(r, self.backend_types):
+                    r = self.numpy_from_backend(r)
+                lst.append(r)
+            return tuple(lst)
+
+        if (isinstance(result, numpy.ndarray) and result.dtype.kind == "O") or isinstance(result, self.backend_types):
+            return self.numpy_from_backend(result)
+
+        return result
+
+
+class vectorize_with_mpmath(vectorize_with_backend):
     """Same as numpy.vectorize but using mpmath backend for function evaluation."""
 
     map_float_to_complex = dict(
@@ -60,6 +161,7 @@ class vectorize_with_mpmath(numpy.vectorize):
         self._contexts = None
         self._contexts_inv = None
         super().__init__(*args, **kwargs)
+        assert self.device == "cpu", self.device
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -122,7 +224,7 @@ class vectorize_with_mpmath(numpy.vectorize):
                 return ctx.make_mpf(mpmath.libmp.fnan)
             elif numpy.isfinite(x):
                 mantissa, exponent = numpy.frexp(x)
-                man = int(numpy.ldexp(mantissa, prec))
+                man = int(mpmath.ldexp(mantissa, prec))
                 exp = int(exponent - prec)
                 r = ctx.make_mpf(mpmath.libmp.from_man_exp(man, exp, prec, rounding))
                 assert ctx.isfinite(r), r._mpf_
@@ -187,84 +289,70 @@ class vectorize_with_mpmath(numpy.vectorize):
 
         raise NotImplementedError(f"convert {type(x)} instance to numpy floating point type")
 
-    def _eval(self, sample, extraprec):
-        context = self.get_context(sample)
-        sample = self.nptomp(sample)
-        with context.extraprec(extraprec):
-            if isinstance(sample, tuple):
-                result = super().__call__(*sample)
-            else:
-                result = super().__call__(sample)
-        return self.mptonp(result)
+    def context_from_backend(self, sample):
+        return self.get_context(sample)
 
-    def call(self, samples, workers=None, enable_progressbar=False):
-        """Apply function to samples using concurrency with the given number
-        of workers. When workers is None, use os.cpu_count() workers.
-
-        """
-        if workers is None:
-            workers = min(os.cpu_count(), len(samples))
-
-        if enable_progressbar:
-
-            def progress(iter, total):
-                yield from tqdm(iter, total=total)
-
-        else:
-
-            def progress(iter, total):
-                return iter
-
-        context = self.get_context(samples[0])
+    def backend_context(self, context):
         extraprec = int(context.prec * self.extra_prec_multiplier) + self.extra_prec
-        samples_extraprec = [(s, extraprec) for s in samples]
-        results = []
-        if workers > 1:
-            with multiprocessing.Pool(workers) as p:
-                for result in p.starmap(self._eval, samples_extraprec):
-                    results.append(result)
-        else:
-            for sample, extraprec in progress(samples_extraprec, total=len(samples)):
-                results.append(self._eval(sample, extraprec))
-        if results and isinstance(results[0], (numpy.number, numpy.ndarray)):
-            return numpy.array(results)
-        return results
+        return context.extraprec(extraprec)
 
-    def __call__(self, *args, **kwargs):
-        mp_args = []
-        context = None
-        for a in args:
-            if isinstance(a, (numpy.ndarray, numpy.floating, numpy.complexfloating)):
-                mp_args.append(self.nptomp(a))
-                if context is None:
-                    context = self.get_context(a)
-                else:
-                    assert context is self.get_context(a), (context, self.get_context(a), a.dtype)
-            else:
-                mp_args.append(a)
+    def numpy_to_backend(self, arr):
+        return self.nptomp(arr)
 
-        extra_prec = int(context.prec * self.extra_prec_multiplier) + self.extra_prec
-        with context.extraprec(extra_prec):
-            result = super().__call__(*mp_args, **kwargs)
+    def numpy_from_backend(self, obj):
+        return self.mptonp(obj)
 
-        if isinstance(result, tuple):
-            lst = []
-            for r in result:
-                if (isinstance(r, numpy.ndarray) and r.dtype.kind == "O") or isinstance(r, mpmath.ctx_mp.mpnumeric):
-                    r = self.mptonp(r)
-                lst.append(r)
-            return tuple(lst)
+    @property
+    def backend_types(self):
+        return (mpmath.ctx_mp.mpnumeric,)
 
-        if (isinstance(result, numpy.ndarray) and result.dtype.kind == "O") or isinstance(result, mpmath.ctx_mp.mpnumeric):
-            return self.mptonp(result)
 
-        return result
+class vectorize_with_jax(vectorize_with_backend):
+
+    @classmethod
+    def backend_is_available(cls, device):
+        import jax
+
+        try:
+            return bool(jax.devices(device))
+        except RuntimeError:
+            return False
+
+    def __init__(self, *args, **kwargs):
+        self.device = kwargs.pop("device", "cpu")
+        super().__init__(*args, **kwargs)
+
+    def backend_context(self, context):
+        return context
+
+    def numpy_to_backend(self, arr):
+        import jax
+
+        return jax.numpy.array(arr)
+
+    def numpy_from_backend(self, obj):
+        return numpy.array(obj)
+
+    @property
+    def backend_types(self):
+        import jaxlib
+
+        return (jaxlib.xla_extension.ArrayImpl,)
+
+    def context_from_backend(self, sample):
+        import jax
+
+        jax.config.update("jax_enable_x64", sample.dtype.type in {numpy.float64, numpy.complex128})
+        return jax.default_device(jax.devices(self.device)[0])
 
 
 class mpmath_array_api:
     """Array API interface to mpmath functions including workarounds to
     mpmath bugs.
     """
+
+    def square(self, x):
+        return x * x
 
     def hypot(self, x, y):
         return x.context.hypot(x, y)
@@ -313,6 +401,8 @@ class mpmath_array_api:
 
     def conjugate(self, x):
         return x.context.conjugate(x)
+
+    conj = conjugate
 
     def sign(self, x):
         return x.context.sign(x)
@@ -678,6 +768,82 @@ class numpy_with_mpmath:
             assert 0  # unreachable
 
 
+class numpy_with_jax:
+    """Namespace of universal functions on numpy arrays that use jax
+    backend for evaluation and return numpy arrays as outputs.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+        import jax
+
+        vfunc = vectorize_with_jax(getattr(jax.numpy, name), **self.params)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
+
+
+class numpy_with_numpy:
+    """Namespace of universal functions on numpy arrays that use numpy
+    backend for evaluation and return numpy arrays as outputs.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+        import numpy
+
+        vfunc = numpy.vectorize(getattr(numpy, name), **self.params)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
+
+
+class numpy_with_algorithms:
+    """Namespace of universal functions on numpy arrays that use
+    functional_algorithms definitions of algorithms.
+    """
+
+    _vfunc_cache = dict()
+
+    def __init__(self, **params):
+        self.params = params
+
+    def __getattr__(self, name):
+        name = dict(arcsinh="asinh", arccos="acos", arcsin="asin", arccosh="acosh", arctan="atan", arctanh="atanh").get(
+            name, name
+        )
+        if name in self._vfunc_cache:
+            return self._vfunc_cache[name]
+
+        import functional_algorithms as fa
+        import numpy
+
+        dtype = self.params["dtype"]
+        ctx = fa.Context(paths=[fa.algorithms])
+        graph = ctx.trace(getattr(fa.algorithms, name), dtype)
+        graph2 = graph.rewrite(fa.targets.numpy, fa.rewrite)
+        func = fa.targets.numpy.as_function(graph2, debug=0)
+        vfunc = numpy.vectorize(func)
+        self._vfunc_cache[name] = vfunc
+        return vfunc
+
+
 def extra_samples(name, dtype):
     """Return a list of samples that are special to a given function.
 
@@ -814,7 +980,7 @@ def real_samples(
         raise ValueError(f"minimal value (={min_value}) cannot be greater than maximal value (={max_value})")
 
     if user_specified_bounds:
-        if min_value > 0:
+        if min_value >= 0:
             start, end = min_value.view(utype), max_value.view(utype)
             step = int(end - start)
             r = (start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)).view(dtype)
@@ -1337,6 +1503,12 @@ def function_validation_parameters(func_name, dtype):
     else:
         dtype_name = dtype.__name__
 
+    # If a function has symmetries, exclude superfluous samples by
+    # specifying a region of the function domain:
+    samples_limits = dict(
+        min_real_value=-numpy.inf, max_real_value=numpy.inf, min_imag_value=-numpy.inf, max_imag_value=numpy.inf
+    )
+
     # ulp_diff(func(sample), reference(sample)) <= max_valid_ulp_count
     max_valid_ulp_count = 3
 
@@ -1354,7 +1526,7 @@ def function_validation_parameters(func_name, dtype):
     # precision of mpmath to improve the accurancy of reference
     # values:
     extra_prec_multiplier = 1
-    if func_name in {"acos", "asin", "asinh", "acosh"}:
+    if func_name in {"acos", "asin", "asinh", "acosh", "atan", "atanh"}:
         extra_prec_multiplier = 20
     elif func_name == "sqrt":
         extra_prec_multiplier = 2
@@ -1369,6 +1541,7 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier=extra_prec_multiplier,
         max_valid_ulp_count=max_valid_ulp_count,
         max_bound_ulp_width=max_bound_ulp_width,
+        samples_limits=samples_limits,
     )
 
 
@@ -1423,3 +1596,68 @@ def warn_once(msg, stacklevel=1):
         return
     _warn_once_cache.add(msg)
     warnings.warn(msg, stacklevel=stacklevel + 1)
+
+
+class Clusters:
+
+    class Cluster:
+
+        def __init__(self):
+            self.points = set()
+
+        def contains(self, point):
+            for x, y in self.points:
+                for dx in {-1, 0, 1}:
+                    for dy in {-1, 0, 1}:
+                        if point == (x + dx, y + dy):
+                            return True
+            return False
+
+        def add(self, point):
+            self.points.add(point)
+
+        def merge_from(self, other):
+            self.points.update(other.points)
+
+        def __repr__(self):
+            return f"{type(self).__name__}({self.points})"
+
+        def center(self):
+            sx, sy = 0, 0
+            for x, y in self.points:
+                sx += x
+                sy += y
+            return (sx / len(self.points), sy / len(self.points))
+
+        def center_point(self):
+            cx, cy = self.center()
+            lst = []
+            for x, y in self.points:
+                lst.append((abs(x - cx) + abs(y - cy), (x, y)))
+            return sorted(lst)[0][1]
+
+    def __init__(self):
+        self.clusters = []
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.clusters})"
+
+    def add(self, point):
+        matching_clusters = []
+        for index, cluster in enumerate(self.clusters):
+            if cluster.contains(point):
+                matching_clusters.append(index)
+
+        if len(matching_clusters) == 0:
+            self.clusters.append(Clusters.Cluster())
+            self.clusters[-1].add(point)
+        elif len(matching_clusters) == 1:
+            self.clusters[matching_clusters[0]].add(point)
+        else:
+            cluster = self.clusters[matching_clusters[0]]
+            for index in reversed(matching_clusters[1:]):
+                cluster.merge_from(self.clusters[index])
+                del self.clusters[index]
+
+    def __iter__(self):
+        return iter(self.clusters)

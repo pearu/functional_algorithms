@@ -17,3 +17,4 @@ from . import algorithms
 from . import targets
 from .textimage import TextImage
 from . import rewrite
+from .signatures import filter_signatures

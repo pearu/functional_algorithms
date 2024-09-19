@@ -1,4 +1,3 @@
-import black
 import numpy
 import sys
 import warnings
