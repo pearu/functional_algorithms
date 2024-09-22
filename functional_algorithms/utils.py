@@ -34,6 +34,8 @@ default_flush_subnormals = False
 
 class vectorize_with_backend(numpy.vectorize):
 
+    pyfunc_is_vectorized = False
+
     @classmethod
     def backend_is_available(cls, device):
         return device == "cpu"
@@ -117,7 +119,10 @@ class vectorize_with_backend(numpy.vectorize):
 
         with self.backend_context(context):
             with warnings.catch_warnings(action="ignore"):
-                result = super().__call__(*mp_args, **kwargs)
+                if self.pyfunc_is_vectorized:
+                    result = self.pyfunc(*mp_args, **kwargs)
+                else:
+                    result = super().__call__(*mp_args, **kwargs)
 
         if isinstance(result, tuple):
             lst = []
@@ -309,6 +314,8 @@ class vectorize_with_mpmath(vectorize_with_backend):
 
 class vectorize_with_jax(vectorize_with_backend):
 
+    pyfunc_is_vectorized = True
+
     @classmethod
     def backend_is_available(cls, device):
         import jax
@@ -317,10 +324,6 @@ class vectorize_with_jax(vectorize_with_backend):
             return bool(jax.devices(device))
         except RuntimeError:
             return False
-
-    def __init__(self, *args, **kwargs):
-        self.device = kwargs.pop("device", "cpu")
-        super().__init__(*args, **kwargs)
 
     def backend_context(self, context):
         return context
