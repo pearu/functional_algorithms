@@ -36,7 +36,8 @@ def test_unary(unary_func_name, backend, device, dtype):
     max_valid_ulp_count = params["max_valid_ulp_count"]
     extra_prec_multiplier = params["extra_prec_multiplier"]
     samples_limits = params["samples_limits"]
-    include_subnormal = True
+    # JAX flushes subnormals to zero
+    include_subnormal = backend != "jax"
 
     mpmath = fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier)
 
@@ -90,8 +91,8 @@ def test_unary(unary_func_name, backend, device, dtype):
     timage.fill(0, 10, bulp > max_valid_ulp_count, symbol="!")
     timage.fill(0, 10, bulp > 100 * max_valid_ulp_count, symbol="E")
 
-    real_axis = samples[0:1, ::im_blocksize].real
-    imag_axis = samples[::re_blocksize, 0:1].imag
+    real_axis = samples[0:1, ::re_blocksize].real
+    imag_axis = samples[::im_blocksize, 0:1].imag
     timage.insert(0, 2, fa.TextImage.fromseq(imag_axis))
     timage.append(-1, 10, fa.TextImage.fromseq(real_axis[:, ::6], mintextwidth=5, maxtextwidth=5))
 
