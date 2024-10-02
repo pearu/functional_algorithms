@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.4.0), see
+// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -37,7 +37,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                   (StableHLO_AddOp
                     (StableHLO_SelectOp:$r
                       (StableHLO_CompareOp
-                       (StableHLO_MaxOp:$_hypot_1_mx
+                       (StableHLO_MaxOp:$mx
                          (StableHLO_AbsOp:$abs_xp1
                            (StableHLO_AddOp:$xp1 $x, $one)),
                          $y),
@@ -47,63 +47,63 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                       (StableHLO_MulOp
                         (StableHLO_SqrtOp:$sqrt_two
                           (StableHLO_ConstantLike<"2">:$two $signed_x)),
-                        $_hypot_1_mx),
+                        $mx),
                       (StableHLO_SelectOp
                         (StableHLO_AndOp
                           (StableHLO_CompareOp
                            (StableHLO_SqrtOp:$sqa
                              (StableHLO_AddOp
                                $one,
-                               (StableHLO_MulOp:$_hypot_1_r
-                                 (StableHLO_DivOp:$mn_over_mx $mn, $_hypot_1_mx),
+                               (StableHLO_MulOp:$r__0
+                                 (StableHLO_DivOp:$mn_over_mx $mn, $mx),
                                  $mn_over_mx))),
                            $one,
                             StableHLO_ComparisonDirectionValue<"EQ">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                           (StableHLO_CompareOp
-                           $_hypot_1_r,
+                           $r__0,
                            (StableHLO_ConstantLike<"0">:$zero $signed_x),
                             StableHLO_ComparisonDirectionValue<"GT">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
                         (StableHLO_AddOp
-                          $_hypot_1_mx,
+                          $mx,
                           (StableHLO_DivOp
-                            (StableHLO_MulOp $_hypot_1_mx, $_hypot_1_r),
+                            (StableHLO_MulOp $mx, $r__0),
                             $two)),
-                        (StableHLO_MulOp $_hypot_1_mx, $sqa))),
+                        (StableHLO_MulOp $mx, $sqa))),
                     (StableHLO_SelectOp:$s
                       (StableHLO_CompareOp
-                       (StableHLO_MaxOp:$_hypot_2_mx
+                       (StableHLO_MaxOp:$mx__0
                          (StableHLO_AbsOp:$abs_xm1
                            (StableHLO_SubtractOp:$xm1 $x, $one)),
                          $y),
-                       (StableHLO_MinOp:$_hypot_2_mn $abs_xm1, $y),
+                       (StableHLO_MinOp:$mn__0 $abs_xm1, $y),
                         StableHLO_ComparisonDirectionValue<"EQ">,
                         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
-                      (StableHLO_MulOp $sqrt_two, $_hypot_2_mx),
+                      (StableHLO_MulOp $sqrt_two, $mx__0),
                       (StableHLO_SelectOp
                         (StableHLO_AndOp
                           (StableHLO_CompareOp
-                           (StableHLO_SqrtOp:$_hypot_2_sqa
+                           (StableHLO_SqrtOp:$sqa__0
                              (StableHLO_AddOp
                                $one,
-                               (StableHLO_MulOp:$_hypot_2_r
-                                 (StableHLO_DivOp:$_hypot_2_mn_over_mx $_hypot_2_mn, $_hypot_2_mx),
-                                 $_hypot_2_mn_over_mx))),
+                               (StableHLO_MulOp:$r__1
+                                 (StableHLO_DivOp:$mn_over_mx__0 $mn__0, $mx__0),
+                                 $mn_over_mx__0))),
                            $one,
                             StableHLO_ComparisonDirectionValue<"EQ">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                           (StableHLO_CompareOp
-                           $_hypot_2_r,
+                           $r__1,
                            $zero,
                             StableHLO_ComparisonDirectionValue<"GT">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
                         (StableHLO_AddOp
-                          $_hypot_2_mx,
+                          $mx__0,
                           (StableHLO_DivOp
-                            (StableHLO_MulOp $_hypot_2_mx, $_hypot_2_r),
+                            (StableHLO_MulOp $mx__0, $r__1),
                             $two)),
-                        (StableHLO_MulOp $_hypot_2_mx, $_hypot_2_sqa))))),
+                        (StableHLO_MulOp $mx__0, $sqa__0))))),
                 $x)),
             (StableHLO_AddOp
               (StableHLO_DivOp
@@ -120,7 +120,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                 (StableHLO_AddOp:$spxm1 $s, $xm1))))))),
     (StableHLO_SelectOp
       (StableHLO_CompareOp
-       (StableHLO_SelectOp:$mx
+       (StableHLO_SelectOp:$mx__1
          (StableHLO_CompareOp:$y_gt_safe_max_opt
           $y,
           (StableHLO_SelectOp:$safe_max_opt
@@ -147,7 +147,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
       (StableHLO_AddOp
         (StableHLO_AddOp
           (StableHLO_LogOp $two),
-          (StableHLO_LogOp $mx)),
+          (StableHLO_LogOp $mx__1)),
         (StableHLO_MulOp
           $half,
           (StableHLO_Log1pOp

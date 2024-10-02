@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.4.0), see
+// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -34,10 +34,10 @@ double asinh_1(double z) {
 }
 
 std::complex<float> asinh_2(std::complex<float> z) {
-  float _asin_acos_kernel_1_signed_y = (z).real();
-  float y = std::abs(_asin_acos_kernel_1_signed_y);
-  float signed_y = (z).imag();
-  float x = std::abs(-(signed_y));
+  float signed_y = (z).real();
+  float y = std::abs(signed_y);
+  float signed_y__0 = (z).imag();
+  float x = std::abs(-(signed_y__0));
   float safe_max = (std::sqrt(std::numeric_limits<float>::max())) / (8);
   float safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
@@ -58,30 +58,28 @@ std::complex<float> asinh_2(std::complex<float> z) {
   float xp1 = (x) + (one);
   float xm1 = (x) - (one);
   float abs_xp1 = std::abs(xp1);
-  float _hypot_1_mx = std::max(abs_xp1, y);
+  float mx__0 = std::max(abs_xp1, y);
   float mn = std::min(abs_xp1, y);
   float sqrt_two = std::sqrt(two);
-  float mn_over_mx = (mn) / (_hypot_1_mx);
-  float _hypot_1_r = (mn_over_mx) * (mn_over_mx);
-  float sqa = std::sqrt((one) + (_hypot_1_r));
+  float mn_over_mx = (mn) / (mx__0);
+  float r__0 = (mn_over_mx) * (mn_over_mx);
+  float sqa = std::sqrt((one) + (r__0));
   float r =
-      (((_hypot_1_mx) == (mn))
-           ? ((sqrt_two) * (_hypot_1_mx))
-           : (((((sqa) == (one)) && ((_hypot_1_r) > (zero)))
-                   ? ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
-                   : ((_hypot_1_mx) * (sqa)))));
+      (((mx__0) == (mn)) ? ((sqrt_two) * (mx__0))
+                         : (((((sqa) == (one)) && ((r__0) > (zero)))
+                                 ? ((mx__0) + (((mx__0) * (r__0)) / (two)))
+                                 : ((mx__0) * (sqa)))));
   float abs_xm1 = std::abs(xm1);
-  float _hypot_2_mx = std::max(abs_xm1, y);
-  float _hypot_2_mn = std::min(abs_xm1, y);
-  float _hypot_2_mn_over_mx = (_hypot_2_mn) / (_hypot_2_mx);
-  float _hypot_2_r = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx);
-  float _hypot_2_sqa = std::sqrt((one) + (_hypot_2_r));
+  float mx__1 = std::max(abs_xm1, y);
+  float mn__0 = std::min(abs_xm1, y);
+  float mn_over_mx__0 = (mn__0) / (mx__1);
+  float r__1 = (mn_over_mx__0) * (mn_over_mx__0);
+  float sqa__0 = std::sqrt((one) + (r__1));
   float s =
-      (((_hypot_2_mx) == (_hypot_2_mn))
-           ? ((sqrt_two) * (_hypot_2_mx))
-           : (((((_hypot_2_sqa) == (one)) && ((_hypot_2_r) > (zero)))
-                   ? ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
-                   : ((_hypot_2_mx) * (_hypot_2_sqa)))));
+      (((mx__1) == (mn__0)) ? ((sqrt_two) * (mx__1))
+                            : (((((sqa__0) == (one)) && ((r__1) > (zero)))
+                                    ? ((mx__1) + (((mx__1) * (r__1)) / (two)))
+                                    : ((mx__1) * (sqa__0)))));
   float a = (half) * ((r) + (s));
   float ap1 = (a) + (one);
   float yy = (y) * (y);
@@ -99,7 +97,7 @@ std::complex<float> asinh_2(std::complex<float> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   float sq = std::sqrt((am1) * (ap1));
-  float _asin_acos_kernel_1_imag =
+  float imag__0 =
       (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(mx))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
@@ -108,10 +106,9 @@ std::complex<float> asinh_2(std::complex<float> z) {
                    : (std::log1p((am1) + (sq))))));
   float half_apx = (half) * ((a) + (x));
   return std::complex<float>(
-      (((_asin_acos_kernel_1_signed_y) < (0)) ? (-(_asin_acos_kernel_1_imag))
-                                              : (_asin_acos_kernel_1_imag)),
+      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)),
       std::atan2(
-          signed_y,
+          signed_y__0,
           (((std::max(x, y)) >= (safe_max))
                ? (y)
                : ((((x) <= (one))
@@ -121,10 +118,10 @@ std::complex<float> asinh_2(std::complex<float> z) {
 }
 
 std::complex<double> asinh_3(std::complex<double> z) {
-  double _asin_acos_kernel_1_signed_y = (z).real();
-  double y = std::abs(_asin_acos_kernel_1_signed_y);
-  double signed_y = (z).imag();
-  double x = std::abs(-(signed_y));
+  double signed_y = (z).real();
+  double y = std::abs(signed_y);
+  double signed_y__0 = (z).imag();
+  double x = std::abs(-(signed_y__0));
   double safe_max = (std::sqrt(std::numeric_limits<double>::max())) / (8);
   double safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
@@ -145,30 +142,28 @@ std::complex<double> asinh_3(std::complex<double> z) {
   double xp1 = (x) + (one);
   double xm1 = (x) - (one);
   double abs_xp1 = std::abs(xp1);
-  double _hypot_1_mx = std::max(abs_xp1, y);
+  double mx__0 = std::max(abs_xp1, y);
   double mn = std::min(abs_xp1, y);
   double sqrt_two = std::sqrt(two);
-  double mn_over_mx = (mn) / (_hypot_1_mx);
-  double _hypot_1_r = (mn_over_mx) * (mn_over_mx);
-  double sqa = std::sqrt((one) + (_hypot_1_r));
+  double mn_over_mx = (mn) / (mx__0);
+  double r__0 = (mn_over_mx) * (mn_over_mx);
+  double sqa = std::sqrt((one) + (r__0));
   double r =
-      (((_hypot_1_mx) == (mn))
-           ? ((sqrt_two) * (_hypot_1_mx))
-           : (((((sqa) == (one)) && ((_hypot_1_r) > (zero)))
-                   ? ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
-                   : ((_hypot_1_mx) * (sqa)))));
+      (((mx__0) == (mn)) ? ((sqrt_two) * (mx__0))
+                         : (((((sqa) == (one)) && ((r__0) > (zero)))
+                                 ? ((mx__0) + (((mx__0) * (r__0)) / (two)))
+                                 : ((mx__0) * (sqa)))));
   double abs_xm1 = std::abs(xm1);
-  double _hypot_2_mx = std::max(abs_xm1, y);
-  double _hypot_2_mn = std::min(abs_xm1, y);
-  double _hypot_2_mn_over_mx = (_hypot_2_mn) / (_hypot_2_mx);
-  double _hypot_2_r = (_hypot_2_mn_over_mx) * (_hypot_2_mn_over_mx);
-  double _hypot_2_sqa = std::sqrt((one) + (_hypot_2_r));
+  double mx__1 = std::max(abs_xm1, y);
+  double mn__0 = std::min(abs_xm1, y);
+  double mn_over_mx__0 = (mn__0) / (mx__1);
+  double r__1 = (mn_over_mx__0) * (mn_over_mx__0);
+  double sqa__0 = std::sqrt((one) + (r__1));
   double s =
-      (((_hypot_2_mx) == (_hypot_2_mn))
-           ? ((sqrt_two) * (_hypot_2_mx))
-           : (((((_hypot_2_sqa) == (one)) && ((_hypot_2_r) > (zero)))
-                   ? ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
-                   : ((_hypot_2_mx) * (_hypot_2_sqa)))));
+      (((mx__1) == (mn__0)) ? ((sqrt_two) * (mx__1))
+                            : (((((sqa__0) == (one)) && ((r__1) > (zero)))
+                                    ? ((mx__1) + (((mx__1) * (r__1)) / (two)))
+                                    : ((mx__1) * (sqa__0)))));
   double a = (half) * ((r) + (s));
   double ap1 = (a) + (one);
   double yy = (y) * (y);
@@ -186,7 +181,7 @@ std::complex<double> asinh_3(std::complex<double> z) {
       ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
                                             : (x_ge_1_or_not));
   double sq = std::sqrt((am1) * (ap1));
-  double _asin_acos_kernel_1_imag =
+  double imag__0 =
       (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(mx))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
@@ -195,10 +190,9 @@ std::complex<double> asinh_3(std::complex<double> z) {
                    : (std::log1p((am1) + (sq))))));
   double half_apx = (half) * ((a) + (x));
   return std::complex<double>(
-      (((_asin_acos_kernel_1_signed_y) < (0)) ? (-(_asin_acos_kernel_1_imag))
-                                              : (_asin_acos_kernel_1_imag)),
+      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)),
       std::atan2(
-          signed_y,
+          signed_y__0,
           (((std::max(x, y)) >= (safe_max))
                ? (y)
                : ((((x) <= (one))

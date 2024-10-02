@@ -1,12 +1,9 @@
-// This file is generated using functional_algorithms tool (0.4.0), see
+// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
 
 
-
-def : Pat<(atanh_0 NonComplexElementType:$z),
-  (CHLO_AtanhOp $z)>;
 
 def : Pat<(atanh_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
