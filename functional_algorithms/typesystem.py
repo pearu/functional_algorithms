@@ -1,4 +1,5 @@
 import string
+import numpy
 
 
 class Type:
@@ -34,7 +35,6 @@ class Type:
                 kind = "type"
             else:
                 return cls(context, "type", obj)
-                raise ValueError(f"expected string starting with float|complex|int|bool|type, got {obj}")
             bits = obj.strip(string.ascii_letters) or None
             if bits:
                 bits = int(bits)
@@ -53,6 +53,8 @@ class Type:
             return cls(context, "boolean", None)
         elif isinstance(obj, Expr):
             return cls(context, "type", obj)
+        elif issubclass(obj, numpy.number):
+            return cls.fromobject(context, obj.__name__)
 
         raise NotImplementedError(type(obj))
 
@@ -116,3 +118,6 @@ class Type:
 
     def is_same_kind(self, other):
         return self.kind == other.kind
+
+    def asdtype(self):
+        return getattr(numpy, str(self), None)

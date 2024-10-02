@@ -1,5 +1,7 @@
 import math
+import numpy
 from . import expr as _expr
+from .utils import number_types, value_types, float_types, complex_types
 
 
 class Printer:
@@ -83,6 +85,17 @@ class Rewriter:
     def _notimpl(self, expr):
         print(f'NOTIMPL: rewrite {expr.kind}({", ".join(op.kind for op in expr.operands)})')
 
+    def _eval(self, like, opname, *args):
+        typ = like.get_type()
+        if typ.bits is not None:
+            dtype = typ.asdtype()
+            if dtype is not None:
+                op = getattr(numpy, opname)
+                return like.context.constant(op(*map(dtype, args)), like)
+        if typ.kind == "float":
+            op = getattr(math, opname)
+            return like.context.constant(op(*args), like)
+
     def absolute(self, expr):
         (x,) = expr.operands
 
@@ -91,7 +104,7 @@ class Rewriter:
 
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)):
+            if isinstance(value, value_types):
                 return x.context.constant(abs(value), like)
 
     def apply(self, expr):
@@ -149,7 +162,7 @@ class Rewriter:
             xvalue, xlike = x.operands
             yvalue, ylike = y.operands
 
-            if isinstance(xvalue, (int, float)) and isinstance(yvalue, (int, float)):
+            if isinstance(xvalue, number_types) and isinstance(yvalue, number_types):
                 r = op(xvalue, yvalue)
                 return expr.context.constant(r, xlike)
 
@@ -162,7 +175,7 @@ class Rewriter:
         for x_, y_ in [(x, y), (y, x)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, (int, float)) and value == 0:
+                if isinstance(value, number_types) and value == 0:
                     return y_
 
     def subtract(self, expr):
@@ -175,7 +188,7 @@ class Rewriter:
         for x_, y_, s in [(x, y, -1), (y, x, 1)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, (int, float)) and value == 0:
+                if isinstance(value, number_types) and value == 0:
                     return -y_ if s == -1 else y_
 
     def multiply(self, expr):
@@ -188,7 +201,7 @@ class Rewriter:
         for x_, y_ in [(x, y), (y, x)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, (int, float)) and value == 1:
+                if isinstance(value, number_types) and value == 1:
                     return y_
 
     def minimum(self, expr):
@@ -201,7 +214,7 @@ class Rewriter:
         x, y = expr.operands
         if y.kind == "constant":
             value, like = y.operands
-            if isinstance(value, (int, float)) and value == 1:
+            if isinstance(value, number_types) and value == 1:
                 return x
 
     def complex(self, expr):
@@ -224,14 +237,14 @@ class Rewriter:
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)) and value == 1:
+            if isinstance(value, number_types) and value == 1:
                 return x.context.constant(0, like)
 
     def log1p(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)) and value == 0:
+            if isinstance(value, number_types) and value == 0:
                 return x
 
     def logical_and(self, expr):
@@ -265,7 +278,7 @@ class Rewriter:
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)):
+            if isinstance(value, number_types):
                 return x.context.constant(-value, like)
 
         if x.kind == "negative":
@@ -277,9 +290,9 @@ class Rewriter:
 
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)):
+            if isinstance(value, float_types):
                 return x
-            if isinstance(value, complex):
+            if isinstance(value, complex_types):
                 return x.context.constant(value.conjugate(), like)
 
         if x.kind == "complex":
@@ -321,7 +334,7 @@ class Rewriter:
                 if yvalue == "neginf":
                     yvalue = -math.inf
 
-            if isinstance(xvalue, (int, float)) and isinstance(yvalue, (int, float)):
+            if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
                 r = relop(xvalue, yvalue)
                 ctx = expr.context
                 return ctx.constant(r, ctx.symbol(None, "boolean"))
@@ -329,7 +342,7 @@ class Rewriter:
             if isinstance(xvalue, str):
                 if xvalue == "largest":
                     # cannot rewrite as largest depends on dtype
-                    if isinstance(yvalue, (int, float)):
+                    if isinstance(yvalue, float_types):
                         return
 
             self._todo(expr)
@@ -366,15 +379,16 @@ class Rewriter:
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)):
+            if isinstance(value, number_types):
                 if value == 0 or value == 1:
                     return x
+                return self._eval(like, "sqrt", value)
 
     def sign(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
-            if isinstance(value, (int, float)):
+            if isinstance(value, float_types):
                 ctx = x.context
                 if value == 0:
                     return ctx.constant(0, like)
