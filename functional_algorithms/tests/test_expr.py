@@ -1,8 +1,5 @@
-from functional_algorithms import expr, Context
+import functional_algorithms as fa
 
 
-def test_normalize_like():
-
-    ctx = Context(paths=[])
-    x = ctx.symbol("x", "complex")
-    assert expr.normalize_like(abs(x)) == "(abs x)"
+def test_rewrite():
+    ctx = fa.Context()

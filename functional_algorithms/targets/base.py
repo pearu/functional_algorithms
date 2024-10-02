@@ -7,22 +7,21 @@ def modifier_base(target, expr):
     if expr.kind in {"symbol", "constant", "apply"}:
         pass
     elif target.kind_to_target.get(expr.kind, NotImplemented) is NotImplemented:
-
         ctx = expr.context
         if ctx.parameters.get(f"use_native_{expr.kind}", False):
             raise NotImplementedError(f'{target.__name__.split(".")[-1]} target does not define native {expr.kind}')
 
         func = NotImplemented
-        for m in expr.context._paths:
+        for m in ctx._paths:
             func = getattr(m, expr.kind, NotImplemented)
             if func is not NotImplemented:
                 break
         if func is NotImplemented:
-            paths = ":".join([m.__name__ for m in expr.context._paths])
+            paths = ":".join([m.__name__ for m in ctx._paths])
             raise NotImplementedError(f'{expr.kind} for {target.__name__.split(".")[-1]} target [paths={paths}]')
 
-        result = expr.context.call(func, expr.operands)
-        if expr._serialized != result._serialized:
+        result = ctx.call(func, expr.operands)
+        if expr.key != result.key:
             # We will call rewrite again because when func result is a
             # new expression then it needs to be rewritten as
             # well. However, we don't know what was the user-specifed
@@ -74,9 +73,6 @@ class PrinterBase:
         return NotImplemented
 
     def tostring(self, expr, tab=""):
-        if expr.ref is None and "other" in expr.props:
-            return self.tostring(expr.props["other"], tab=tab)
-
         if expr.ref in self.defined_refs:
             assert self.need_ref.get(expr.ref), expr.ref
             return expr.ref

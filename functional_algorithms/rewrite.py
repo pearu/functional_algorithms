@@ -391,6 +391,9 @@ class Rewriter:
     def symbol(self, expr):
         pass
 
+    def hypot(self, expr):
+        pass
+
 
 def rewrite(expr):
     """Return rewritten expression, otherwise return None."""
@@ -412,3 +415,30 @@ def rewrite(expr):
 def __rewrite_modifier__(expr):
     result = rewrite(expr)
     return expr if result is None else result
+
+
+class RewriteContext:
+    """Caches rewrite results."""
+
+    def __init__(self):
+        self.cache = {}
+
+    def __contains__(self, expr):
+        return expr.key in self.cache
+
+    def __call__(self, original, new=None):
+        if new is not None:
+            if original.key in self.cache:
+                cached = self.cache[original.key]
+                assert new is cached
+            else:
+                self.cache[original.key] = new
+                force_ref = original.props.get("force_ref")
+                if force_ref is not None:
+                    new.props.update(force_ref=force_ref)
+                ref_name = original.props.get("reference_name")
+                if isinstance(ref_name, str):
+                    new.props.update(reference_name=ref_name)
+            return new
+        else:
+            return self.cache[original.key]
