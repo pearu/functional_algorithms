@@ -43,64 +43,64 @@ Finally,
 
 | Function | dtype | dULP=0 (exact) | dULP=1 | dULP=2 | dULP=3 | dULP>3 | Notes |
 | -------- | ----- | -------------- | ------ | ------ | ------ | ------ | ----- |
-| absolute | complex64 | 967753 | 33696 | 552 | - | - | - |
-| absolute<sub>2</sub> | complex64 | 962185 | 39256 | 552 | - | 8 | using native absolute |
-| absolute | complex128 | 991753 | 10104 | 144 | - | - | - |
+| absolute | complex64 | 967745 | 33704 | 552 | - | - | - |
+| absolute<sub>2</sub> | complex64 | 962177 | 39264 | 552 | - | 8 | using native absolute |
+| absolute | complex128 | 991861 | 9996 | 144 | - | - | - |
 | acos | float32 | 961608 | 38291 | 99 | 3 | - | - |
 | acos<sub>2</sub> | float32 | 961878 | 38119 | 4 | - | - | using native acos |
-| acos | float64 | 992582 | 7416 | 3 | - | - | - |
-| acos | complex64 | 810108 | 191263 | 622 | 8 | - | - |
-| acos<sub>2</sub> | complex64 | 678888 | 322829 | 284 | - | - | using native acos |
-| acos | complex128 | 690209 | 311554 | 238 | - | - | - |
+| acos | float64 | 992599 | 7396 | 6 | - | - | - |
+| acos | complex64 | 810406 | 190999 | 588 | 8 | - | - |
+| acos<sub>2</sub> | complex64 | 678274 | 323467 | 260 | - | - | using native acos |
+| acos | complex128 | 750619 | 251104 | 278 | - | - | - |
 | acosh | float32 | 988269 | 11704 | 28 | - | - | - |
 | acosh<sub>2</sub> | float32 | 999248 | 753 | - | - | - | using native acosh |
-| acosh | float64 | 946246 | 53752 | 3 | - | - | - |
-| acosh | complex64 | 810108 | 191263 | 622 | 8 | - | - |
-| acosh<sub>2</sub> | complex64 | 678888 | 322829 | 284 | - | - | using native acosh |
-| acosh | complex128 | 690209 | 311554 | 238 | - | - | - |
+| acosh | float64 | 946280 | 53715 | 6 | - | - | - |
+| acosh | complex64 | 810406 | 190999 | 588 | 8 | - | - |
+| acosh<sub>2</sub> | complex64 | 678274 | 323467 | 260 | - | - | using native acosh |
+| acosh | complex128 | 750619 | 251104 | 278 | - | - | - |
 | asin | float32 | 974679 | 24368 | 942 | 12 | - | - |
 | asin<sub>2</sub> | float32 | 996779 | 3010 | 212 | - | - | using native asin |
-| asin | float64 | 995197 | 4776 | 28 | - | - | - |
-| asin | complex64 | 807415 | 193174 | 1320 | 92 | - | - |
-| asin<sub>2</sub> | complex64 | 807661 | 194084 | 252 | 4 | - | using native asin |
-| asin | complex128 | 687179 | 313978 | 844 | - | - | - |
+| asin | float64 | 995203 | 4772 | 26 | - | - | - |
+| asin | complex64 | 808231 | 192742 | 996 | 32 | - | - |
+| asin<sub>2</sub> | complex64 | 806919 | 194826 | 252 | 4 | - | using native asin |
+| asin | complex128 | 750491 | 250830 | 680 | - | - | - |
 | asinh | float32 | 916129 | 83790 | 82 | - | - | - |
 | asinh<sub>2</sub> | float32 | 999111 | 890 | - | - | - | using native asinh |
-| asinh | float64 | 825453 | 174482 | 66 | - | - | - |
-| asinh | complex64 | 807415 | 193174 | 1320 | 92 | - | - |
-| asinh<sub>2</sub> | complex64 | 807661 | 194084 | 252 | 4 | - | using native asinh |
-| asinh | complex128 | 687179 | 313978 | 844 | - | - | - |
-| atan | complex64 | 850741 | 146392 | 4784 | 84 | - | - |
-| atan<sub>2</sub> | complex64 | 903333 | 97028 | 1640 | - | - | using native atan |
-| atan | complex128 | 936337 | 65264 | 400 | - | - | - |
-| atanh | complex64 | 850741 | 146392 | 4784 | 84 | - | - |
-| atanh<sub>2</sub> | complex64 | 903333 | 97028 | 1640 | - | - | using native atanh |
-| atanh | complex128 | 936337 | 65264 | 400 | - | - | - |
+| asinh | float64 | 825119 | 174798 | 84 | - | - | - |
+| asinh | complex64 | 808231 | 192742 | 996 | 32 | - | - |
+| asinh<sub>2</sub> | complex64 | 806919 | 194826 | 252 | 4 | - | using native asinh |
+| asinh | complex128 | 750491 | 250830 | 680 | - | - | - |
+| atan | complex64 | 851639 | 145498 | 4780 | 84 | - | - |
+| atan<sub>2</sub> | complex64 | 902789 | 97576 | 1636 | - | - | using native atan |
+| atan | complex128 | 936441 | 65256 | 304 | - | - | - |
+| atanh | complex64 | 851639 | 145498 | 4780 | 84 | - | - |
+| atanh<sub>2</sub> | complex64 | 902789 | 97576 | 1636 | - | - | using native atanh |
+| atanh | complex128 | 936441 | 65256 | 304 | - | - | - |
 | square | float32 | 997347 | 2654 | - | - | - | - |
 | square<sub>2</sub> | float32 | 997347 | 2654 | - | - | - | using native square |
-| square | float64 | 999593 | 408 | - | - | - | - |
-| square | complex64 | 976809 | 25192 | - | - | - | - |
-| square<sub>2</sub> | complex64 | 939997 | 29016 | 16 | - | 32972 | using native square |
-| square | complex128 | 995833 | 6168 | - | - | - | - |
+| square | float64 | 999553 | 448 | - | - | - | - |
+| square | complex64 | 976865 | 25136 | - | - | - | - |
+| square<sub>2</sub> | complex64 | 940181 | 28836 | 16 | - | 32968 | using native square |
+| square | complex128 | 995705 | 6296 | - | - | - | - |
 | sqrt | float32 | 1000001 | - | - | - | - | using native sqrt |
-| sqrt | complex64 | 639749 | 362152 | 100 | - | - | using native sqrt |
-| angle | complex64 | 940281 | 61338 | 378 | 4 | - | - |
-| angle | complex128 | 989725 | 12276 | - | - | - | - |
-| log1p<sup>1</sup> | complex64 | 697224 | 62971<sup>50269</sup> | 2437<sup>1108</sup> | 1521<sup>1505</sup> | 237848<sup>237612</sup>!! | using native log1p |
-| log1p<sup>2</sup> | complex64 | 902287 | 97840<sup>42698</sup> | 1582<sup>72</sup> | 102<sup>6</sup> | 190<sup>2</sup>!! | - |
-| log1p<sup>3</sup> | complex64 | 902287 | 97840<sup>41454</sup> | 1582<sup>44</sup> | 102 | 190 | - |
-| log1p<sup>1</sup> | complex64 | 697224 | 62971<sup>50269</sup> | 2437<sup>1108</sup> | 1521<sup>1505</sup> | 237848<sup>237612</sup>!! | using native log1p |
-| log1p<sup>2</sup> | complex64 | 902287 | 97840<sup>42698</sup> | 1582<sup>72</sup> | 102<sup>6</sup> | 190<sup>2</sup>!! | - |
-| log1p<sup>3</sup> | complex64 | 902287 | 97840<sup>41454</sup> | 1582<sup>44</sup> | 102 | 190 | - |
-| log1p<sup>1</sup> | complex128 | 801864 | 200067<sup>188447</sup> | 64<sup>10</sup> | 6 | - | - |
+| sqrt | complex64 | 639573 | 362328 | 100 | - | - | using native sqrt |
+| angle | complex64 | 940289 | 61332 | 376 | 4 | - | - |
+| angle | complex128 | 989787 | 12214 | - | - | - | - |
+| log1p<sup>1</sup> | complex64 | 902529 | 97592<sup>48500</sup> | 1586<sup>1172</sup> | 104<sup>28</sup> | 190<sup>22</sup>!! | - |
+| log1p<sup>2</sup> | complex64 | 902529 | 97592<sup>42692</sup> | 1586<sup>78</sup> | 104<sup>6</sup> | 190<sup>2</sup>!! | - |
+| log1p<sup>3</sup> | complex64 | 902529 | 97592<sup>41452</sup> | 1586<sup>44</sup> | 104 | 190 | - |
+| log1p<sup>1</sup> | complex64 | 698489 | 61706<sup>50263</sup> | 2437<sup>1108</sup> | 1519<sup>1505</sup> | 237850<sup>237612</sup>!! | using native log1p |
+| log1p<sup>2</sup>[using={'native log1p'}] | complex64 | 698489 | 61706<sup>49384</sup> | 2437<sup>48</sup> | 1519<sup>984</sup> | 237850<sup>237376</sup>!! | using native log1p |
+| log1p<sup>3</sup>[using={'native log1p'}] | complex64 | 698489 | 61706<sup>49206</sup> | 2437<sup>8</sup> | 1519<sup>36</sup> | 237850<sup>235730</sup>!! | using native log1p |
+| log1p<sup>1</sup> | complex128 | 850341 | 151568<sup>139004</sup> | 86<sup>8</sup> | 4 | 2 | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
-| tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using native tan, upcast tan |
+| tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |
 | real_naive_tan | float32 | 819251 | 179168 | 1580 | 2 | - | - |
-| real_naive_tan<sub>2</sub> | float32 | 825895 | 173622 | 484 | - | - | using upcast cos, upcast sin |
-| real_naive_tan<sub>3</sub> | float32 | 1000001 | - | - | - | - | using upcast divide, upcast cos, upcast sin |
-| tan | complex64 | 783679 | 197584 | 19902 | 776 | 60 | using native tan |
-| tan<sub>2</sub> | complex64 | 1001417 | 584 | - | - | - | using native tan, upcast tan |
+| real_naive_tan<sub>2</sub> | float32 | 825895 | 173622 | 484 | - | - | using upcast sin, upcast cos |
+| real_naive_tan<sub>3</sub> | float32 | 1000001 | - | - | - | - | using upcast sin, upcast cos, upcast divide |
+| tan | complex64 | 783819 | 197524 | 19806 | 792 | 60 | using native tan |
+| tan<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using upcast tan, native tan |
 | tanh | float32 | 985109 | 14892 | - | - | - | using native tanh |
 | tanh<sub>2</sub> | float32 | 1000001 | - | - | - | - | using native tanh, upcast tanh |
-| tanh | complex64 | 783679 | 197584 | 19902 | 776 | 60 | using native tanh |
-| tanh<sub>2</sub> | complex64 | 1001417 | 584 | - | - | - | using native tanh, upcast tanh |
+| tanh | complex64 | 783819 | 197524 | 19806 | 792 | 60 | using native tanh |
+| tanh<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using native tanh, upcast tanh |
