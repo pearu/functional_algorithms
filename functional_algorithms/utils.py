@@ -31,6 +31,13 @@ class _UNSPECIFIED:
 UNSPECIFIED = _UNSPECIFIED()
 default_flush_subnormals = False
 
+complex_types = (complex, numpy.complexfloating)
+float_types = (float, numpy.floating)
+integer_types = (int, numpy.integer)
+number_types = complex_types, float_types, integer_types
+boolean_types = (bool,)
+value_types = number_types + boolean_types
+
 
 class vectorize_with_backend(numpy.vectorize):
 

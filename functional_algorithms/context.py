@@ -4,7 +4,7 @@ import types
 import typing
 import warnings
 from collections import defaultdict
-from .utils import UNSPECIFIED
+from .utils import UNSPECIFIED, boolean_types, float_types, complex_types
 from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
 from .typesystem import Type
 
@@ -219,14 +219,23 @@ class Context:
         if typ is UNSPECIFIED:
             like = self.default_like
             if like is not None:
-                typ = like.operands[0]
+                typ = like.operands[1]
             else:
                 typ = "float"
         return make_symbol(self, name, typ)
 
     def constant(self, value, like_expr=UNSPECIFIED):
         if like_expr is UNSPECIFIED:
-            like_expr = self.default_like
+            if isinstance(value, boolean_types):
+                like_expr = self.symbol("_boolean_value", "boolean")
+            elif self._default_constant_type is not None:
+                like_expr = self.symbol("_value", self._default_constant_type)
+            elif isinstance(value, float_types):
+                like_expr = self.symbol("_float_value", type(value))
+            elif isinstance(value, complex_types):
+                like_expr = self.symbol("_complex_value", type(value))
+            else:
+                like_expr = self.default_like
         return make_constant(self, value, like_expr)
 
     def call(self, func, args):

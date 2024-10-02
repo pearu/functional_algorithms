@@ -1,6 +1,6 @@
 import struct
 import warnings
-from .utils import UNSPECIFIED, warn_once
+from .utils import UNSPECIFIED, warn_once, value_types
 from .typesystem import Type
 from .rewrite import RewriteContext
 
@@ -247,7 +247,7 @@ class Expr:
             assert len(operands) == 2 and isinstance(operands[0], str) and isinstance(operands[1], Type), operands
         elif kind == "constant":
             assert len(operands) == 2
-            assert isinstance(operands[0], (int, float, bool, complex, str, Expr)), type(operands[0])
+            assert isinstance(operands[0], value_types + (str, Expr)), type(operands[0])
             if isinstance(operands[0], Expr):
                 assert operands[0].context is context.alt, operands
             if context.alt is not None and not isinstance(operands[0], Expr):
