@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
+# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -30,13 +30,11 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         )
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float64 = (y) if (y_gt_safe_max_opt) else (x)
-        two: numpy.float64 = numpy.float64(2)
         half: numpy.float64 = numpy.float64(0.5)
-        zero: numpy.float64 = numpy.float64(0)
         xoy: numpy.float64 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.float64(numpy.inf)), dtype=numpy.bool_))))
-            else (zero)
+            else (numpy.float64(0))
         )
         one: numpy.float64 = numpy.float64(1)
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
@@ -44,35 +42,8 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         ) and ((x) < (one))
         xp1: numpy.float64 = (x) + (one)
         xm1: numpy.float64 = (x) - (one)
-        abs_xp1: numpy.float64 = numpy.abs(xp1)
-        _hypot_1_mx: numpy.float64 = max(abs_xp1, y)
-        mn: numpy.float64 = min(abs_xp1, y)
-        sqrt_two: numpy.float64 = numpy.sqrt(two)
-        _hypot_1_r: numpy.float64 = numpy.square((mn) / (_hypot_1_mx))
-        sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_1_r))
-        r: numpy.float64 = (
-            ((sqrt_two) * (_hypot_1_mx))
-            if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
-            else (
-                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
-                if ((numpy.equal(sqa, one, dtype=numpy.bool_)) and ((_hypot_1_r) > (zero)))
-                else ((_hypot_1_mx) * (sqa))
-            )
-        )
-        abs_xm1: numpy.float64 = numpy.abs(xm1)
-        _hypot_2_mx: numpy.float64 = max(abs_xm1, y)
-        _hypot_2_mn: numpy.float64 = min(abs_xm1, y)
-        _hypot_2_r: numpy.float64 = numpy.square((_hypot_2_mn) / (_hypot_2_mx))
-        _hypot_2_sqa: numpy.float64 = numpy.sqrt((one) + (_hypot_2_r))
-        s: numpy.float64 = (
-            ((sqrt_two) * (_hypot_2_mx))
-            if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
-            else (
-                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
-                if ((numpy.equal(_hypot_2_sqa, one, dtype=numpy.bool_)) and ((_hypot_2_r) > (zero)))
-                else ((_hypot_2_mx) * (_hypot_2_sqa))
-            )
-        )
+        r: numpy.float64 = numpy.hypot(xp1, y)
+        s: numpy.float64 = numpy.hypot(xm1, y)
         a: numpy.float64 = (half) * ((r) + (s))
         ap1: numpy.float64 = (a) + (one)
         yy: numpy.float64 = (y) * (y)
@@ -89,7 +60,7 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         am1: numpy.float64 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float64 = numpy.sqrt((am1) * (ap1))
         half_apx: numpy.float64 = (half) * ((a) + (x))
-        imag: numpy.float64 = numpy.arctan2(
+        imag__0: numpy.float64 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -103,11 +74,11 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         )
         result = make_complex(
             (
-                (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+                (((numpy.log(numpy.float64(2))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
                 if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
                 else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
             ),
-            (-(imag)) if ((signed_y) < (numpy.float64(0))) else (imag),
+            (-(imag__0)) if ((signed_y) < (numpy.float64(0))) else (imag__0),
         )
         return result
 
@@ -127,13 +98,11 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         )
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float32 = (y) if (y_gt_safe_max_opt) else (x)
-        two: numpy.float32 = numpy.float32(2)
         half: numpy.float32 = numpy.float32(0.5)
-        zero: numpy.float32 = numpy.float32(0)
         xoy: numpy.float32 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.float32(numpy.inf)), dtype=numpy.bool_))))
-            else (zero)
+            else (numpy.float32(0))
         )
         one: numpy.float32 = numpy.float32(1)
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
@@ -141,35 +110,8 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         ) and ((x) < (one))
         xp1: numpy.float32 = (x) + (one)
         xm1: numpy.float32 = (x) - (one)
-        abs_xp1: numpy.float32 = numpy.abs(xp1)
-        _hypot_1_mx: numpy.float32 = max(abs_xp1, y)
-        mn: numpy.float32 = min(abs_xp1, y)
-        sqrt_two: numpy.float32 = numpy.sqrt(two)
-        _hypot_1_r: numpy.float32 = numpy.square((mn) / (_hypot_1_mx))
-        sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_1_r))
-        r: numpy.float32 = (
-            ((sqrt_two) * (_hypot_1_mx))
-            if (numpy.equal(_hypot_1_mx, mn, dtype=numpy.bool_))
-            else (
-                ((_hypot_1_mx) + (((_hypot_1_mx) * (_hypot_1_r)) / (two)))
-                if ((numpy.equal(sqa, one, dtype=numpy.bool_)) and ((_hypot_1_r) > (zero)))
-                else ((_hypot_1_mx) * (sqa))
-            )
-        )
-        abs_xm1: numpy.float32 = numpy.abs(xm1)
-        _hypot_2_mx: numpy.float32 = max(abs_xm1, y)
-        _hypot_2_mn: numpy.float32 = min(abs_xm1, y)
-        _hypot_2_r: numpy.float32 = numpy.square((_hypot_2_mn) / (_hypot_2_mx))
-        _hypot_2_sqa: numpy.float32 = numpy.sqrt((one) + (_hypot_2_r))
-        s: numpy.float32 = (
-            ((sqrt_two) * (_hypot_2_mx))
-            if (numpy.equal(_hypot_2_mx, _hypot_2_mn, dtype=numpy.bool_))
-            else (
-                ((_hypot_2_mx) + (((_hypot_2_mx) * (_hypot_2_r)) / (two)))
-                if ((numpy.equal(_hypot_2_sqa, one, dtype=numpy.bool_)) and ((_hypot_2_r) > (zero)))
-                else ((_hypot_2_mx) * (_hypot_2_sqa))
-            )
-        )
+        r: numpy.float32 = numpy.hypot(xp1, y)
+        s: numpy.float32 = numpy.hypot(xm1, y)
         a: numpy.float32 = (half) * ((r) + (s))
         ap1: numpy.float32 = (a) + (one)
         yy: numpy.float32 = (y) * (y)
@@ -186,7 +128,7 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         am1: numpy.float32 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float32 = numpy.sqrt((am1) * (ap1))
         half_apx: numpy.float32 = (half) * ((a) + (x))
-        imag: numpy.float32 = numpy.arctan2(
+        imag__0: numpy.float32 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -200,11 +142,11 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         )
         result = make_complex(
             (
-                (((numpy.log(two)) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+                (((numpy.log(numpy.float32(2))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
                 if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
                 else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
             ),
-            (-(imag)) if ((signed_y) < (numpy.float32(0))) else (imag),
+            (-(imag__0)) if ((signed_y) < (numpy.float32(0))) else (imag__0),
         )
         return result
 

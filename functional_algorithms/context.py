@@ -32,7 +32,7 @@ class Context:
         self._expressions = {}
         self._stack_name = ""
         self._stack_call_count = defaultdict(int)
-        self._ref_values = {}
+        self._ref_values = {}  # TODO: move to printer context
         self._paths = paths
         self._alt = None
         self._enable_alt = enable_alt
@@ -70,7 +70,8 @@ class Context:
     def _register_expression(self, expr):
         # Expressions are singletons.  Notice that Expr does not
         # implement __hash__/__eq__ on purpose: __eq__ is used to
-        # construct equality expressions.
+        # construct equality expressions. Also, __bool__ raises an
+        # exception.
         prev = self._expressions.get(expr._serialized)
         if prev is None:
             prev = self._expressions[expr._serialized] = expr
@@ -83,13 +84,54 @@ class Context:
 
             # sanity check for detecting reference conflicts
             ref = prev.props.get("ref", UNSPECIFIED)
+            # ref is not defined until Expr.ref property is called by
+            # the target printer:
+            assert ref is UNSPECIFIED
             if isinstance(ref, str) and ref in self._ref_values:
-                assert self._ref_values[ref]._serialized == prev._serialized, (
-                    ref,
-                    self._ref_values[ref]._serialized,
-                    prev._serialized,
-                )
+                assert self._ref_values[ref] is prev
         return prev
+
+    def _register_reference(self, expr, ref_name):
+        # To-be used only from expr.make_ref.
+        #
+        # Expressions can have reference names that target printers
+        # may use to assign expression to a variable that name is the
+        # specified reference name, this variable will be used in
+        # other expressions as a replacement of the given expression.
+        assert isinstance(ref_name, str)
+        other = self._ref_values.get(ref_name)
+        if other is None:
+            # a new reference
+            pass
+        elif other is expr:
+            # reference name is already registered
+            assert expr.props["ref"] == ref_name  # sanity check
+            return ref_name
+        else:
+            # reference name is already used.  Make reference name
+            # unique, first trying to use the origin as a prefix, and
+            # then by adding a counter as a suffix:
+            ref_name = expr.props["origin"] + ref_name
+            other = self._ref_values.get(ref_name)
+            if other is expr:
+                assert expr.props["ref"] == ref_name  # sanity check
+                return expr
+            counter = 0
+            ref_name_ = f"{ref_name}__{counter}"
+            while other is not None:
+                other = self._ref_values.get(ref_name_)
+                if other is expr:
+                    assert expr.props["ref"] == ref_name_  # sanity check
+                    return expr
+                elif other is not None:
+                    counter += 1
+                    ref_name_ = f"{ref_name}__{counter}"
+            ref_name = ref_name_
+
+        # register reference name:
+        self._ref_values[ref_name] = expr
+        expr.props.update(ref=ref_name)
+        return ref_name
 
     def __call__(self, expr):
         """Post-process tracing of a function that defines a functional
@@ -104,25 +146,11 @@ class Context:
         frame = sys._getframe(1)
         for name, obj in frame.f_locals.items():
             if isinstance(obj, Expr) and obj.props["origin"] == self._stack_name:
-                ref = obj.props.get("ref", UNSPECIFIED)
-                if ref is UNSPECIFIED:
-                    if name not in self._ref_values:
-                        ref = name
-                    else:
-                        ref = self._stack_name + name
-                        if ref in self._ref_values:
-                            c = 0
-                            ref_ = ref + f"__{c}"
-                            while ref_ in self._ref_values:
-                                c += 1
-                                ref_ = ref + f"__{c}"
-                            ref = ref_
-                    obj.reference(ref_name=ref, force=obj.props.get("force", None))
+                ref_name = obj.props.get("reference_name", UNSPECIFIED)
+                if ref_name is UNSPECIFIED:
+                    obj.reference(ref_name=name, force=obj.props.get("force", None))
                     if self.alt is not None and obj.kind == "constant" and isinstance(obj.operands[0], Expr):
-                        ref_ = ref + "_"
-                        assert ref_ not in self.alt._ref_values
-                        obj.operands[0].reference(ref_name=ref_, force=obj.props.get("force", None))
-
+                        obj.operands[0].reference(ref_name=name + "_", force=obj.props.get("force", None))
         return expr
 
     def trace(self, func, *args):
