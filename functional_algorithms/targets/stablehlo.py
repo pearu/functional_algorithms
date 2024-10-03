@@ -1,7 +1,6 @@
 import warnings
 
 from . import stablehlo as this_module
-from ..expr import Expr
 from .base import modifier_base
 
 constant_target = this_module
@@ -171,7 +170,8 @@ class Printer:
                 like_val = f"${like.ref}"
             else:
                 warnings.warn(
-                    f"undefined reference {like} in {expr} (when a constant is used as left operand, its ref value must be specified explicitly)"
+                    f"undefined reference {like} in {expr} (when a constant is used as left operand,"
+                    " its ref value must be specified explicitly)"
                 )
                 like_val = self.tostring(like)
             if isinstance(value, str):

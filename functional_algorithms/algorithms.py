@@ -372,7 +372,7 @@ def complex_asin(ctx, z: complex):
         arcsin(x / a) ~ arctan2(x, sqrt(0.5 * (a + x) * (y * y / (hypot(x + 1, y) + x + 1) + hypot(x - 1, y) - x - 1)))
       else
         arcsin(x / a) ~ arctan2(x, y * sqrt(0.5 * (a + x) * (1 / (hypot(x + 1, y) + x + 1) + 1 / (hypot(x - 1, y) + x - 1))))
- 
+
     Imaginary part
     --------------
     In general, the unsigned imaginary part of arcus sine input can be
@@ -790,7 +790,7 @@ def angle(ctx, z: complex):
 
 
 @definition("angle")
-def angle(ctx, z: complex):
+def angle_(ctx, z: complex):
     assert 0  # unreachable
 
 
@@ -1044,7 +1044,6 @@ def complex_atanh(ctx, z: complex):
     zero = ctx.constant(0, x)
     one = ctx.constant(1, x)
     four = ctx.constant(4, x)
-    two = ctx.constant(2, x)
     half = ctx.constant(0.5, x)
     quarter = ctx.constant(0.25, x)
     pi = ctx.constant("pi", x)

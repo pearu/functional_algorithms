@@ -1,7 +1,7 @@
 import math
 import numpy
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types, integer_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types
 
 
 class Printer:
@@ -47,7 +47,8 @@ class Printer:
 class Rewriter:
 
     patterns = {
-        "lt(constant(0, _M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)), constant(1000000000000.0, _M0_)))": (
+        "lt(constant(0, _M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
+        " constant(1000000000000.0, _M0_)))": (
             "ctx.constant(True, ctx.symbol(None, 'boolean'))",
             "constant(True, _M1_)",
         ),
@@ -55,7 +56,9 @@ class Rewriter:
             "ctx.eq(ctx.constant(1, _M0_), abs(_M0_))",
             "eq(constant(1, _M0_), abs(_M0_))",
         ),
-        "select(logical_and(ge(abs(_M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)), constant(1e-06, _M0_))), logical_not(eq(abs(_M0_), constant(posinf, _M0_)))), divide(constant(0, _M0_), abs(_M0_)), constant(0, _M0_))": (
+        "select(logical_and(ge(abs(_M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
+        " constant(1e-06, _M0_))), logical_not(eq(abs(_M0_), constant(posinf, _M0_)))),"
+        " divide(constant(0, _M0_), abs(_M0_)), constant(0, _M0_))": (
             "ctx.constant(0, _M0_)",
             "constant(0, _M0_)",
         ),
@@ -513,7 +516,7 @@ class Substitute:
                     is_a_match = match == expr.operands[0]
             elif isinstance(match, _expr.Expr):
                 is_a_match = match.key == expr.key
-            elif iscallable(match):
+            elif callable(match):
                 is_a_match = match(expr)
             else:
                 raise NotImplementedError(f"{type(match)=}")

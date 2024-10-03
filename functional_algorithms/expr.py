@@ -356,11 +356,11 @@ class Expr:
         return f'{self.kind}({",".join(operand._serialized for operand in self.operands)})'
 
     def implement_missing(self, target):
-        warn_once(f"Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
+        warn_once("Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
         return self.rewrite(target)
 
     def simplify(self):
-        warn_once(f"Calling `Expr.simplify()` is deprecated. Use `Expr.rewrite(rewrite)` instead.", stacklevel=2)
+        warn_once("Calling `Expr.simplify()` is deprecated. Use `Expr.rewrite(rewrite)` instead.", stacklevel=2)
         from . import rewrite
 
         return self.rewrite(rewrite)

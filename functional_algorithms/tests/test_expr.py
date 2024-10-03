@@ -6,11 +6,11 @@ def test_constant():
     ctx = fa.Context()
     true = ctx.constant(True)
     assert true.get_type().kind == "boolean"
-    assert true.get_type().bits == None
+    assert true.get_type().bits is None
 
     x = ctx.constant(1.23)
     assert x.get_type().kind == "float"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
     x = ctx.constant(numpy.float32(1.23))
     assert x.get_type().kind == "float"
@@ -56,15 +56,15 @@ def test_symbol():
 
     x = ctx.symbol("x")
     assert x.get_type().kind == "float"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
     x = ctx.symbol("x", float)
     assert x.get_type().kind == "float"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
     x = ctx.symbol("x", bool)
     assert x.get_type().kind == "boolean"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
 
 def test_symbol_boolean():
@@ -72,11 +72,11 @@ def test_symbol_boolean():
 
     x = ctx.symbol("x")
     assert x.get_type().kind == "boolean"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
     x = ctx.symbol("x", float)
     assert x.get_type().kind == "float"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
 
 def test_symbol_numpy():
@@ -88,7 +88,7 @@ def test_symbol_numpy():
 
     x = ctx.symbol("x", bool)
     assert x.get_type().kind == "boolean"
-    assert x.get_type().bits == None
+    assert x.get_type().bits is None
 
 
 def test_rewrite():
@@ -152,7 +152,6 @@ def test_substitute_numpy():
     ctx = fa.Context(default_constant_type=numpy.float32)
 
     x = ctx.symbol("x")
-    y = ctx.symbol("y")
     eps = ctx.constant("eps", x)
 
     def subs(expr, **dct):

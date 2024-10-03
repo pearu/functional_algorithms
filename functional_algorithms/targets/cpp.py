@@ -1,5 +1,3 @@
-import warnings
-
 from . import cpp as this_module
 from .base import PrinterBase, modifier_base
 from .. import utils
