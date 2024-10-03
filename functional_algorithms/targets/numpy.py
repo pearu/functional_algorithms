@@ -156,7 +156,9 @@ kind_to_target = dict(
 )
 
 constant_to_target = dict(
-    smallest="numpy.finfo({type}).tiny",
+    smallest_subnormal="numpy.finfo({type}).smallest_subnormal",
+    smallest="numpy.finfo({type}).smallest_normal",
+    eps="numpy.finfo({type}).eps",
     largest="numpy.finfo({type}).max",
     posinf="{type}(numpy.inf)",
     neginf="-{type}(numpy.inf)",
@@ -217,7 +219,9 @@ class Printer(PrinterBase):
 
     def make_constant(self, like, value):
         typ = self.get_type(like)
-        return f"{typ}({value})"
+        s = str(value)
+        s = {"inf": "numpy.inf", "-inf": "-numpy.inf", "nan": "numpy.nan"}.get(s, s)
+        return f"{typ}({s})"
 
     def make_argument(self, arg):
         assert arg.kind == "symbol", arg.kind
