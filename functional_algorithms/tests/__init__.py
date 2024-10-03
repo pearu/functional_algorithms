@@ -1,4 +1,5 @@
 def run():
-    import pytest, os
+    import pytest
+    import os
 
     pytest.main(["-svx", os.path.dirname(__file__)])

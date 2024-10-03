@@ -1,5 +1,3 @@
-import warnings
-
 from . import xla_client as this_module
 from . import cpp as constant_target
 from .base import PrinterBase, modifier_base

@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
+# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -9,7 +9,7 @@ import sys
 
 def log1p_1(z: complex) -> complex:
     x: float = (z).real
-    one: float = 1
+    one: float = 1.0
     xp1: float = (x) + (one)
     y: float = (z).imag
     ay: float = abs(y)

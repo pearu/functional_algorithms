@@ -1,4 +1,4 @@
-__all__ = ["Constext", "Expr", "targets", "TextImage"]
+__all__ = ["Context", "Expr", "targets", "TextImage", "algorithms", "targets", "rewrite", "filter_signatures"]
 
 try:
     from ._version import __version__
@@ -7,7 +7,7 @@ except ImportError:
 
     try:
         __version__ = importlib.metadata.version("py" + __name__)
-    except:
+    except Exception:
         __version__ = "N/A"
 
 

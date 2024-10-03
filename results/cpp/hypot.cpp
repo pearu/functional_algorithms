@@ -16,14 +16,13 @@ float hypot_0(float x, float y) {
   float abs_y = std::abs(y);
   float mx = std::max(abs_x, abs_y);
   float mn = std::min(abs_x, abs_y);
-  float constant_2 = 2;
-  float constant_1 = 1;
+  float constant_f1 = 1.0;
   float mn_over_mx = (mn) / (mx);
   float r = (mn_over_mx) * (mn_over_mx);
-  float sqa = std::sqrt((constant_1) + (r));
-  return (((mx) == (mn)) ? ((std::sqrt(constant_2)) * (mx))
-                         : (((((sqa) == (constant_1)) && ((r) > (0)))
-                                 ? ((mx) + (((mx) * (r)) / (constant_2)))
+  float sqa = std::sqrt((constant_f1) + (r));
+  return (((mx) == (mn)) ? ((1.4142135) * (mx))
+                         : (((((sqa) == (constant_f1)) && ((r) > (0.0)))
+                                 ? ((mx) + (((mx) * (r)) / (2.0)))
                                  : ((mx) * (sqa)))));
 }
 
@@ -32,13 +31,12 @@ double hypot_1(double x, double y) {
   double abs_y = std::abs(y);
   double mx = std::max(abs_x, abs_y);
   double mn = std::min(abs_x, abs_y);
-  double constant_2 = 2;
-  double constant_1 = 1;
+  double constant_f1 = 1.0;
   double mn_over_mx = (mn) / (mx);
   double r = (mn_over_mx) * (mn_over_mx);
-  double sqa = std::sqrt((constant_1) + (r));
-  return (((mx) == (mn)) ? ((std::sqrt(constant_2)) * (mx))
-                         : (((((sqa) == (constant_1)) && ((r) > (0)))
-                                 ? ((mx) + (((mx) * (r)) / (constant_2)))
+  double sqa = std::sqrt((constant_f1) + (r));
+  return (((mx) == (mn)) ? ((1.4142135623730951) * (mx))
+                         : (((((sqa) == (constant_f1)) && ((r) > (0.0)))
+                                 ? ((mx) + (((mx) * (r)) / (2.0)))
                                  : ((mx) * (sqa)))));
 }

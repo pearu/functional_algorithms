@@ -1,4 +1,4 @@
-from functional_algorithms import Context, targets, algorithms, utils, rewrite
+from functional_algorithms import Context, targets, utils, rewrite
 
 
 class TestImplementations:
@@ -100,7 +100,6 @@ def myhypot(x: float, y: float) -> float:
 def test_myhypot_xla_client():
 
     ctx = Context(paths=[TestImplementations])
-    constant_ctx = Context()
 
     graph = ctx.trace(TestImplementations.hypot)
 

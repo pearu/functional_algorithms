@@ -1,7 +1,7 @@
 import math
 import numpy
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types
 
 
 class Printer:
@@ -47,7 +47,8 @@ class Printer:
 class Rewriter:
 
     patterns = {
-        "lt(constant(0, _M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)), constant(1000000000000.0, _M0_)))": (
+        "lt(constant(0, _M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
+        " constant(1000000000000.0, _M0_)))": (
             "ctx.constant(True, ctx.symbol(None, 'boolean'))",
             "constant(True, _M1_)",
         ),
@@ -55,7 +56,9 @@ class Rewriter:
             "ctx.eq(ctx.constant(1, _M0_), abs(_M0_))",
             "eq(constant(1, _M0_), abs(_M0_))",
         ),
-        "select(logical_and(ge(abs(_M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)), constant(1e-06, _M0_))), logical_not(eq(abs(_M0_), constant(posinf, _M0_)))), divide(constant(0, _M0_), abs(_M0_)), constant(0, _M0_))": (
+        "select(logical_and(ge(abs(_M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
+        " constant(1e-06, _M0_))), logical_not(eq(abs(_M0_), constant(posinf, _M0_)))),"
+        " divide(constant(0, _M0_), abs(_M0_)), constant(0, _M0_))": (
             "ctx.constant(0, _M0_)",
             "constant(0, _M0_)",
         ),
@@ -87,7 +90,7 @@ class Rewriter:
 
     def _eval(self, like, opname, *args):
         typ = like.get_type()
-        if typ.bits is not None:
+        if typ.kind in {"float", "complex", "integer", "boolean"} and typ.bits is not None:
             dtype = typ.asdtype()
             if dtype is not None:
                 op = getattr(numpy, opname)
@@ -161,7 +164,6 @@ class Rewriter:
         if x.kind == "constant" and y.kind == "constant":
             xvalue, xlike = x.operands
             yvalue, ylike = y.operands
-
             if isinstance(xvalue, number_types) and isinstance(yvalue, number_types):
                 r = op(xvalue, yvalue)
                 return expr.context.constant(r, xlike)
@@ -221,7 +223,41 @@ class Rewriter:
         pass
 
     def constant(self, expr):
-        pass
+        value, like = expr.operands
+        typ = like.get_type()
+        if typ.kind in {"float", "complex"} and typ.bits is not None:
+            dtype = typ.asdtype()
+            if dtype is not None:
+                if isinstance(value, number_types):
+                    if not isinstance(value, dtype):
+                        return expr.context.constant(dtype(value), like)
+                elif isinstance(value, str):
+                    if value == "posinf":
+                        return expr.context.constant(dtype(numpy.inf), like)
+                    if value == "neginf":
+                        return expr.context.constant(-dtype(numpy.inf), like)
+                    if value == "pi":
+                        return expr.context.constant(dtype(numpy.pi), like)
+                    if value in {"undefined", "nan"}:
+                        return expr.context.constant(dtype(numpy.nan), like)
+                    fi = numpy.finfo(dtype)
+                    if value == "eps":
+                        return expr.context.constant(dtype(fi.eps), like)
+                    if value == "largest":
+                        return expr.context.constant(dtype(fi.max), like)
+                    if value == "smallest":
+                        return expr.context.constant(dtype(fi.smallest_normal), like)
+                    if value == "smallest_subnormal":
+                        return expr.context.constant(dtype(fi.smallest_subnormal), like)
+        elif typ.kind == "float" and typ.bits is None:
+            if not isinstance(value, float) and isinstance(value, number_types):
+                return expr.context.constant(float(value), like)
+        elif typ.kind == "complex" and typ.bits is None:
+            if not isinstance(value, complex) and isinstance(value, number_types):
+                return expr.context.constant(complex(value), like)
+        elif typ.kind == "boolean" and typ.bits is not None:
+            if isinstance(value, boolean_types) and not isinstance(value, bool):
+                return expr.context.constant(bool(value), like)
 
     def upcast(self, expr):
         (x,) = expr.operands
@@ -335,7 +371,7 @@ class Rewriter:
                     yvalue = -math.inf
 
             if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
-                r = relop(xvalue, yvalue)
+                r = bool(relop(xvalue, yvalue))
                 ctx = expr.context
                 return ctx.constant(r, ctx.symbol(None, "boolean"))
 
@@ -456,3 +492,44 @@ class RewriteContext:
             return new
         else:
             return self.cache[original.key]
+
+
+class Substitute:
+
+    def __init__(self, matches, replacements):
+        self.matches = matches
+        self.replacements = replacements
+
+    @classmethod
+    def fromdict(cls, dct):
+        matches, replacements = [], []
+        for match, replacement in dct.items():
+            matches.append(match)
+            replacements.append(replacement)
+        return cls(matches, replacements)
+
+    def __rewrite_modifier__(self, expr):
+        for match, replacement in zip(self.matches, self.replacements):
+            is_a_match = False
+            if isinstance(match, str):
+                if expr.kind in {"symbol", "constant"} and isinstance(expr.operands[0], str):
+                    is_a_match = match == expr.operands[0]
+            elif isinstance(match, _expr.Expr):
+                is_a_match = match.key == expr.key
+            elif callable(match):
+                is_a_match = match(expr)
+            else:
+                raise NotImplementedError(f"{type(match)=}")
+
+            if is_a_match:
+                if isinstance(replacement, _expr.Expr):
+                    return replacement
+                elif isinstance(replacement, value_types) or replacement in _expr.known_constant_names:
+                    return expr.context.constant(replacement, expr)
+                elif isinstance(replacement, str):
+                    typ = expr.get_type()
+                    assert typ is not None, expr
+                    return expr.context.symbol(replacement, typ=typ)
+                else:
+                    raise NotImplementedError(f"{type(replacement)=}")
+        return expr

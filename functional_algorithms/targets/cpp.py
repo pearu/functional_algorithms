@@ -1,5 +1,3 @@
-import warnings
-
 from . import cpp as this_module
 from .base import PrinterBase, modifier_base
 from .. import utils
@@ -156,7 +154,13 @@ class Printer(PrinterBase):
         return f"{typ} {var} = {value};"
 
     def make_constant(self, like, value):
-        return f"{value}"
+        typ = self.get_type(like)
+        s = str(value)
+        if s == "inf":
+            s = f"std::numeric_limits<{typ}>::infinity()"
+        elif s == "-inf":
+            s = f"(-std::numeric_limits<{typ}>::infinity())"
+        return s
 
     def make_argument(self, arg):
         typ = self.get_type(arg)

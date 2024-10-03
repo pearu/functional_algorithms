@@ -89,6 +89,11 @@ class Context:
             assert ref is UNSPECIFIED
             if isinstance(ref, str) and ref in self._ref_values:
                 assert self._ref_values[ref] is prev
+        else:
+            if expr.kind == "constant" and type(expr.operands[0]) is not type(prev.operands[0]):
+                print(expr, type(expr.operands[0]))
+                print(prev, type(prev.operands[0]))
+                raise RuntimeError("attempt to re-register equivalent expression")
         return prev
 
     def _register_reference(self, expr, ref_name):

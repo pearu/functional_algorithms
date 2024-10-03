@@ -17,26 +17,26 @@ def atan_0(z: complex) -> complex:
     y: float = (z).real
     ay: float = abs(y)
     in_safe_region: bool = ((ax) < (safe_max)) and ((ay) < (safe_max))
-    one: float = 1
+    one: float = 1.0
     naxm1: float = (one) - (ax)
     y2: float = (y) * (y)
-    constant_neg1: float = -1
-    zero: float = 0
+    constant_fneg1: float = -1.0
+    zero: float = 0.0
     constant_posinf: float = math.inf
     constant_neginf: float = -math.inf
     return complex(
         (
             (math.atan2((y) + (y), ((naxm1) * ((one) + (ax))) - (y2)))
             if (in_safe_region)
-            else (((one) if ((y) >= (0)) else (constant_neg1)) * (math.pi))
+            else (((one) if ((y) >= (0.0)) else (constant_fneg1)) * (math.pi))
         )
         * (0.5),
         -(
             (
-                ((one) if ((x) >= (zero)) else (constant_neg1))
+                ((one) if ((x) >= (zero)) else (constant_fneg1))
                 * (
                     math.log1p(
-                        (4)
+                        (4.0)
                         * (
                             ((ax) / (((naxm1) * (naxm1)) + (y2)))
                             if (in_safe_region)

@@ -12,19 +12,19 @@ def asin_acos_kernel_0(z: complex) -> complex:
     x: float = abs(signed_x)
     signed_y: float = (z).imag
     y: float = abs(signed_y)
-    safe_max: float = (math.sqrt(sys.float_info.max)) / (8)
-    one: float = 1
+    safe_max: float = (math.sqrt(sys.float_info.max)) / (8.0)
+    one: float = 1.0
     half: float = 0.5
     xp1: float = (x) + (one)
     abs_xp1: float = abs(xp1)
     mx: float = max(abs_xp1, y)
     mn: float = min(abs_xp1, y)
-    two: float = 2
-    sqrt_two: float = math.sqrt(two)
+    sqrt_two: float = 1.4142135623730951
     mn_over_mx: float = (mn) / (mx)
     r__0: float = (mn_over_mx) * (mn_over_mx)
     sqa: float = math.sqrt((one) + (r__0))
-    zero: float = 0
+    zero: float = 0.0
+    two: float = 2.0
     r: float = (
         ((sqrt_two) * (mx))
         if ((mx) == (mn))
@@ -54,7 +54,7 @@ def asin_acos_kernel_0(z: complex) -> complex:
     y_gt_safe_max_opt: bool = (y) >= (safe_max_opt)
     mx__1: float = (y) if (y_gt_safe_max_opt) else (x)
     xoy: float = ((x) / (y)) if ((y_gt_safe_max_opt) and (not ((y) == (math.inf)))) else (zero)
-    logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4))) and ((x) < (one))
+    logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4.0))) and ((x) < (one))
     ap1: float = (a) + (one)
     half_yy: float = (half) * (yy)
     divide_half_yy_rpxp1: float = (half_yy) / (rpxp1)

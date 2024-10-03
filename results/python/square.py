@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
+# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -14,4 +14,4 @@ def square_0(z: float) -> float:
 def square_1(z: complex) -> complex:
     x: float = (z).real
     y: float = (z).imag
-    return complex((0) if ((abs(x)) == (abs(y))) else (((x) - (y)) * ((x) + (y))), (2) * ((x) * (y)))
+    return complex((0.0) if ((abs(x)) == (abs(y))) else (((x) - (y)) * ((x) + (y))), (2.0) * ((x) * (y)))

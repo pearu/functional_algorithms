@@ -22,8 +22,8 @@ def acos_0(z: numpy.complex128) -> numpy.complex128:
         x: numpy.float64 = numpy.abs(signed_x)
         signed_y: numpy.float64 = (z).imag
         y: numpy.float64 = numpy.abs(signed_y)
-        safe_max: numpy.float64 = (numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).max))) / (numpy.float64(8))
-        one: numpy.float64 = numpy.float64(1)
+        safe_max: numpy.float64 = (numpy.float64(1.3407807929942596e154)) / (numpy.float64(8.0))
+        one: numpy.float64 = numpy.float64(1.0)
         half: numpy.float64 = numpy.float64(0.5)
         xp1: numpy.float64 = (x) + (one)
         r: numpy.float64 = numpy.hypot(xp1, y)
@@ -44,12 +44,10 @@ def acos_0(z: numpy.complex128) -> numpy.complex128:
         mx: numpy.float64 = (y) if (y_gt_safe_max_opt) else (x)
         xoy: numpy.float64 = (
             ((x) / (y))
-            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.float64(numpy.inf)), dtype=numpy.bool_))))
-            else (numpy.float64(0))
+            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.inf), dtype=numpy.bool_))))
+            else (numpy.float64(0.0))
         )
-        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
-            (y) < ((numpy.sqrt(numpy.float64(numpy.finfo(numpy.float64).tiny))) * (numpy.float64(4)))
-        ) and ((x) < (one))
+        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float64(5.966672584960166e-154))) and ((x) < (one))
         ap1: numpy.float64 = (a) + (one)
         half_yy: numpy.float64 = (half) * (yy)
         divide_half_yy_rpxp1: numpy.float64 = (half_yy) / (rpxp1)
@@ -61,7 +59,7 @@ def acos_0(z: numpy.complex128) -> numpy.complex128:
         am1: numpy.float64 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float64 = numpy.sqrt((am1) * (ap1))
         imag: numpy.float64 = (
-            (((numpy.log(numpy.float64(2))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+            (((numpy.log(numpy.float64(2.0))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
@@ -78,7 +76,7 @@ def acos_0(z: numpy.complex128) -> numpy.complex128:
                 ),
                 signed_x,
             ),
-            (imag) if ((signed_y) < (numpy.float64(0))) else (-(imag)),
+            (imag) if ((signed_y) < (numpy.float64(0.0))) else (-(imag)),
         )
         return result
 
@@ -90,8 +88,8 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
         x: numpy.float32 = numpy.abs(signed_x)
         signed_y: numpy.float32 = (z).imag
         y: numpy.float32 = numpy.abs(signed_y)
-        safe_max: numpy.float32 = (numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).max))) / (numpy.float32(8))
-        one: numpy.float32 = numpy.float32(1)
+        safe_max: numpy.float32 = (numpy.float32(1.8446743e19)) / (numpy.float32(8.0))
+        one: numpy.float32 = numpy.float32(1.0)
         half: numpy.float32 = numpy.float32(0.5)
         xp1: numpy.float32 = (x) + (one)
         r: numpy.float32 = numpy.hypot(xp1, y)
@@ -112,12 +110,10 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
         mx: numpy.float32 = (y) if (y_gt_safe_max_opt) else (x)
         xoy: numpy.float32 = (
             ((x) / (y))
-            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.float32(numpy.inf)), dtype=numpy.bool_))))
-            else (numpy.float32(0))
+            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.inf), dtype=numpy.bool_))))
+            else (numpy.float32(0.0))
         )
-        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = (
-            (y) < ((numpy.sqrt(numpy.float32(numpy.finfo(numpy.float32).tiny))) * (numpy.float32(4)))
-        ) and ((x) < (one))
+        logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float32(4.3368087e-19))) and ((x) < (one))
         ap1: numpy.float32 = (a) + (one)
         half_yy: numpy.float32 = (half) * (yy)
         divide_half_yy_rpxp1: numpy.float32 = (half_yy) / (rpxp1)
@@ -129,7 +125,7 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
         am1: numpy.float32 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float32 = numpy.sqrt((am1) * (ap1))
         imag: numpy.float32 = (
-            (((numpy.log(numpy.float32(2))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
+            (((numpy.log(numpy.float32(2.0))) + (numpy.log(mx))) + ((half) * (numpy.log1p((xoy) * (xoy)))))
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
@@ -146,7 +142,7 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
                 ),
                 signed_x,
             ),
-            (imag) if ((signed_y) < (numpy.float32(0))) else (-(imag)),
+            (imag) if ((signed_y) < (numpy.float32(0.0))) else (-(imag)),
         )
         return result
 
@@ -154,14 +150,14 @@ def acos_1(z: numpy.complex64) -> numpy.complex64:
 def acos_2(z: numpy.float64) -> numpy.float64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float64(z)
-        constant_1: numpy.float64 = numpy.float64(1)
-        result = numpy.arctan2(numpy.sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z)
+        constant_f1: numpy.float64 = numpy.float64(1.0)
+        result = numpy.arctan2(numpy.sqrt(((constant_f1) - (z)) * ((constant_f1) + (z))), z)
         return result
 
 
 def acos_3(z: numpy.float32) -> numpy.float32:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.float32(z)
-        constant_1: numpy.float32 = numpy.float32(1)
-        result = numpy.arctan2(numpy.sqrt(((constant_1) - (z)) * ((constant_1) + (z))), z)
+        constant_f1: numpy.float32 = numpy.float32(1.0)
+        result = numpy.arctan2(numpy.sqrt(((constant_f1) - (z)) * ((constant_f1) + (z))), z)
         return result

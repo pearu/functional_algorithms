@@ -1,7 +1,4 @@
-import inspect
 import numpy
-import math
-import cmath
 from functional_algorithms import Context, targets, algorithms, utils, rewrite
 import pytest
 

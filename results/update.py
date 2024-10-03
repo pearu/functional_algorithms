@@ -41,7 +41,7 @@ for more information."""
             try:
                 graph = ctx.trace(func, *atypes).implement_missing(target).simplify()
             except NotImplementedError as msg:
-                print(msg)
+                print(f"SKIP[NOTIMPL]: {msg}")
                 continue
             graph.props.update(name=f"{func_name}_{i}")
             src = graph.tostring(target)

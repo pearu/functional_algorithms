@@ -1,3 +1,5 @@
+import numpy
+import math
 import struct
 import warnings
 from .utils import UNSPECIFIED, warn_once, value_types
@@ -22,6 +24,16 @@ ceil, floor, floor_divide, remainder, round, truncate,
 copysign, sign, nextafter,
 upcast, downcast,
 is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero
+""".replace(
+        " ", ""
+    )
+    .replace("\n", "")
+    .split(",")
+)
+
+known_constant_names = set(
+    """
+eps, posinf, neginf, smallest, largest, smallest_subnormal, pi, undefined, nan
 """.replace(
         " ", ""
     )
@@ -87,6 +99,8 @@ def make_constant(context, value, like_expr):
     # which some targets use implicitly to define the constant type.
     if isinstance(value, str):
         value = {"+inf": "posinf", "inf": "posinf", "pinf": "posinf", "-inf": "neginf", "ninf": "neginf"}.get(value, value)
+        if value not in known_constant_names:
+            warn_once(f"creating constant from unknown constant name: {value}")
     return Expr(context, "constant", (value, normalize_like(like_expr)))
 
 
@@ -124,17 +138,41 @@ def normalize(context, operands):
 def toidentifier(value):
     if isinstance(value, bool):
         return str(value)
-    elif isinstance(value, int):
+    elif isinstance(value, (int, numpy.integer)):
         if value < 0:
             return "neg" + str(-value)
         return str(value)
     elif isinstance(value, float):
+        try:
+            intvalue = int(value)
+        except OverflowError:
+            intvalue = None
+        if value == intvalue:
+            return "f" + toidentifier(intvalue)
+        if math.isinf(value):
+            return "posinf" if value > 0 else "neginf"
         return "f" + hex(struct.unpack("<Q", struct.pack("<d", value))[0])[1:]
     elif isinstance(value, complex):
         return "c" + toidentifier(value.real) + toidentifier(value.imag)
     elif isinstance(value, str):
         assert value.isidentifier(), value
         return value
+    elif isinstance(value, numpy.floating):
+        try:
+            intvalue = int(value)
+        except OverflowError:
+            intvalue = None
+        if value == intvalue:
+            return value.dtype.kind + toidentifier(intvalue)
+        if numpy.isposinf(value):
+            return "posinf"
+        if numpy.isneginf(value):
+            return "neginf"
+        if numpy.isnan(value):
+            return "nan"
+        return value.dtype.kind + "0x" + "".join(map(hex, value.tobytes()[::-1])).replace("0x", "")
+    elif isinstance(value, numpy.complexfloating):
+        return value.dtype.kind + toidentifier(value.real) + toidentifier(value.imag)
     else:
         raise NotImplementedError(type(value))
 
@@ -313,15 +351,16 @@ class Expr:
         if self.kind == "symbol":
             return f"{self.operands[0]}:{self.operands[1]}"
         if self.kind == "constant":
-            return f"{self.operands[0]}:type({self.operands[1]._serialized})"
+            value, like = self.operands
+            return f"{value}_{type(value).__name__}:type({like._serialized})"
         return f'{self.kind}({",".join(operand._serialized for operand in self.operands)})'
 
     def implement_missing(self, target):
-        warn_once(f"Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
+        warn_once("Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
         return self.rewrite(target)
 
     def simplify(self):
-        warn_once(f"Calling `Expr.simplify()` is deprecated. Use `Expr.rewrite(rewrite)` instead.", stacklevel=2)
+        warn_once("Calling `Expr.simplify()` is deprecated. Use `Expr.rewrite(rewrite)` instead.", stacklevel=2)
         from . import rewrite
 
         return self.rewrite(rewrite)
@@ -431,6 +470,7 @@ class Expr:
         """Return a key unique to this expression instance and that can be
         used as a dictionary key.
         """
+        return id(self)
         return self._serialized  # could also be id(self)
 
     @property

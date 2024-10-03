@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
+# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -19,7 +19,7 @@ def log1p_0(z: numpy.complex128) -> numpy.complex128:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.complex128(z)
         x: numpy.float64 = (z).real
-        one: numpy.float64 = numpy.float64(1)
+        one: numpy.float64 = numpy.float64(1.0)
         xp1: numpy.float64 = (x) + (one)
         y: numpy.float64 = (z).imag
         ay: numpy.float64 = numpy.abs(y)
@@ -39,7 +39,7 @@ def log1p_1(z: numpy.complex64) -> numpy.complex64:
     with warnings.catch_warnings(action="ignore"):
         z = numpy.complex64(z)
         x: numpy.float32 = (z).real
-        one: numpy.float32 = numpy.float32(1)
+        one: numpy.float32 = numpy.float32(1.0)
         xp1: numpy.float32 = (x) + (one)
         y: numpy.float32 = (z).imag
         ay: numpy.float32 = numpy.abs(y)

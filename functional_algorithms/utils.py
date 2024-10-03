@@ -10,7 +10,9 @@ from collections import defaultdict
 try:
     from tqdm import tqdm
 except ImportError:
-    tqdm = lambda seq: seq
+
+    def tqdm(seq):
+        return seq
 
 
 class _UNSPECIFIED:
@@ -53,19 +55,19 @@ class vectorize_with_backend(numpy.vectorize):
 
     @property
     def backend_types(self):
-        raise NotImplemented(f"{type(self).__name__}.backend_types")
+        raise NotImplementedError(f"{type(self).__name__}.backend_types")
 
     def backend_context(self, context):
-        raise NotImplemented(f"{type(self).__name__}.backend_context")
+        raise NotImplementedError(f"{type(self).__name__}.backend_context")
 
     def numpy_to_backend(self, arr):
-        raise NotImplemented(f"{type(self).__name__}.numpy_to_backend")
+        raise NotImplementedError(f"{type(self).__name__}.numpy_to_backend")
 
     def numpy_from_backend(self, obj):
-        raise NotImplemented(f"{type(self).__name__}.numpy_from_backend")
+        raise NotImplementedError(f"{type(self).__name__}.numpy_from_backend")
 
     def context_from_backend(self, obj):
-        raise NotImplemented(f"{type(self).__name__}.context_from_backend")
+        raise NotImplementedError(f"{type(self).__name__}.context_from_backend")
 
     def _call_eval(self, sample):
         context = self.context_from_backend(sample)
@@ -361,9 +363,6 @@ class mpmath_array_api:
     mpmath bugs.
     """
 
-    def square(self, x):
-        return x * x
-
     def hypot(self, x, y):
         return x.context.hypot(x, y)
 
@@ -375,24 +374,6 @@ class mpmath_array_api:
 
     def log(self, x):
         return x.context.ln(x)
-
-    def arcsin(self, x):
-        return x.context.asin(x)
-
-    def arccos(self, x):
-        return x.context.acos(x)
-
-    def arctan(self, x):
-        return x.context.atan(x)
-
-    def arcsinh(self, x):
-        return x.context.asinh(x)
-
-    def arccosh(self, x):
-        return x.context.acosh(x)
-
-    def arctanh(self, x):
-        return x.context.atanh(x)
 
     def exp(self, x):
         return x.context.exp(x)
@@ -433,14 +414,6 @@ class mpmath_array_api:
                 return ctx.make_mpc((ctx.zero._mpf_, (x.real * x.imag * 2)._mpf_))
             return ctx.make_mpc((((x.real - x.imag) * (x.real + x.imag))._mpf_, (x.real * x.imag * 2)._mpf_))
         return x * x
-
-    def sqrt(self, x):
-        ctx = x.context
-        if isinstance(x, ctx.mpc):
-            # Workaround mpmath 1.3 bug in sqrt(+-inf+-infj) evaluation (see mpmath/mpmath#776).
-            if ctx.isinf(x.imag):
-                return ctx.make_mpc((ctx.inf._mpf_, x.imag._mpf_))
-        return ctx.sqrt(x)
 
     def expm1(self, x):
         return x.context.expm1(x)
@@ -656,7 +629,6 @@ class mpmath_array_api:
         ctx = x.context
         if isinstance(x, ctx.mpc):
             pi = ctx.pi
-            inf = ctx.inf
             zero = ctx.zero
             if ctx.isinf(x.real) or ctx.isinf(x.imag):
                 if x.imag < 0:
@@ -677,7 +649,6 @@ class mpmath_array_api:
         ctx = x.context
         if isinstance(x, ctx.mpc):
             pi = ctx.pi
-            inf = ctx.inf
             zero = ctx.zero
             if ctx.isinf(x.real) or ctx.isinf(x.imag):
                 if x.real < 0:
@@ -1465,7 +1436,6 @@ def validate_function(
     max_bound_ulp_width=1,
     bucket=None,
 ):
-    fi = numpy.finfo(dtype)
     ulp_stats = defaultdict(int)
     outrange_stats = defaultdict(int)
 
@@ -1476,8 +1446,6 @@ def validate_function(
         )
 
     for index in tqdm(range(len(samples))) if enable_progressbar else range(len(samples)):
-        min_ulp, min_v1 = None, None
-        min_ulp3, min_v3 = None, None
         v2 = reference_results[index][()]
         sample = samples[index]
         v1 = func(*sample) if isinstance(sample, tuple) else func(sample)
@@ -1564,7 +1532,6 @@ def format_python(code):
 
 
 def format_cpp(code):
-    import os
     import pathlib
     import tempfile
     import subprocess
