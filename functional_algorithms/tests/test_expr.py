@@ -163,3 +163,242 @@ def test_substitute_numpy():
     assert subs(x + eps, x=2).rewrite(fa.rewrite) is ctx.constant(numpy.float32(2), x)
     assert subs(x + eps * 2, x=2).rewrite(fa.rewrite) is ctx.constant(numpy.float32(2 + 2 * fi.eps), x)
     assert subs(x, x="pi").rewrite(fa.rewrite) is ctx.constant(numpy.float32(numpy.pi), x)
+
+
+def test_is_property():
+
+    ctx = fa.Context()
+
+    x = ctx.symbol("x")
+
+    assert x._is("positive") is None
+    assert x._is("nonpositive") is None
+    assert x._is("negative") is None
+    assert x._is("nonnegative") is None
+    assert x._is("finite") is None
+    assert x._is("zero") is None
+    assert x._is("nonzero") is None
+    assert x._is("one") is None
+
+    for r in [ctx.square(x), x * x]:
+        assert r._is("positive") is None
+        assert r._is("nonpositive") is None
+        assert r._is("negative") is False
+        assert r._is("nonnegative") is True
+        assert r._is("finite") is None
+        assert r._is("zero") is None
+        assert r._is("nonzero") is None
+        assert r._is("one") is None
+
+    r = ctx.constant(5, x)
+    assert r._is("positive") is True
+    assert r._is("nonpositive") is False
+    assert r._is("negative") is False
+    assert r._is("nonnegative") is True
+    assert r._is("finite") is True
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is False
+
+    r = ctx.constant("posinf", x)
+    assert r._is("positive") is True
+    assert r._is("nonpositive") is False
+    assert r._is("negative") is False
+    assert r._is("nonnegative") is True
+    assert r._is("finite") is False
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is False
+
+    r = ctx.constant(1, x)
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is True
+
+    for name in ["smallest_subnormal", "smallest", "eps", "largest"]:
+        r = ctx.constant(name, x)
+        assert r._is("positive") is True
+        assert r._is("nonpositive") is False
+        assert r._is("negative") is False
+        assert r._is("nonnegative") is True
+        assert r._is("finite") is True
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is False
+
+    r = ctx.constant(0, x)
+    assert r._is("positive") is False
+    assert r._is("nonpositive") is True
+    assert r._is("negative") is False
+    assert r._is("nonnegative") is True
+    assert r._is("finite") is True
+    assert r._is("zero") is True
+    assert r._is("nonzero") is False
+    assert r._is("one") is False
+
+    r = ctx.constant(-5, x)
+    assert r._is("positive") is False
+    assert r._is("nonpositive") is True
+    assert r._is("negative") is True
+    assert r._is("nonnegative") is False
+    assert r._is("finite") is True
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is False
+
+    r = ctx.constant("neginf", x)
+    assert r._is("positive") is False
+    assert r._is("nonpositive") is True
+    assert r._is("negative") is True
+    assert r._is("nonnegative") is False
+    assert r._is("finite") is False
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is False
+
+    for name in ["undefined", "nan"]:
+        r = ctx.constant("undefined", x)
+        assert r._is("positive") is None
+        assert r._is("nonpositive") is None
+        assert r._is("negative") is None
+        assert r._is("nonnegative") is None
+        assert r._is("finite") is None
+        assert r._is("zero") is None
+        assert r._is("nonzero") is None
+        assert r._is("one") is None
+
+    r = ctx.constant(5, x) + ctx.constant("eps", x)
+    assert r.kind == "add"
+    assert r._is("positive") is True
+    assert r._is("nonpositive") is False
+    assert r._is("negative") is False
+    assert r._is("nonnegative") is True
+    assert r._is("finite") is True
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is None
+
+    r = ctx.constant(-5, x) + ctx.constant("eps", x)
+    assert r.kind == "add"
+    assert r._is("positive") is None
+    assert r._is("nonpositive") is None
+    assert r._is("negative") is None
+    assert r._is("nonnegative") is None
+    assert r._is("finite") is True
+    assert r._is("zero") is None
+    assert r._is("nonzero") is None
+    assert r._is("one") is None
+
+    r = ctx.constant(5, x) - ctx.constant("eps", x)
+    assert r.kind == "subtract"
+    assert r._is("positive") is None
+    assert r._is("nonpositive") is None
+    assert r._is("negative") is None
+    assert r._is("nonnegative") is None
+    assert r._is("finite") is True
+    assert r._is("zero") is None
+    assert r._is("nonzero") is None
+    assert r._is("one") is None
+
+    r = ctx.constant(-5, x) - ctx.constant("eps", x)
+    assert r.kind == "subtract"
+    assert r._is("positive") is False
+    assert r._is("nonpositive") is True
+    assert r._is("negative") is True
+    assert r._is("nonnegative") is False
+    assert r._is("finite") is True
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is False
+
+    r = ctx.constant("eps", x) - ctx.constant(-5, x)
+    assert r.kind == "subtract"
+    assert r._is("positive") is True
+    assert r._is("nonpositive") is False
+    assert r._is("negative") is False
+    assert r._is("nonnegative") is True
+    assert r._is("finite") is True
+    assert r._is("zero") is False
+    assert r._is("nonzero") is True
+    assert r._is("one") is None
+
+    for kind, r in [
+        ("multiply", ctx.constant(5, x) * ctx.constant(6, x)),
+        ("multiply", ctx.constant(-5, x) * ctx.constant(-6, x)),
+        ("divide", ctx.constant(5, x) / ctx.constant(6, x)),
+        ("divide", ctx.constant(-5, x) / ctx.constant(-6, x)),
+    ]:
+        assert r.kind == kind
+        assert r._is("positive") is True
+        assert r._is("nonpositive") is False
+        assert r._is("negative") is False
+        assert r._is("nonnegative") is True
+        assert r._is("finite") is True
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is None
+
+    for kind, r in [
+        ("multiply", ctx.constant(-5, x) * ctx.constant(6, x)),
+        ("multiply", ctx.constant(5, x) * ctx.constant(-6, x)),
+        ("divide", ctx.constant(-5, x) / ctx.constant(6, x)),
+        ("divide", ctx.constant(5, x) / ctx.constant(-6, x)),
+    ]:
+        assert r.kind == kind
+        assert r._is("positive") is False
+        assert r._is("nonpositive") is True
+        assert r._is("negative") is True
+        assert r._is("nonnegative") is False
+        assert r._is("finite") is True
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is False
+
+    for kind in ["square", "sqrt", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(5, x))
+        assert r.kind == kind
+        assert r._is("positive") is True, kind
+        assert r._is("nonpositive") is False
+        assert r._is("negative") is False
+        assert r._is("nonnegative") is True
+        assert r._is("finite") is True
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is False
+
+    for kind in ["square", "sqrt", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(1, x))
+        assert r.kind == kind
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is True
+
+    for kind in ["square", "sqrt", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(0, x))
+        assert r.kind == kind
+        assert r._is("zero") is True
+        assert r._is("nonzero") is False
+        assert r._is("one") is False
+
+    for kind in ["square", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(-5, x))
+        assert r.kind == kind
+        assert r._is("positive") is True, kind
+        assert r._is("nonpositive") is False
+        assert r._is("negative") is False
+        assert r._is("nonnegative") is True
+        assert r._is("finite") is True
+        assert r._is("zero") is False
+        assert r._is("nonzero") is True
+        assert r._is("one") is False
+
+    r = ctx.sqrt(ctx.constant(-5, x))
+    assert r.kind == "sqrt"
+    assert r._is("positive") is None
+    assert r._is("nonpositive") is None
+    assert r._is("negative") is None
+    assert r._is("nonnegative") is None
+    assert r._is("finite") is None
+    assert r._is("zero") is None
+    assert r._is("nonzero") is None
+    assert r._is("one") is None

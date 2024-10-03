@@ -2,7 +2,7 @@ import numpy
 import math
 import struct
 import warnings
-from .utils import UNSPECIFIED, warn_once, value_types
+from .utils import UNSPECIFIED, warn_once, value_types, float_types, integer_types, number_types
 from .typesystem import Type
 from .rewrite import RewriteContext
 
@@ -217,6 +217,18 @@ def make_ref(expr):
     return expr.context._register_reference(expr, ref)
 
 
+def _is_cache(mth):
+
+    def wrap(self):
+        name = mth.__name__
+        r = self.props.get(name, UNSPECIFIED)
+        if r is UNSPECIFIED:
+            self.props[name] = r = mth(self)
+        return r
+
+    return wrap
+
+
 class Printer:
 
     def tostring(self, expr, tab=""):
@@ -325,8 +337,10 @@ class Expr:
         # updates) have global effect within the given context.
         obj._serialized = obj._serialize()
 
-        # props is a dictionary that contains ref, force_ref,
-        # other. In general, its content could be anything.
+        # props is a dictionary that contains reference_name and
+        # force_ref.  In general, its content could be anything. For
+        # instance, the results of `_is_foo` method calls are cached
+        # in props.
 
         # When ref is specified in props, it is used as a variable
         # name referencing the expression. When an expression with
@@ -665,6 +679,219 @@ class Expr:
     @property
     def is_inf(self):
         return self.context.logical_or(self.is_posinf, self.is_neginf)
+
+    def _is(self, *props):
+        result = True
+        for prop in props:
+            r = getattr(self, f"_is_{prop}")
+            if r is None:
+                return
+            result = result and r
+            if not result:
+                break
+        return result
+
+    @property
+    @_is_cache
+    def _is_nonzero(self):
+        r = self._is_zero
+        if r is not None:
+            return not r
+
+    @property
+    @_is_cache
+    def _is_zero(self):
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, Expr):
+                return value._is_zero
+            elif isinstance(value, number_types):
+                return bool(value == 0)
+            elif isinstance(value, str):
+                if value in {"undefined", "nan"}:
+                    return
+                elif value in known_constant_names:
+                    return False
+        elif self.kind == "sqrt":
+            if self.operands[0]._is_negative:
+                return
+            return self.operands[0]._is_zero
+        elif self.kind in {"square", "absolute"}:
+            return self.operands[0]._is_zero
+        elif self._is_positive or self._is_negative:
+            return False
+
+    @property
+    @_is_cache
+    def _is_one(self):
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, Expr):
+                return value._is_one
+            elif isinstance(value, number_types):
+                return bool(value == 1)
+            elif isinstance(value, str):
+                if value in {"undefined", "nan"}:
+                    return
+                elif value in known_constant_names:
+                    return False
+        elif self.kind == "sqrt":
+            if self.operands[0]._is_negative:
+                return
+            return self.operands[0]._is_one
+        elif self.kind in {"square", "absolute"}:
+            return self.operands[0]._is_one
+        elif self._is_nonpositive:
+            return False
+
+    @property
+    @_is_cache
+    def _is_finite(self):
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, str):
+                if value in {"posinf", "neginf"}:
+                    return False
+                elif value in {"undefined", "nan"}:
+                    return
+                elif value in known_constant_names:
+                    return True
+            elif isinstance(value, float_types):
+                if isinstance(value, numpy.floating):
+                    return numpy.isfinite(value)
+                return math.isfinite(value)
+            elif isinstance(value, integer_types):
+                return True
+        elif self.kind == "divide":
+            x, y = self.operands
+            if y.kind == "constant":
+                if isinstance(y.operands[0], Expr):
+                    return y._is_nonzero and x._is_finite
+                elif y._is_zero:
+                    return False
+                elif y.operands[0] in {"posinf", "neginf"}:
+                    return x._is_finite
+            return x._is_finite and y._is_finite
+        elif self.kind == "sqrt":
+            if self._is_nonnegative:
+                return True
+        elif self.kind in {"add", "subtract", "positive", "negative", "absolute", "multiply", "square"}:
+            for x in self.operands:
+                r = x._is_finite
+                if r is None:
+                    return
+                if not r:
+                    break
+            else:
+                return True
+            return False
+
+    @property
+    @_is_cache
+    def _is_nonnegative(self):
+        assert not self.is_complex
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, float_types + integer_types):
+                return value >= 0
+            elif isinstance(value, str):
+                if value in {"neginf"}:
+                    return False
+                elif value in {"undefined", "nan"}:
+                    return
+                elif value in known_constant_names:
+                    return True
+            elif isinstance(value, Expr):
+                return value._is_nonnegative
+        elif self.kind == "add":
+            x, y = self.operands
+            if x._is_nonnegative and y._is_nonnegative:
+                return True
+            if x._is_negative and y._is_negative:
+                return False
+        elif self.kind == "subtract":
+            x, y = self.operands
+            if x._is_nonnegative and y._is_nonpositive:
+                return True
+            if x._is_negative and y._is_positive:
+                return False
+
+        elif self.kind in {"multiply", "divide"}:
+            x, y = self.operands
+            if (
+                (x._is_nonnegative and y._is_nonnegative)
+                or (x._is_nonpositive and y._is_nonpositive)
+                or (x is y and x.kind != "constant")
+            ):
+                return True
+            if (x._is_negative and y._is_positive) or (x._is_positive and y._is_negative):
+                return False
+        elif self.kind == "negative":
+            return self.operands[0]._is_nonpositive
+        elif self.kind == "positive":
+            return self.operands[0]._is_nonnegative
+        elif self.kind == "sqrt" and self.operands[0]._is_nonnegative:
+            return True
+        elif self.kind in {"absolute", "square"}:
+            return True
+
+    @property
+    @_is_cache
+    def _is_nonpositive(self):
+        assert not self.is_complex
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, float_types + integer_types):
+                return value <= 0
+            elif isinstance(value, str):
+                if value in {"neginf"}:
+                    return True
+                elif value in {"undefined", "nan"}:
+                    return
+                elif value in known_constant_names:
+                    return False
+            elif isinstance(value, Expr):
+                return value._is_nonpositive
+        elif self.kind == "add":
+            x, y = self.operands
+            if x._is_nonpositive and y._is_nonpositive:
+                return True
+            if x._is_positive and y._is_positive:
+                return False
+        elif self.kind == "subtract":
+            x, y = self.operands
+            if x._is_nonpositive and y._is_nonnegative:
+                return True
+            if x._is_positive and y._is_negative:
+                return False
+        elif self.kind in {"multiply", "divide"}:
+            x, y = self.operands
+            if (x._is_nonpositive and y._is_positive) or (x._is_nonnegative and y._is_negative):
+                return True
+            if (x._is_negative and y._is_negative) or (x._is_positive and y._is_positive):
+                return False
+        elif self.kind == "negative":
+            return self.operands[0]._is_nonnegative
+        elif self.kind == "positive":
+            return self.operands[0]._is_nonpositive
+        elif self.kind in {"sqrt", "square", "absolute"} and self.operands[0]._is_positive:
+            return False
+        elif self.kind in {"square", "absolute"} and self.operands[0]._is_negative:
+            return False
+
+    @property
+    @_is_cache
+    def _is_positive(self):
+        r = self._is_nonpositive
+        if r is not None:
+            return not r
+
+    @property
+    @_is_cache
+    def _is_negative(self):
+        r = self._is_nonnegative
+        if r is not None:
+            return not r
 
     @property
     def is_complex(self):
