@@ -87,7 +87,7 @@ class Rewriter:
 
     def _eval(self, like, opname, *args):
         typ = like.get_type()
-        if typ.bits is not None:
+        if typ.kind in {"float", "complex", "integer", "boolean"} and typ.bits is not None:
             dtype = typ.asdtype()
             if dtype is not None:
                 op = getattr(numpy, opname)

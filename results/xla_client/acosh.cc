@@ -57,7 +57,7 @@ XlaOp acosh_1(XlaOp z) {
   XlaOp abs_xp1 = Abs(xp1);
   XlaOp mx__0 = Max(abs_xp1, y);
   XlaOp mn = Min(abs_xp1, y);
-  XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(two_));
+  XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(2));
   XlaOp r__0 = Square(Div(mn, mx__0));
   XlaOp sqa = Sqrt(Add(one, r__0));
   XlaOp two = ScalarLike(signed_x, two_);

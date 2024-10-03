@@ -17,14 +17,14 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
        (StableHLO_DivOp:$safe_max
          (StableHLO_SqrtOp
            (StableHLO_ConstantLikeMaxFiniteValue $signed_x)),
-         (StableHLO_ConstantLike<"8"> $signed_x)),
+         (StableHLO_ConstantLike<"8.0"> $signed_x)),
         StableHLO_ComparisonDirectionValue<"GE">,
         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
       $y,
       (StableHLO_SelectOp
         (StableHLO_CompareOp
          $x,
-         (StableHLO_ConstantLike<"1">:$one $signed_x),
+         (StableHLO_ConstantLike<"1.0">:$one $signed_x),
           StableHLO_ComparisonDirectionValue<"LE">,
           (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
         (StableHLO_SqrtOp
@@ -45,8 +45,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                         StableHLO_ComparisonDirectionValue<"EQ">,
                         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                       (StableHLO_MulOp
-                        (StableHLO_SqrtOp:$sqrt_two
-                          (StableHLO_ConstantLike<"2">:$two $signed_x)),
+                        (StableHLO_ConstantLike<"1.4142135623730951">:$sqrt_two $signed_x),
                         $mx),
                       (StableHLO_SelectOp
                         (StableHLO_AndOp
@@ -62,14 +61,14 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                           (StableHLO_CompareOp
                            $r__0,
-                           (StableHLO_ConstantLike<"0">:$zero $signed_x),
+                           (StableHLO_ConstantLike<"0.0">:$zero $signed_x),
                             StableHLO_ComparisonDirectionValue<"GT">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
                         (StableHLO_AddOp
                           $mx,
                           (StableHLO_DivOp
                             (StableHLO_MulOp $mx, $r__0),
-                            $two)),
+                            (StableHLO_ConstantLike<"2.0">:$two $signed_x))),
                         (StableHLO_MulOp $mx, $sqa))),
                     (StableHLO_SelectOp:$s
                       (StableHLO_CompareOp
@@ -171,7 +170,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
            (StableHLO_MulOp
              (StableHLO_SqrtOp
                (StableHLO_ConstantLikeSmallestNormalizedValue $signed_x)),
-             (StableHLO_ConstantLike<"4"> $signed_x)),
+             (StableHLO_ConstantLike<"4.0"> $signed_x)),
             StableHLO_ComparisonDirectionValue<"LT">,
             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
           (StableHLO_CompareOp

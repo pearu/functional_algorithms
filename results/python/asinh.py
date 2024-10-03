@@ -12,22 +12,22 @@ def asinh_0(z: complex) -> complex:
     y: float = abs(signed_y)
     signed_y__0: float = (z).imag
     x: float = abs(-(signed_y__0))
-    safe_max: float = (math.sqrt(sys.float_info.max)) / (8)
+    safe_max: float = (math.sqrt(sys.float_info.max)) / (8.0)
     safe_max_opt: float = ((safe_max) * (1e-06)) if ((x) < ((safe_max) * (1000000000000.0))) else ((safe_max) * (100.0))
     y_gt_safe_max_opt: bool = (y) >= (safe_max_opt)
     mx: float = (y) if (y_gt_safe_max_opt) else (x)
-    two: float = 2
+    two: float = 2.0
     half: float = 0.5
-    zero: float = 0
+    zero: float = 0.0
     xoy: float = ((x) / (y)) if ((y_gt_safe_max_opt) and (not ((y) == (math.inf)))) else (zero)
-    one: float = 1
-    logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4))) and ((x) < (one))
+    one: float = 1.0
+    logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4.0))) and ((x) < (one))
     xp1: float = (x) + (one)
     xm1: float = (x) - (one)
     abs_xp1: float = abs(xp1)
     mx__0: float = max(abs_xp1, y)
     mn: float = min(abs_xp1, y)
-    sqrt_two: float = math.sqrt(two)
+    sqrt_two: float = 1.4142135623730951
     mn_over_mx: float = (mn) / (mx__0)
     r__0: float = (mn_over_mx) * (mn_over_mx)
     sqa: float = math.sqrt((one) + (r__0))
@@ -71,7 +71,7 @@ def asinh_0(z: complex) -> complex:
     )
     half_apx: float = (half) * ((a) + (x))
     return complex(
-        (-(imag__0)) if ((signed_y) < (0)) else (imag__0),
+        (-(imag__0)) if ((signed_y) < (0.0)) else (imag__0),
         math.atan2(
             signed_y__0,
             (
@@ -90,9 +90,9 @@ def asinh_0(z: complex) -> complex:
 def asinh_1(z: float) -> float:
     ax: float = abs(z)
     ax2: float = (ax) * (ax)
-    one: float = 1
+    one: float = 1.0
     return ((0 if z == 0 else math.copysign(1, z))) * (
-        ((math.log(2)) + (math.log(ax)))
+        ((math.log(2.0)) + (math.log(ax)))
         if ((ax) >= (math.sqrt(sys.float_info.max)))
         else (math.log1p((ax) + ((ax2) / ((one) + (math.sqrt((one) + (ax2)))))))
     )

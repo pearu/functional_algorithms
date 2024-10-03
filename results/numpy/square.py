@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.1.2.dev7+g332df57.d20240604), see
+# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -22,11 +22,11 @@ def square_0(z: numpy.complex128) -> numpy.complex128:
         y: numpy.float64 = (z).imag
         result = make_complex(
             (
-                (numpy.float64(0))
+                (numpy.float64(0.0))
                 if (numpy.equal(numpy.abs(x), numpy.abs(y), dtype=numpy.bool_))
                 else (((x) - (y)) * ((x) + (y)))
             ),
-            (numpy.float64(2)) * ((x) * (y)),
+            (numpy.float64(2.0)) * ((x) * (y)),
         )
         return result
 
@@ -38,11 +38,11 @@ def square_1(z: numpy.complex64) -> numpy.complex64:
         y: numpy.float32 = (z).imag
         result = make_complex(
             (
-                (numpy.float32(0))
+                (numpy.float32(0.0))
                 if (numpy.equal(numpy.abs(x), numpy.abs(y), dtype=numpy.bool_))
                 else (((x) - (y)) * ((x) + (y)))
             ),
-            (numpy.float32(2)) * ((x) * (y)),
+            (numpy.float32(2.0)) * ((x) * (y)),
         )
         return result
 

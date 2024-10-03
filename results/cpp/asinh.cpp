@@ -14,10 +14,10 @@
 float asinh_0(float z) {
   float ax = std::abs(z);
   float ax2 = (ax) * (ax);
-  float one = 1;
+  float one = 1.0;
   return ((z == 0 ? z : std::copysign(1, z))) *
-         ((((ax) >= (std::sqrt(std::numeric_limits<float>::max())))
-               ? ((std::log(2)) + (std::log(ax)))
+         ((((ax) >= (1.8446743e+19))
+               ? ((std::log(2.0)) + (std::log(ax)))
                : (std::log1p((ax) +
                              ((ax2) / ((one) + (std::sqrt((one) + (ax2)))))))));
 }
@@ -25,10 +25,10 @@ float asinh_0(float z) {
 double asinh_1(double z) {
   double ax = std::abs(z);
   double ax2 = (ax) * (ax);
-  double one = 1;
+  double one = 1.0;
   return ((z == 0 ? z : std::copysign(1, z))) *
-         ((((ax) >= (std::sqrt(std::numeric_limits<double>::max())))
-               ? ((std::log(2)) + (std::log(ax)))
+         ((((ax) >= (1.3407807929942596e+154))
+               ? ((std::log(2.0)) + (std::log(ax)))
                : (std::log1p((ax) +
                              ((ax2) / ((one) + (std::sqrt((one) + (ax2)))))))));
 }
@@ -38,29 +38,28 @@ std::complex<float> asinh_2(std::complex<float> z) {
   float y = std::abs(signed_y);
   float signed_y__0 = (z).imag();
   float x = std::abs(-(signed_y__0));
-  float safe_max = (std::sqrt(std::numeric_limits<float>::max())) / (8);
+  float safe_max = (1.8446743e+19) / (8.0);
   float safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
   float mx = ((y_gt_safe_max_opt) ? (y) : (x));
-  float two = 2;
+  float two = 2.0;
   float half = 0.5;
-  float zero = 0;
+  float zero = 0.0;
   float xoy = (((y_gt_safe_max_opt) &&
                 (!((y) == (std::numeric_limits<float>::infinity()))))
                    ? ((x) / (y))
                    : (zero));
-  float one = 1;
+  float one = 1.0;
   bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < ((std::sqrt(std::numeric_limits<float>::min())) * (4))) &&
-      ((x) < (one));
+      ((y) < (4.3368087e-19)) && ((x) < (one));
   float xp1 = (x) + (one);
   float xm1 = (x) - (one);
   float abs_xp1 = std::abs(xp1);
   float mx__0 = std::max(abs_xp1, y);
   float mn = std::min(abs_xp1, y);
-  float sqrt_two = std::sqrt(two);
+  float sqrt_two = 1.4142135;
   float mn_over_mx = (mn) / (mx__0);
   float r__0 = (mn_over_mx) * (mn_over_mx);
   float sqa = std::sqrt((one) + (r__0));
@@ -106,7 +105,7 @@ std::complex<float> asinh_2(std::complex<float> z) {
                    : (std::log1p((am1) + (sq))))));
   float half_apx = (half) * ((a) + (x));
   return std::complex<float>(
-      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)),
+      (((signed_y) < (0.0)) ? (-(imag__0)) : (imag__0)),
       std::atan2(
           signed_y__0,
           (((std::max(x, y)) >= (safe_max))
@@ -122,29 +121,28 @@ std::complex<double> asinh_3(std::complex<double> z) {
   double y = std::abs(signed_y);
   double signed_y__0 = (z).imag();
   double x = std::abs(-(signed_y__0));
-  double safe_max = (std::sqrt(std::numeric_limits<double>::max())) / (8);
+  double safe_max = (1.3407807929942596e+154) / (8.0);
   double safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
   double mx = ((y_gt_safe_max_opt) ? (y) : (x));
-  double two = 2;
+  double two = 2.0;
   double half = 0.5;
-  double zero = 0;
+  double zero = 0.0;
   double xoy = (((y_gt_safe_max_opt) &&
                  (!((y) == (std::numeric_limits<double>::infinity()))))
                     ? ((x) / (y))
                     : (zero));
-  double one = 1;
+  double one = 1.0;
   bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < ((std::sqrt(std::numeric_limits<double>::min())) * (4))) &&
-      ((x) < (one));
+      ((y) < (5.966672584960166e-154)) && ((x) < (one));
   double xp1 = (x) + (one);
   double xm1 = (x) - (one);
   double abs_xp1 = std::abs(xp1);
   double mx__0 = std::max(abs_xp1, y);
   double mn = std::min(abs_xp1, y);
-  double sqrt_two = std::sqrt(two);
+  double sqrt_two = 1.4142135623730951;
   double mn_over_mx = (mn) / (mx__0);
   double r__0 = (mn_over_mx) * (mn_over_mx);
   double sqa = std::sqrt((one) + (r__0));
@@ -190,7 +188,7 @@ std::complex<double> asinh_3(std::complex<double> z) {
                    : (std::log1p((am1) + (sq))))));
   double half_apx = (half) * ((a) + (x));
   return std::complex<double>(
-      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)),
+      (((signed_y) < (0.0)) ? (-(imag__0)) : (imag__0)),
       std::atan2(
           signed_y__0,
           (((std::max(x, y)) >= (safe_max))

@@ -1,12 +1,9 @@
-// This file is generated using functional_algorithms tool (0.4.0), see
+// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
 
 
-
-def : Pat<(log1p_0 NonComplexElementType:$z),
-  (StableHLO_Log1pOp $z)>;
 
 def : Pat<(log1p_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
@@ -16,7 +13,7 @@ def : Pat<(log1p_1 ComplexElementType:$z),
           (StableHLO_CompareOp
            (StableHLO_AddOp:$xp1
              (StableHLO_RealOp:$x $z),
-             (StableHLO_ConstantLike<"1">:$one $x)),
+             (StableHLO_ConstantLike<"1.0">:$one $x)),
            (StableHLO_AbsOp:$ay
              (StableHLO_ImagOp:$y $z)),
             StableHLO_ComparisonDirectionValue<"GE">,

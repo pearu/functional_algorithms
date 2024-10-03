@@ -31,11 +31,11 @@ XlaOp asin_1(XlaOp z) {
   XlaOp abs_xp1 = Abs(xp1);
   XlaOp mx = Max(abs_xp1, y);
   XlaOp mn = Min(abs_xp1, y);
-  FloatType two_ = 2;
-  XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(two_));
+  XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(2));
   XlaOp r__0 = Square(Div(mn, mx));
   XlaOp sqa = Sqrt(Add(one, r__0));
   XlaOp zero = ScalarLike(signed_x, 0);
+  FloatType two_ = 2;
   XlaOp two = ScalarLike(signed_x, two_);
   XlaOp r = Select(Eq(mx, mn), Mul(sqrt_two, mx),
                    Select(And(Eq(sqa, one), Gt(r__0, zero)),

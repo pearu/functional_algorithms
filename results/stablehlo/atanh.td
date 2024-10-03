@@ -12,14 +12,14 @@ def : Pat<(atanh_1 ComplexElementType:$z),
         (StableHLO_SelectOp
           (StableHLO_CompareOp
            (StableHLO_RealOp:$x $z),
-           (StableHLO_ConstantLike<"0">:$zero $x),
+           (StableHLO_ConstantLike<"0.0">:$zero $x),
             StableHLO_ComparisonDirectionValue<"GE">,
             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
-          (StableHLO_ConstantLike<"1">:$one $x),
-          (StableHLO_ConstantLike<"-1">:$constant_neg1 $x)),
+          (StableHLO_ConstantLike<"1.0">:$one $x),
+          (StableHLO_ConstantLike<"-1.0">:$constant_fneg1 $x)),
         (StableHLO_Log1pOp
           (StableHLO_MulOp
-            (StableHLO_ConstantLike<"4"> $x),
+            (StableHLO_ConstantLike<"4.0"> $x),
             (StableHLO_SelectOp
               (StableHLO_AndOp:$in_safe_region
                 (StableHLO_CompareOp
@@ -110,10 +110,10 @@ def : Pat<(atanh_1 ComplexElementType:$z),
           (StableHLO_SelectOp
             (StableHLO_CompareOp
              $y,
-             (StableHLO_ConstantLike<"0"> $y),
+             (StableHLO_ConstantLike<"0.0"> $y),
               StableHLO_ComparisonDirectionValue<"GE">,
               (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
             $one,
-            $constant_neg1),
+            $constant_fneg1),
           (StableHLO_ConstantLike<"M_PI"> $x))),
       (StableHLO_ConstantLike<"0.5"> $x)))>;

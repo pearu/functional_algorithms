@@ -12,25 +12,25 @@
 
 
 float acosh_0(float z) {
-  float constant_2 = 2;
-  float constant_1 = 1;
-  float sqrt_subtract_z_constant_1 = std::sqrt((z) - (constant_1));
-  return (((z) >= ((std::numeric_limits<float>::max()) / (constant_2)))
-              ? ((std::log(constant_2)) + (std::log(z)))
-              : (std::log1p((sqrt_subtract_z_constant_1) *
-                            ((std::sqrt((z) + (constant_1))) +
-                             (sqrt_subtract_z_constant_1)))));
+  float constant_f2 = 2.0;
+  float constant_f1 = 1.0;
+  float sqrt_subtract_z_constant_f1 = std::sqrt((z) - (constant_f1));
+  return (((z) >= ((3.4028235e+38) / (constant_f2)))
+              ? ((std::log(constant_f2)) + (std::log(z)))
+              : (std::log1p((sqrt_subtract_z_constant_f1) *
+                            ((std::sqrt((z) + (constant_f1))) +
+                             (sqrt_subtract_z_constant_f1)))));
 }
 
 double acosh_1(double z) {
-  double constant_2 = 2;
-  double constant_1 = 1;
-  double sqrt_subtract_z_constant_1 = std::sqrt((z) - (constant_1));
-  return (((z) >= ((std::numeric_limits<double>::max()) / (constant_2)))
-              ? ((std::log(constant_2)) + (std::log(z)))
-              : (std::log1p((sqrt_subtract_z_constant_1) *
-                            ((std::sqrt((z) + (constant_1))) +
-                             (sqrt_subtract_z_constant_1)))));
+  double constant_f2 = 2.0;
+  double constant_f1 = 1.0;
+  double sqrt_subtract_z_constant_f1 = std::sqrt((z) - (constant_f1));
+  return (((z) >= ((1.7976931348623157e+308) / (constant_f2)))
+              ? ((std::log(constant_f2)) + (std::log(z)))
+              : (std::log1p((sqrt_subtract_z_constant_f1) *
+                            ((std::sqrt((z) + (constant_f1))) +
+                             (sqrt_subtract_z_constant_f1)))));
 }
 
 std::complex<float> acosh_2(std::complex<float> z) {
@@ -38,29 +38,28 @@ std::complex<float> acosh_2(std::complex<float> z) {
   float y = std::abs(signed_y);
   float signed_x = (z).real();
   float x = std::abs(signed_x);
-  float safe_max = (std::sqrt(std::numeric_limits<float>::max())) / (8);
+  float safe_max = (1.8446743e+19) / (8.0);
   float safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
   float mx = ((y_gt_safe_max_opt) ? (y) : (x));
-  float two = 2;
+  float two = 2.0;
   float half = 0.5;
-  float zero = 0;
+  float zero = 0.0;
   float xoy = (((y_gt_safe_max_opt) &&
                 (!((y) == (std::numeric_limits<float>::infinity()))))
                    ? ((x) / (y))
                    : (zero));
-  float one = 1;
+  float one = 1.0;
   bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < ((std::sqrt(std::numeric_limits<float>::min())) * (4))) &&
-      ((x) < (one));
+      ((y) < (4.3368087e-19)) && ((x) < (one));
   float xp1 = (x) + (one);
   float xm1 = (x) - (one);
   float abs_xp1 = std::abs(xp1);
   float mx__0 = std::max(abs_xp1, y);
   float mn = std::min(abs_xp1, y);
-  float sqrt_two = std::sqrt(two);
+  float sqrt_two = 1.4142135;
   float mn_over_mx = (mn) / (mx__0);
   float r__0 = (mn_over_mx) * (mn_over_mx);
   float sqa = std::sqrt((one) + (r__0));
@@ -113,7 +112,7 @@ std::complex<float> acosh_2(std::complex<float> z) {
            : (((logical_and_lt_y_safe_min_lt_x_one)
                    ? ((y) / (sq))
                    : (std::log1p((am1) + (sq)))))),
-      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)));
+      (((signed_y) < (0.0)) ? (-(imag__0)) : (imag__0)));
 }
 
 std::complex<double> acosh_3(std::complex<double> z) {
@@ -121,29 +120,28 @@ std::complex<double> acosh_3(std::complex<double> z) {
   double y = std::abs(signed_y);
   double signed_x = (z).real();
   double x = std::abs(signed_x);
-  double safe_max = (std::sqrt(std::numeric_limits<double>::max())) / (8);
+  double safe_max = (1.3407807929942596e+154) / (8.0);
   double safe_max_opt =
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
   double mx = ((y_gt_safe_max_opt) ? (y) : (x));
-  double two = 2;
+  double two = 2.0;
   double half = 0.5;
-  double zero = 0;
+  double zero = 0.0;
   double xoy = (((y_gt_safe_max_opt) &&
                  (!((y) == (std::numeric_limits<double>::infinity()))))
                     ? ((x) / (y))
                     : (zero));
-  double one = 1;
+  double one = 1.0;
   bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < ((std::sqrt(std::numeric_limits<double>::min())) * (4))) &&
-      ((x) < (one));
+      ((y) < (5.966672584960166e-154)) && ((x) < (one));
   double xp1 = (x) + (one);
   double xm1 = (x) - (one);
   double abs_xp1 = std::abs(xp1);
   double mx__0 = std::max(abs_xp1, y);
   double mn = std::min(abs_xp1, y);
-  double sqrt_two = std::sqrt(two);
+  double sqrt_two = 1.4142135623730951;
   double mn_over_mx = (mn) / (mx__0);
   double r__0 = (mn_over_mx) * (mn_over_mx);
   double sqa = std::sqrt((one) + (r__0));
@@ -196,5 +194,5 @@ std::complex<double> acosh_3(std::complex<double> z) {
            : (((logical_and_lt_y_safe_min_lt_x_one)
                    ? ((y) / (sq))
                    : (std::log1p((am1) + (sq)))))),
-      (((signed_y) < (0)) ? (-(imag__0)) : (imag__0)));
+      (((signed_y) < (0.0)) ? (-(imag__0)) : (imag__0)));
 }

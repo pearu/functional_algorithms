@@ -13,13 +13,12 @@ def absolute_0(z: complex) -> float:
     abs_y: float = abs((z).imag)
     mx: float = max(abs_x, abs_y)
     mn: float = min(abs_x, abs_y)
-    constant_2: float = 2
-    constant_1: float = 1
+    constant_f1: float = 1.0
     mn_over_mx: float = (mn) / (mx)
     r: float = (mn_over_mx) * (mn_over_mx)
-    sqa: float = math.sqrt((constant_1) + (r))
+    sqa: float = math.sqrt((constant_f1) + (r))
     return (
-        ((math.sqrt(constant_2)) * (mx))
+        ((1.4142135623730951) * (mx))
         if ((mx) == (mn))
-        else (((mx) + (((mx) * (r)) / (constant_2))) if (((sqa) == (constant_1)) and ((r) > (0))) else ((mx) * (sqa)))
+        else (((mx) + (((mx) * (r)) / (2.0))) if (((sqa) == (constant_f1)) and ((r) > (0.0))) else ((mx) * (sqa)))
     )

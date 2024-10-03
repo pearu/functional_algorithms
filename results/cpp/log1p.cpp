@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.10.2.dev1+g24430b3.d20240905), see
+// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -13,7 +13,7 @@
 
 std::complex<float> log1p_2(std::complex<float> z) {
   float x = (z).real();
-  float one = 1;
+  float one = 1.0;
   float xp1 = (x) + (one);
   float y = (z).imag();
   float ay = std::abs(y);
@@ -29,7 +29,7 @@ std::complex<float> log1p_2(std::complex<float> z) {
 
 std::complex<double> log1p_3(std::complex<double> z) {
   double x = (z).real();
-  double one = 1;
+  double one = 1.0;
   double xp1 = (x) + (one);
   double y = (z).imag();
   double ay = std::abs(y);
