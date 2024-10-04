@@ -402,3 +402,248 @@ def test_is_property():
     assert r._is("zero") is None
     assert r._is("nonzero") is None
     assert r._is("one") is None
+
+
+def test_rewrite_relop_consistency():
+
+    for data in [fa.rewrite._constant_relop_constant, fa.rewrite._constant_relop_any, fa.rewrite._any_relop_any]:
+        for (lhs, rhs), (ge, gt, le, lt, eq, ne) in data.items():
+            # lhs rop rhs   is equivalent to    rhs swap_rop lhs
+            swap_le, swap_lt, swap_ge, swap_gt, swap_eq, swap_ne = data[(rhs, lhs)]
+            assert ge == swap_ge
+            assert gt == swap_gt
+            assert le == swap_le
+            assert lt == swap_lt
+            assert eq == swap_eq
+            assert ne == swap_ne
+
+            # lhs rop rhs   is equivalent to    not (lhs inverse_rop rhs)
+            inverse_ge = lt
+            inverse_gt = le
+            inverse_le = gt
+            inverse_lt = ge
+            inverse_eq = ne
+            inverse_ne = eq
+            assert (inverse_ge is None and ge is None) or (inverse_ge is not None and ge is not None)
+            assert ge is None or ge == (not inverse_ge)
+            assert (inverse_gt is None and gt is None) or (inverse_gt is not None and gt is not None)
+            assert gt is None or gt == (not inverse_gt)
+            assert (inverse_le is None and le is None) or (inverse_le is not None and le is not None)
+            assert le is None or le == (not inverse_le)
+            assert (inverse_lt is None and lt is None) or (inverse_lt is not None and lt is not None)
+            assert lt is None or lt == (not inverse_lt)
+            assert (inverse_eq is None and eq is None) or (inverse_eq is not None and eq is not None)
+            assert eq is None or eq == (not inverse_eq)
+            assert (inverse_ne is None and ne is None) or (inverse_ne is not None and ne is not None)
+            assert ne is None or ne == (not inverse_ne)
+
+
+def test_relops():
+    def rewrite(expr):
+        r1 = expr.rewrite(fa.rewrite)
+        expr2 = fa.Expr(
+            expr.context, dict(lt="gt", le="ge", gt="lt", ge="le", eq="eq", ne="ne")[expr.kind], expr.operands[::-1]
+        )
+        r2_ = expr2.rewrite(fa.rewrite)
+        if r2_.kind == "constant":
+            r2 = r2_
+        else:
+            r2 = fa.Expr(
+                expr.context, dict(lt="gt", le="ge", gt="lt", ge="le", eq="eq", ne="ne")[r2_.kind], r2_.operands[::-1]
+            )
+        assert r1 is r2
+        return r1
+
+    ctx = fa.Context()
+    true = ctx.constant(True)
+    false = ctx.constant(False)
+    x = ctx.symbol("x")
+
+    assert rewrite(x > 0).kind == "gt"
+    assert rewrite(x >= 0).kind == "ge"
+    assert rewrite(x <= 0).kind == "le"
+    assert rewrite(x < 0).kind == "lt"
+    assert rewrite(x == 0).kind == "eq"
+    assert rewrite(x != 0).kind == "ne"
+    assert rewrite(x > 1).kind == "gt"
+    assert rewrite(x >= 1).kind == "ge"
+    assert rewrite(x <= 1).kind == "le"
+    assert rewrite(x < 1).kind == "lt"
+    assert rewrite(x == 1).kind == "eq"
+    assert rewrite(x != 1).kind == "ne"
+    assert rewrite(x == 1).kind == "eq"
+
+    for r in [ctx.square(x), x * x]:
+        assert rewrite(r > 0).kind == "gt"
+        assert rewrite(r >= 0) is true
+        assert rewrite(r <= 0).kind == "le"
+        assert rewrite(r < 0) is false
+        assert rewrite(r == 0).kind == "eq"
+        assert rewrite(r != 0).kind == "ne"
+        assert rewrite(r == 1).kind == "eq"
+
+    for r in [ctx.square(x), x * x]:
+        assert rewrite(r > 1).kind == "gt"
+        assert rewrite(r >= 1).kind == "ge"
+        assert rewrite(r <= 1).kind == "le"
+        assert rewrite(r < 1).kind == "lt"
+        assert rewrite(r == 1).kind == "eq"
+        assert rewrite(r != 1).kind == "ne"
+
+    for r in [
+        ctx.constant(1, x),
+        ctx.constant(5, x),
+        ctx.constant("posinf", x),
+        ctx.constant("largest", x),
+        ctx.constant("eps", x),
+        ctx.constant("smallest", x),
+        ctx.constant("smallest_subnormal", x),
+    ]:
+        assert rewrite(r > 0) is true
+        assert rewrite(r >= 0) is true
+        assert rewrite(r <= 0) is false
+        assert rewrite(r < 0) is false
+        assert rewrite(r == 0) is false
+        assert rewrite(r != 0) is true
+
+    for r in [
+        ctx.constant(-5, x),
+        ctx.constant("neginf", x),
+    ]:
+        assert rewrite(r > 0) is false
+        assert rewrite(r >= 0) is false
+        assert rewrite(r <= 0) is true
+        assert rewrite(r < 0) is true
+        assert rewrite(r == 0) is false
+        assert rewrite(r != 0) is true
+        assert rewrite(r > 1) is false
+        assert rewrite(r >= 1) is false
+        assert rewrite(r <= 1) is true
+        assert rewrite(r < 1) is true
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 1) is true
+
+    for r in [
+        ctx.constant(5, x),
+        ctx.constant("posinf", x),
+        ctx.constant("largest", x),
+    ]:
+        assert rewrite(r > 1) is true
+        assert rewrite(r >= 1) is true
+        assert rewrite(r <= 1) is false
+        assert rewrite(r < 1) is false
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 1) is true
+
+    for r in [
+        ctx.constant(0, x),
+        ctx.constant("eps", x),
+        ctx.constant("smallest", x),
+        ctx.constant("smallest_subnormal", x),
+    ]:
+        assert rewrite(r > 1) is false
+        assert rewrite(r >= 1) is false
+        assert rewrite(r <= 1) is true
+        assert rewrite(r < 1) is true
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 1) is true
+
+    r = ctx.constant(5, x) + ctx.constant("eps", x)
+    assert r.kind == "add"
+    assert rewrite(r > 0) is true
+    assert rewrite(r >= 0) is true
+    assert rewrite(r <= 0) is false
+    assert rewrite(r < 0) is false
+    assert rewrite(r == 0) is false
+    assert rewrite(r != 0) is true
+
+    r = ctx.constant(-5, x) + ctx.constant("eps", x)
+    assert r.kind == "add"
+    assert rewrite(r > 0).kind == "gt"
+    assert rewrite(r >= 0).kind == "ge"
+    assert rewrite(r <= 0).kind == "le"
+    assert rewrite(r < 0).kind == "lt"
+    assert rewrite(r == 0).kind == "eq"
+    assert rewrite(r != 0).kind == "ne"
+
+    r = ctx.constant(5, x) - ctx.constant("eps", x)
+    assert r.kind == "subtract"
+    assert rewrite(r > 0).kind == "gt"
+    assert rewrite(r >= 0).kind == "ge"
+    assert rewrite(r <= 0).kind == "le"
+    assert rewrite(r < 0).kind == "lt"
+    assert rewrite(r == 0).kind == "eq"
+    assert rewrite(r != 0).kind == "ne"
+
+    r = ctx.constant(-5, x) - ctx.constant("eps", x)
+    assert r.kind == "subtract"
+    assert rewrite(r > 0) is false
+    assert rewrite(r >= 0) is false
+    assert rewrite(r <= 0) is true
+    assert rewrite(r < 0) is true
+    assert rewrite(r == 0) is false
+    assert rewrite(r != 0) is true
+
+    for kind, r in [
+        ("multiply", ctx.constant(5, x) * ctx.constant(6, x)),
+        ("multiply", ctx.constant(-5, x) * ctx.constant(-6, x)),
+        ("divide", ctx.constant(5, x) / ctx.constant(6, x)),
+        ("divide", ctx.constant(-5, x) / ctx.constant(-6, x)),
+    ]:
+        assert r.kind == kind
+        assert rewrite(r > 0) is true
+        assert rewrite(r >= 0) is true
+        assert rewrite(r <= 0) is false
+        assert rewrite(r < 0) is false
+        assert rewrite(r == 0) is false
+        assert rewrite(r != 0) is true
+
+    for kind, r in [
+        ("multiply", ctx.constant(-5, x) * ctx.constant(6, x)),
+        ("multiply", ctx.constant(5, x) * ctx.constant(-6, x)),
+        ("divide", ctx.constant(-5, x) / ctx.constant(6, x)),
+        ("divide", ctx.constant(5, x) / ctx.constant(-6, x)),
+    ]:
+        assert r.kind == kind
+        assert rewrite(r > 0) is false
+        assert rewrite(r >= 0) is false
+        assert rewrite(r <= 0) is true
+        assert rewrite(r < 0) is true
+        assert rewrite(r == 0) is false
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 0) is true
+
+    for kind in ["square", "sqrt", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(5, x))
+        assert r.kind == kind
+        assert rewrite(r > 0) is true
+        assert rewrite(r >= 0) is true
+        assert rewrite(r <= 0) is false
+        assert rewrite(r < 0) is false
+        assert rewrite(r == 0) is false
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 0) is true
+
+        if kind != "sqrt":
+            r = getattr(ctx, kind)(ctx.constant(-5, x))
+            assert r.kind == kind
+            assert rewrite(r > 0) is true
+            assert rewrite(r >= 0) is true
+            assert rewrite(r <= 0) is false
+            assert rewrite(r < 0) is false
+            assert rewrite(r == 0) is false
+            assert rewrite(r == 1) is false
+            assert rewrite(r != 0) is true
+
+    for kind in ["square", "sqrt", "absolute"]:
+        r = getattr(ctx, kind)(ctx.constant(1, x))
+        assert r.kind == kind
+        assert rewrite(r == 0) is false
+        assert rewrite(r == 1) is true
+        assert rewrite(r != 0) is true
+
+        r = getattr(ctx, kind)(ctx.constant(0, x))
+        assert r.kind == kind
+        assert rewrite(r == 0) is true
+        assert rewrite(r == 1) is false
+        assert rewrite(r != 0) is false
