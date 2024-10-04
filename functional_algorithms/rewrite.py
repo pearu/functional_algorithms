@@ -44,6 +44,152 @@ class Printer:
             return f"{expr.kind}({ops})"
 
 
+_constant_relop_constant = {
+    # >=      >     <=     <     ==       !=
+    ("posinf", "posinf"): (True, False, True, False, True, False),
+    ("posinf", "neginf"): (True, True, False, False, False, True),
+    ("posinf", "largest"): (True, True, False, False, False, True),
+    ("posinf", "eps"): (True, True, False, False, False, True),
+    ("posinf", "smallest"): (True, True, False, False, False, True),
+    ("posinf", "smallest_subnormal"): (True, True, False, False, False, True),
+    ("posinf", 1): (True, True, False, False, False, True),
+    ("posinf", 0): (True, True, False, False, False, True),
+    ("neginf", "posinf"): (False, False, True, True, False, True),
+    ("neginf", "neginf"): (True, False, True, False, True, False),
+    ("neginf", "largest"): (False, False, True, True, False, True),
+    ("neginf", "eps"): (False, False, True, True, False, True),
+    ("neginf", "smallest"): (False, False, True, True, False, True),
+    ("neginf", "smallest_subnormal"): (False, False, True, True, False, True),
+    ("neginf", 1): (False, False, True, True, False, True),
+    ("neginf", 0): (False, False, True, True, False, True),
+    ("largest", "posinf"): (False, False, True, True, False, True),
+    ("largest", "neginf"): (True, True, False, False, False, True),
+    ("largest", "largest"): (True, False, True, False, True, False),
+    ("largest", "eps"): (True, True, False, False, False, True),
+    ("largest", "smallest"): (True, True, False, False, False, True),
+    ("largest", "smallest_subnormal"): (True, True, False, False, False, True),
+    ("largest", 1): (True, True, False, False, False, True),
+    ("largest", 0): (True, True, False, False, False, True),
+    ("smallest", "posinf"): (False, False, True, True, False, True),
+    ("smallest", "neginf"): (True, True, False, False, False, True),
+    ("smallest", "largest"): (False, False, True, True, False, True),
+    ("smallest", "eps"): (False, False, True, True, False, True),
+    ("smallest", "smallest"): (True, False, True, False, True, False),
+    ("smallest", "smallest_subnormal"): (True, True, False, False, False, True),
+    ("smallest", 1): (False, False, True, True, False, True),
+    ("smallest", 0): (True, True, False, False, False, True),
+    ("smallest_subnormal", "posinf"): (False, False, True, True, False, True),
+    ("smallest_subnormal", "neginf"): (True, True, False, False, False, True),
+    ("smallest_subnormal", "largest"): (False, False, True, True, False, True),
+    ("smallest_subnormal", "eps"): (False, False, True, True, False, True),
+    ("smallest_subnormal", "smallest"): (False, False, True, True, False, True),
+    ("smallest_subnormal", "smallest_subnormal"): (True, False, True, False, True, False),
+    ("smallest_subnormal", 1): (False, False, True, True, False, True),
+    ("smallest_subnormal", 0): (True, True, False, False, False, True),
+    ("eps", "posinf"): (False, False, True, True, False, True),
+    ("eps", "neginf"): (True, True, False, False, False, True),
+    ("eps", "largest"): (False, False, True, True, False, True),
+    ("eps", "eps"): (True, False, True, False, True, False),
+    ("eps", "smallest"): (True, True, False, False, False, True),
+    ("eps", "smallest_subnormal"): (True, True, False, False, False, True),
+    ("eps", 1): (False, False, True, True, False, True),
+    ("eps", 0): (True, True, False, False, False, True),
+    (1, "posinf"): (False, False, True, True, False, True),
+    (1, "neginf"): (True, True, False, False, False, True),
+    (1, "largest"): (False, False, True, True, False, True),
+    (1, "eps"): (True, True, False, False, False, True),
+    (1, "smallest"): (True, True, False, False, False, True),
+    (1, "smallest_subnormal"): (True, True, False, False, False, True),
+    (1, 1): (True, False, True, False, True, False),
+    (1, 0): (True, True, False, False, False, True),
+    (0, "posinf"): (False, False, True, True, False, True),
+    (0, "neginf"): (True, True, False, False, False, True),
+    (0, "largest"): (False, False, True, True, False, True),
+    (0, "eps"): (False, False, True, True, False, True),
+    (0, "smallest"): (False, False, True, True, False, True),
+    (0, "smallest_subnormal"): (False, False, True, True, False, True),
+    (0, 1): (False, False, True, True, False, True),
+    (0, 0): (True, False, True, False, True, False),
+}
+
+
+_constant_relop_any = {
+    # >=      >     <=     <     ==       !=
+    ("posinf", "positive"): (True, None, None, False, None, None),
+    ("neginf", "positive"): (False, False, True, True, False, True),
+    ("largest", "positive"): (None, None, None, None, None, None),
+    ("smallest", "positive"): (None, False, True, None, None, None),
+    ("smallest_subnormal", "positive"): (None, False, True, None, None, None),
+    ("eps", "positive"): (None, None, None, None, None, None),
+    (1, "positive"): (None, None, None, None, None, None),
+    (0, "positive"): (False, False, True, True, False, True),
+    ("posinf", "nonnegative"): (True, None, None, False, None, None),
+    ("neginf", "nonnegative"): (False, False, True, True, False, True),
+    ("largest", "nonnegative"): (None, None, None, None, None, None),
+    ("smallest", "nonnegative"): (None, False, True, None, None, None),
+    ("smallest_subnormal", "nonnegative"): (None, False, True, None, None, None),
+    ("eps", "nonnegative"): (None, None, None, None, None, None),
+    (1, "nonnegative"): (None, None, None, None, None, None),
+    (0, "nonnegative"): (None, False, True, None, None, None),
+    ("posinf", "negative"): (True, True, False, False, False, True),
+    ("neginf", "negative"): (None, False, True, None, None, None),
+    ("largest", "negative"): (True, True, False, False, False, True),
+    ("smallest", "negative"): (True, True, False, False, False, True),
+    ("smallest_subnormal", "negative"): (True, True, False, False, False, True),
+    ("eps", "negative"): (True, True, False, False, False, True),
+    (1, "negative"): (True, True, False, False, False, True),
+    (0, "negative"): (True, True, False, False, False, True),
+    ("posinf", "nonpositive"): (True, True, False, False, False, True),
+    ("neginf", "nonpositive"): (None, False, True, None, None, None),
+    ("largest", "nonpositive"): (True, True, False, False, False, True),
+    ("smallest", "nonpositive"): (True, True, False, False, False, True),
+    ("smallest_subnormal", "nonpositive"): (True, True, False, False, False, True),
+    ("eps", "nonpositive"): (True, True, False, False, False, True),
+    (1, "nonpositive"): (True, True, False, False, False, True),
+    (0, "nonpositive"): (True, None, None, False, None, None),
+    ("posinf", "finite"): (True, True, False, False, False, True),
+    ("neginf", "finite"): (False, False, True, True, False, True),
+    ("largest", "finite"): (True, None, None, False, None, None),
+    ("smallest", "finite"): (None, None, None, None, None, None),
+    ("smallest_subnormal", "finite"): (None, None, None, None, None, None),
+    ("eps", "finite"): (None, None, None, None, None, None),
+    (1, "finite"): (None, None, None, None, None, None),
+    (0, "finite"): (None, None, None, None, None, None),
+}
+
+for (_lhs, _rhs), (_ge, _gt, _le, _lt, _eq, _ne) in dict(_constant_relop_any.items()).items():
+    _constant_relop_any[_rhs, _lhs] = (_le, _lt, _ge, _gt, _eq, _ne)
+
+_any_relop_any = {
+    # >=      >     <=     <     ==       !=
+    ("finite", "finite"): (None, None, None, None, None, None),
+    ("finite", "positive"): (None, None, None, None, None, None),
+    ("finite", "negative"): (None, None, None, None, None, None),
+    ("finite", "nonpositive"): (None, None, None, None, None, None),
+    ("finite", "nonnegative"): (None, None, None, None, None, None),
+    ("positive", "finite"): (None, None, None, None, None, None),
+    ("positive", "positive"): (None, None, None, None, None, None),
+    ("positive", "negative"): (True, True, False, False, False, True),
+    ("positive", "nonpositive"): (True, True, False, False, False, True),
+    ("positive", "nonnegative"): (None, None, None, None, None, None),
+    ("negative", "finite"): (None, None, None, None, None, None),
+    ("negative", "negative"): (None, None, None, None, None, None),
+    ("negative", "positive"): (False, False, True, True, False, True),
+    ("negative", "nonnegative"): (False, False, True, True, False, True),
+    ("negative", "nonpositive"): (None, None, None, None, None, None),
+    ("nonnegative", "finite"): (None, None, None, None, None, None),
+    ("nonnegative", "positive"): (None, None, None, None, None, None),
+    ("nonnegative", "nonnegative"): (None, None, None, None, None, None),
+    ("nonnegative", "negative"): (True, True, False, False, False, True),
+    ("nonnegative", "nonpositive"): (True, True, False, False, False, True),
+    ("nonpositive", "finite"): (None, None, None, None, None, None),
+    ("nonpositive", "nonpositive"): (None, None, None, None, None, None),
+    ("nonpositive", "negative"): (None, None, None, None, None, None),
+    ("nonpositive", "positive"): (False, False, True, True, False, True),
+    ("nonpositive", "nonnegative"): (False, False, True, True, False, True),
+}
+
+
 class Rewriter:
 
     patterns = {
@@ -96,7 +242,10 @@ class Rewriter:
                 op = getattr(numpy, opname)
                 return like.context.constant(op(*map(dtype, args)), like)
         if typ.kind == "float":
-            op = getattr(math, opname)
+            if opname == "square":
+                op = lambda x: x * x
+            else:
+                op = getattr(math, opname)
             return like.context.constant(op(*args), like)
 
     def absolute(self, expr):
@@ -358,48 +507,84 @@ class Rewriter:
         if x.kind == "complex":
             return x.operands[1]
 
-    def _compare(self, expr, relop):
+    def _compare(self, expr, relop, relop_index, swap_relop_index):
         x, y = expr.operands
-        if x.kind == "constant" and y.kind == "constant":
+        if x.kind == "constant":
             xvalue, xlike = x.operands
+            if y.kind == "constant":
+                yvalue, ylike = y.operands
+
+                if isinstance(xvalue, _expr.Expr) or isinstance(yvalue, _expr.Expr):
+                    r = self._compare(relop(xvalue, yvalue), relop, relop_index, swap_relop_index)
+                    if isinstance(r, bool):
+                        return expr.context.constant(r)
+                else:
+                    r = _constant_relop_constant.get((xvalue, yvalue))
+                    if r is not None:
+                        return expr.context.constant(r[relop_index])
+
+                if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
+                    r = bool(relop(xvalue, yvalue))
+                    return expr.context.constant(r)
+
+            elif isinstance(xvalue, number_types):
+                for prop in ["positive", "negative", "nonpositive", "nonnegative", "finite"]:
+                    if y._is(prop):
+                        r = _constant_relop_any.get((xvalue, prop))
+                        if r is not None:
+                            r = r[relop_index]
+                            if r is not None:
+                                return expr.context.constant(r)
+
+        elif y.kind == "constant":
             yvalue, ylike = y.operands
-
-            if isinstance(yvalue, str):
-                if yvalue == "posinf":
-                    yvalue = math.inf
-                if yvalue == "neginf":
-                    yvalue = -math.inf
-
-            if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
-                r = bool(relop(xvalue, yvalue))
-                ctx = expr.context
-                return ctx.constant(r, ctx.symbol(None, "boolean"))
-
-            if isinstance(xvalue, str):
-                if xvalue == "largest":
-                    # cannot rewrite as largest depends on dtype
-                    if isinstance(yvalue, float_types):
-                        return
-
-            self._todo(expr)
+            if isinstance(yvalue, number_types):
+                for prop in ["positive", "negative", "nonpositive", "nonnegative", "finite"]:
+                    if x._is(prop):
+                        r = _constant_relop_any.get((yvalue, prop))
+                        if r is not None:
+                            r = r[swap_relop_index]
+                            if r is not None:
+                                return expr.context.constant(r)
+        else:
+            for xprop, yprop in [
+                ("positive", "negative"),
+                ("positive", "nonnegative"),
+                ("positive", "nonpositive"),
+                ("negative", "positive"),
+                ("negative", "nonpositive"),
+                ("negative", "nonnegative"),
+                ("nonpositive", "negative"),
+                ("nonpositive", "nonnegative"),
+                ("nonpositive", "positive"),
+                ("nonnegative", "positive"),
+                ("nonnegative", "nonpositive"),
+                ("nonnegative", "negative"),
+            ]:
+                if x._is(xprop) and y._is(yprop):
+                    r = _any_relop_any.get((xprop, yprop))
+                    if r is not None:
+                        r = r[relop_index]
+                        if r is not None:
+                            return expr.context.constant(r)
 
     def ge(self, expr):
-        return self._compare(expr, lambda x, y: x >= y)
+        return self._compare(expr, lambda x, y: x >= y, 0, 2)
 
     def gt(self, expr):
-        return self._compare(expr, lambda x, y: x > y)
+        return self._compare(expr, lambda x, y: x > y, 1, 3)
 
     def le(self, expr):
-        return self._compare(expr, lambda x, y: x <= y)
+        return self._compare(expr, lambda x, y: x <= y, 2, 0)
 
     def lt(self, expr):
-        return self._compare(expr, lambda x, y: x < y)
+        return self._compare(expr, lambda x, y: x < y, 3, 1)
 
     def eq(self, expr):
-        return self._compare(expr, lambda x, y: x == y)
+        return self._compare(expr, lambda x, y: x == y, 4, 4)
 
     def ne(self, expr):
-        return self._compare(expr, lambda x, y: x != y)
+        return self._compare(expr, lambda x, y: x != y, 5, 5)
 
     def select(self, expr):
         cond, x, y = expr.operands
@@ -436,7 +621,9 @@ class Rewriter:
     def square(self, expr):
         (x,) = expr.operands
         if x.kind == "constant":
-            self._todo(expr)
+            value, like = x.operands
+            if isinstance(value, number_types):
+                return self._eval(like, "square", value)
 
     def symbol(self, expr):
         pass
