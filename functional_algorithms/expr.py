@@ -552,6 +552,8 @@ class Expr:
         return self.context.pos(self)
 
     def __invert__(self):
+        if self._is_boolean:
+            return self.context.logical_not(self)
         return self.context.invert(self)
 
     def __add__(self, other):
@@ -597,18 +599,24 @@ class Expr:
         return self.context.remainder(other, self)
 
     def __and__(self, other):
+        if self._is_boolean and other._is_boolean:
+            return self.context.logical_and(self, other)
         return self.context.bitwise_and(self, other)
 
     def __rand__(self, other):
         return self.context.bitwise_and(other, self)
 
     def __or__(self, other):
+        if self._is_boolean and other._is_boolean:
+            return self.context.logical_or(self, other)
         return self.context.bitwise_or(self, other)
 
     def __ror__(self, other):
         return self.context.bitwise_or(other, self)
 
     def __xor__(self, other):
+        if self._is_boolean and other._is_boolean:
+            return self.context.logical_xor(self, other)
         return self.context.bitwise_xor(self, other)
 
     def __rxor__(self, other):
@@ -894,6 +902,14 @@ class Expr:
             return not r
 
     @property
+    def _is_boolean(self):
+        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "logical_not"}:
+            return True
+        if self.kind in {"symbol", "constant", "select"}:
+            return self.operands[1].is_boolean
+        return False
+
+    @property
     def is_complex(self):
         if self.kind in {"symbol", "constant", "select"}:
             return self.operands[1].is_complex
@@ -1028,3 +1044,15 @@ class Expr:
             t = self.operands[0].get_type()
             return Type(self.context, t.kind, t.bits // 2 if t.bits is not None else None)
         raise NotImplementedError((self.kind, str(self)))
+
+
+def assert_equal(result, expected):
+    assert isinstance(result, type(expected)), (type(result), type(expected))
+    if isinstance(expected, Expr):
+        assert result is expected, (result._serialized, expected._serialized)
+    elif isinstance(expected, tuple):
+        assert len(result) == len(expected), (len(result), len(expected))
+        for result_item, expected_item in zip(result, expected):
+            assert_equal(result_item, expected_item)
+    else:
+        assert result == expected

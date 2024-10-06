@@ -2,6 +2,9 @@ import functional_algorithms as fa
 import numpy
 
 
+assert_equal = fa.expr.assert_equal
+
+
 def test_constant():
     ctx = fa.Context()
     true = ctx.constant(True)
@@ -647,3 +650,76 @@ def test_relops():
         assert rewrite(r == 0) is true
         assert rewrite(r == 1) is false
         assert rewrite(r != 0) is false
+
+
+def test_logical_op_flatten():
+    ctx = fa.Context(default_constant_type="boolean")
+
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+    z = ctx.symbol("z")
+    w = ctx.symbol("w")
+
+    assert tuple(fa.rewrite.op_flatten(x, kind="logical_and")) == (x,)
+    assert tuple(fa.rewrite.op_flatten(x & y)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x)) == (x, y, x)
+    assert tuple(fa.rewrite.op_flatten(x & y & x & x)) == (x, y, x, x)
+
+    assert tuple(fa.rewrite.op_flatten(x & y, commutative=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x, commutative=True)) == (x, x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x & x, commutative=True)) == (x, x, x, y)
+
+    assert tuple(fa.rewrite.op_flatten(x & y, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x, idempotent=True)) == (x, y, x)
+    assert tuple(fa.rewrite.op_flatten(x & y & x & x, idempotent=True)) == (x, y, x)
+
+    assert tuple(fa.rewrite.op_flatten(x & y, commutative=True, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x, commutative=True, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x & y & x & x, commutative=True, idempotent=True)) == (x, y)
+
+    assert tuple(fa.rewrite.op_flatten(x, kind="logical_or")) == (x,)
+    assert tuple(fa.rewrite.op_flatten(x | y)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x)) == (x, y, x)
+    assert tuple(fa.rewrite.op_flatten(x | y | x | x)) == (x, y, x, x)
+
+    assert tuple(fa.rewrite.op_flatten(x | y, commutative=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x, commutative=True)) == (x, x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x | x, commutative=True)) == (x, x, x, y)
+
+    assert tuple(fa.rewrite.op_flatten(x | y, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x, idempotent=True)) == (x, y, x)
+    assert tuple(fa.rewrite.op_flatten(x | y | x | x, idempotent=True)) == (x, y, x)
+
+    assert tuple(fa.rewrite.op_flatten(x | y, commutative=True, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x, commutative=True, idempotent=True)) == (x, y)
+    assert tuple(fa.rewrite.op_flatten(x | y | x | x, commutative=True, idempotent=True)) == (x, y)
+
+    assert tuple(fa.rewrite.op_flatten((x | y) & z)) == (x | y, z)
+    assert tuple(fa.rewrite.op_flatten((x & z) | (x & z))) == ((x & z), (x & z))
+
+
+def test_logical_op_expand():
+    ctx = fa.Context(default_constant_type="boolean")
+
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+    z = ctx.symbol("z")
+    w = ctx.symbol("w")
+    p = ctx.symbol("p")
+
+    kwargs = dict(kind="logical_and")
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & z, **kwargs)), (x & z, y & z))
+    assert_equal(tuple(fa.rewrite.op_expand(w & (x | y), **kwargs)), (w & x, w & y))
+    assert_equal(tuple(fa.rewrite.op_expand(w & (x | y) & z, **kwargs)), (w & x & z, w & y & z))
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & (z | w), **kwargs)), (x & z, x & w, y & z, y & w))
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & p & (z | w), **kwargs)), (x & p & z, x & p & w, y & p & z, y & p & w))
+
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & x, **kwargs)), (x & x, y & x))
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & x, idempotent=True, **kwargs)), (x, y & x))
+
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & x & y, idempotent=True, **kwargs)), (x & y, y & x & y))
+    assert_equal(tuple(fa.rewrite.op_expand((x | y) & x & y, idempotent=True, commutative=True, **kwargs)), (x & y, x & y))
+    assert_equal(
+        tuple(fa.rewrite.op_expand((x | y) & x & y, idempotent=True, commutative=True, over_idempotent=True, **kwargs)),
+        (x & y,),
+    )
