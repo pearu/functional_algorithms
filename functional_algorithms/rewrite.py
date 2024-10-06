@@ -190,6 +190,133 @@ _any_relop_any = {
 }
 
 
+def op_rewrite(expr, commutative=False, idempotent=False, kind=None):
+    return op_unflatten(op_flatten(expr, commutative=commutative, idempotent=idempotent, kind=kind), kind)
+
+
+def op_expand(
+    expr,
+    commutative=False,
+    idempotent=False,
+    over_commutative=False,
+    over_idempotent=False,
+    kind=None,
+):
+    """Apply (left and right) distributive law to expr.
+
+    op_expand((x | y) & z, kind='logical_and')  -> (x & z, y & z)
+    """
+    if kind is None:
+        kind = expr.kind
+    over_kind = dict(logical_and="logical_or", multiply="add")[kind]
+    kind_op = getattr(expr.context, kind)
+    left = None
+    over_lst = []
+    for item in op_flatten(expr, commutative=commutative, idempotent=idempotent, kind=kind):
+        if item.kind == over_kind:
+            if over_lst:
+                assert left is None
+                over_lst = [
+                    kind_op(left_item, item2)
+                    for left_item in over_lst
+                    for item2 in op_flatten(item, commutative=over_commutative, idempotent=over_idempotent, kind=over_kind)
+                ]
+            else:
+                for item2 in op_flatten(item, commutative=over_commutative, idempotent=over_idempotent, kind=over_kind):
+                    over_lst.append(item2 if left is None else kind_op(left, item2))
+                left = None
+        elif over_lst:
+            over_lst = [kind_op(item2, item) for item2 in over_lst]
+        elif left is None:
+            left = item
+        else:
+            left = kind_op(left, item)
+
+    lst = []
+    dct = {}
+    for item in over_lst:
+        e = op_rewrite(item, commutative=commutative, idempotent=idempotent, kind=kind)
+        s = e._serialized
+        lst.append(s)
+        dct[s] = e
+    if over_commutative:
+        lst = sorted(lst)
+
+    if over_idempotent:
+        last_e = None
+        for s in lst:
+            e = dct[s]
+            if e is not last_e:
+                yield e
+                last_e = e
+    else:
+        for s in lst:
+            yield dct[s]
+
+
+def op_flatten(expr, commutative=False, idempotent=False, kind=None, _kind=None):
+    """Return all operands of a nested operation.
+
+    For example:
+
+      op_flatten(And(a, And(And(b, a), c))) -> a, b, a, c
+      op_flatten(And(a, And(And(b, a), c)), commutative=True) -> a, b, c
+      op_flatten(And(a, a), idempotent=True) -> a
+    """
+    assert kind in {None, "logical_and", "logical_or", "multiply", "add"}, kind
+
+    if kind is None:
+        kind = expr.kind
+
+    kwargs = dict(commutative=commutative, idempotent=idempotent)
+
+    if _kind is None:
+        # front-end of op_flatten
+        lst = []
+        dct = {}
+        for e in op_flatten(expr, _kind=kind, **kwargs):
+            s = e._serialized
+            lst.append(s)
+            dct[s] = e
+        if commutative:
+            lst = sorted(lst)
+
+        if idempotent:
+            last_e = None
+            for s in lst:
+                e = dct[s]
+                if e is not last_e:
+                    yield e
+                    last_e = e
+        else:
+            for s in lst:
+                yield dct[s]
+
+    elif kind == _kind:
+        for e in expr.operands:
+            yield from op_flatten(e, _kind=_kind, **kwargs)
+    else:
+        yield expr
+
+
+def op_unflatten(operands, kind):
+    """Return nested operation on operands. Inverse of op_flatten.
+
+    For example:
+       op_unflatten('logical_and', [a, b, c]) -> And(And(a, b), c)
+    """
+    lhs = None
+    op = None
+
+    for operand in operands:
+        if lhs is None:
+            lhs = operand
+            op = getattr(lhs.context, kind)
+        else:
+            lhs = op(lhs, operand)
+    return lhs
+
+
 class Rewriter:
 
     patterns = {
@@ -439,7 +566,9 @@ class Rewriter:
             if x_.kind == "constant":
                 value, like = x_.operands
                 if isinstance(value, bool):
-                    return y_ if value else ctx.constant(False, ctx.symbol(None, "boolean"))
+                    return y_ if value else ctx.constant(False)
+
+        operands = tuple(op_flatten(expr, commutative=True, idempotent=True))
 
     def logical_or(self, expr):
         x, y = expr.operands
