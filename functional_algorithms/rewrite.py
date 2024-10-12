@@ -1,5 +1,6 @@
 import math
 import numpy
+from collections import defaultdict
 from . import expr as _expr
 from .utils import number_types, value_types, float_types, complex_types, boolean_types
 
@@ -191,7 +192,65 @@ _any_relop_any = {
 
 
 def op_rewrite(expr, commutative=False, idempotent=False, kind=None):
+    """Normalizes expression."""
     return op_unflatten(op_flatten(expr, commutative=commutative, idempotent=idempotent, kind=kind), kind)
+
+
+def op_collect(expr, commutative=False, idempotent=False, over_commutative=False, over_idempotent=False, over_kind=None):
+    """Collect common terms in expression.
+
+    op_collect((x & z) | (y & z)) -> (x | y) & z
+    """
+    if over_kind is None:
+        over_kind = expr.kind
+
+    kind = dict(logical_or="logical_and", add="multiply")[over_kind]
+
+    over_operands = tuple(
+        op_expand(
+            expr,
+            commutative=commutative,
+            idempotent=idempotent,
+            over_commutative=over_commutative,
+            over_idempotent=over_idempotent,
+            kind=kind,
+        )
+    )
+
+    dct = dict()
+    matrix = []
+    for index, item in enumerate(over_operands):
+        row = []
+        for index1, item1 in enumerate(op_flatten(item, commutative=commutative, idempotent=idempotent, kind=kind)):
+            dct[item1.key] = item1
+            row.append(item1.key)
+        if commutative and idempotent:
+            row = sorted(set(row))
+        elif commutative:
+            row = sorted(row)
+        elif idempotent:
+            new_row = []
+            for item in row:
+                if new_row and new_row[-1] == item:
+                    continue
+                new_row.append(item)
+            row = new_row
+        matrix.append(row)
+
+    left = []
+    while len(set([row[0] if row else None for row in matrix])) == 1:
+        left.append(dct[matrix[0][0]])
+        matrix = [row[1:] for row in matrix if len(row) > 1]
+
+    right = []
+    while len(set([row[-1] if row else None for row in matrix])) == 1:
+        right.insert(0, dct[matrix[0][-1]])
+        matrix = [row[:-1] for row in matrix if len(row) > 1]
+
+    if matrix:
+        middle = op_unflatten([op_unflatten([dct[key] for key in row], kind) for row in matrix], over_kind)
+        return op_unflatten(left + [middle] + right, kind)
+    return op_unflatten(left + right, kind)
 
 
 def op_expand(

@@ -484,8 +484,11 @@ class Expr:
         """Return a key unique to this expression instance and that can be
         used as a dictionary key.
         """
-        return id(self)
-        return self._serialized  # could also be id(self)
+        # Sometimes, returning id(self) would be also a valid key, but
+        # in algorithms (e.g. op_collect with commutative=True) that
+        # use keys sorting, this would introduce non-deterministic
+        # results.
+        return self._serialized
 
     @property
     def ref(self):

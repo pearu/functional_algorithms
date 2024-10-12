@@ -723,3 +723,29 @@ def test_logical_op_expand():
         tuple(fa.rewrite.op_expand((x | y) & x & y, idempotent=True, commutative=True, over_idempotent=True, **kwargs)),
         (x & y,),
     )
+
+
+def test_logical_op_collect():
+
+    ctx = fa.Context(default_constant_type="boolean")
+
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+    z = ctx.symbol("z")
+    w = ctx.symbol("w")
+
+    kwargs = dict(over_kind="logical_or")
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z), **kwargs), (x | y) & z)
+    assert_equal(fa.rewrite.op_collect((z & x & z) | (y & z), **kwargs), ((z & x) | y) & z)
+    assert_equal(fa.rewrite.op_collect((z & x & z) | (y & z), commutative=True, idempotent=True, **kwargs), (x | y) & z)
+
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | z, **kwargs), (x | y) & z)
+    assert_equal(fa.rewrite.op_collect((z & x) | (y & z), **kwargs), (z & x) | (y & z))
+    assert_equal(fa.rewrite.op_collect((z & x) | (y & z), commutative=True, **kwargs), (x | y) & z)
+
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), **kwargs), (x | y | x) & z)
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), commutative=True, **kwargs), (x | y | x) & z)
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), over_commutative=True, **kwargs), (x | x | y) & z)
+    assert_equal(
+        fa.rewrite.op_collect((x & z) | (y & z) | (x & z), over_commutative=True, over_idempotent=True, **kwargs), (x | y) & z
+    )
