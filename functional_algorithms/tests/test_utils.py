@@ -5,7 +5,7 @@ import itertools
 from functional_algorithms import utils
 
 
-@pytest.fixture(scope="function", params=[numpy.float32, numpy.float64])
+@pytest.fixture(scope="function", params=[numpy.float16, numpy.float32, numpy.float64, numpy.float128])
 def real_dtype(request):
     return request.param
 
@@ -115,6 +115,8 @@ def _iter_samples_parameters():
 
 
 def test_real_samples(real_dtype):
+    if real_dtype not in {numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
     for size in range(6, 20):
         for params in _iter_samples_parameters():
             r = utils.real_samples(size=size, dtype=real_dtype, **params)
@@ -123,6 +125,8 @@ def test_real_samples(real_dtype):
 
 
 def test_complex_samples(real_dtype):
+    if real_dtype not in {numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
         for params in _iter_samples_parameters():
             r = utils.complex_samples(size=size, dtype=real_dtype, **params)
@@ -136,6 +140,8 @@ def test_complex_samples(real_dtype):
 
 
 def test_real_pair_samples(real_dtype):
+    if real_dtype not in {numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
         for params in _iter_samples_parameters():
             s1 = utils.real_samples(size=size[0], dtype=real_dtype, **params).size
@@ -152,6 +158,8 @@ def test_real_pair_samples(real_dtype):
 
 
 def test_complex_pair_samples(real_dtype):
+    if real_dtype not in {numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
     for size1 in [(6, 6), (6, 7)]:
         for size2 in [(6, 6), (7, 6)]:
             for params in _iter_samples_parameters():
@@ -185,6 +193,8 @@ def test_complex_pair_samples(real_dtype):
 
 
 def test_periodic_samples(real_dtype):
+    if real_dtype not in {numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
     for period in [1, 3.14, numpy.pi / 2]:
         for size in [10, 11, 51]:
             for periods in [4, 5, 13]:
@@ -275,3 +285,37 @@ def test_numpy_with_backend(backend, dtype, device):
         assert_equal(result, expected)
 
     test(func(arr))
+
+
+def test_float2mpf(real_dtype):
+    import mpmath
+
+    ctx = mpmath.mp
+    ctx.prec = utils.vectorize_with_mpmath.float_prec[real_dtype.__name__]
+    fi = numpy.finfo(real_dtype)
+    dtype_name = real_dtype.__name__
+    dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
+
+    for f in [
+        -numpy.inf,
+        -utils.vectorize_with_mpmath.float_max[dtype_name],
+        -150,
+        -0.3,
+        -fi.eps,
+        -fi.smallest_normal,
+        -fi.smallest_subnormal,
+        0,
+        fi.smallest_subnormal,
+        fi.smallest_normal,
+        fi.eps,
+        0.3,
+        150,
+        utils.vectorize_with_mpmath.float_max[dtype_name],
+        numpy.inf,
+    ]:
+
+        v = real_dtype(f)
+        m = utils.float2mpf(ctx, v)
+        r = utils.mpf2float(real_dtype, m)
+        assert type(r) is type(v)
+        assert r == v
