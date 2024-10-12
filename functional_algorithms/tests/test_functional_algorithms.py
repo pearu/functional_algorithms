@@ -142,6 +142,27 @@ double myhypot(double x, double y) {
     )
 
 
+def test_myhypot_symbolic():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.hypot)
+
+    graph1 = graph.rewrite(targets.symbolic)
+    graph1.props.update(name="myhypot")
+    txt = graph1.tostring(targets.symbolic, tab="")
+    assert txt == utils.format_python(
+        """\
+def myhypot(x: float, y: float) -> float:
+    abs_x: float = abs(x)
+    abs_y: float = abs(y)
+    mx: float = max(abs_x, abs_y)
+    mn_over_mx: float = (min(abs_x, abs_y)) / (mx)
+    return (mx) * (sqrt(((mn_over_mx) * (mn_over_mx)) + (1)))
+"""
+    )
+
+
 def test_square_python():
 
     ctx = Context(paths=[TestImplementations])
@@ -150,6 +171,22 @@ def test_square_python():
 
     graph1 = graph.rewrite(targets.python)
     py = graph1.tostring(targets.python, tab="")
+
+    assert py == utils.format_python(
+        """\
+def square(x: float) -> float:
+  return (x) * (x)"""
+    )
+
+
+def test_square_symbolic():
+
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.square, "x")
+
+    graph1 = graph.rewrite(targets.symbolic)
+    py = graph1.tostring(targets.symbolic, tab="")
 
     assert py == utils.format_python(
         """\
