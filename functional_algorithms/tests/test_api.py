@@ -3,7 +3,7 @@ import pytest
 import warnings
 
 
-@pytest.fixture(scope="function", params=["python", "numpy", "stablehlo", "xla_client", "cpp"])
+@pytest.fixture(scope="function", params=targets.__all__)
 def target_name(request):
     return request.param
 

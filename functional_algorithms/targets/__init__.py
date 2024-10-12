@@ -1,2 +1,2 @@
-__all__ = ["stablehlo", "python", "numpy", "xla_client", "cpp"]
-from . import stablehlo, python, numpy, xla_client, cpp
+__all__ = ["stablehlo", "python", "numpy", "xla_client", "cpp", "symbolic"]
+from . import stablehlo, python, numpy, xla_client, cpp, symbolic
