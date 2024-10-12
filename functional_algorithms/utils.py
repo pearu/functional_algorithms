@@ -41,6 +41,66 @@ boolean_types = (bool,)
 value_types = number_types + boolean_types
 
 
+def float2mpf(ctx, x):
+    """Convert numpy floating-point number to mpf object."""
+    if numpy.isposinf(x):
+        return ctx.make_mpf(mpmath.libmp.finf)
+    elif numpy.isneginf(x):
+        return ctx.make_mpf(mpmath.libmp.fninf)
+    elif numpy.isnan(x):
+        return ctx.make_mpf(mpmath.libmp.fnan)
+    elif numpy.isfinite(x):
+        prec, rounding = ctx._prec_rounding
+        mantissa, exponent = numpy.frexp(x)
+        man = int(mpmath.ldexp(mantissa, prec))
+        exp = int(exponent - prec)
+        r = ctx.make_mpf(mpmath.libmp.from_man_exp(man, exp, prec, rounding))
+        assert ctx.isfinite(r), r._mpf_
+        return r
+    else:
+        assert 0  # unreachable
+
+
+def mpf2float(dtype, x, flush_subnormals=False):
+    """Convert mpf object to numpy floating-point number."""
+    ctx = x.context
+    if ctx.isfinite(x):
+        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
+        assert bc >= 0, (sign, man, exp, bc, x._mpf_)
+        fp_format = dtype.__name__
+        zexp = (
+            vectorize_with_mpmath.float_minexp[fp_format]
+            if flush_subnormals
+            else vectorize_with_mpmath.float_subexp[fp_format]
+        )
+        if exp + bc < zexp:
+            return -dtype(0) if sign else dtype(0)
+        if exp + bc > vectorize_with_mpmath.float_maxexp[fp_format]:
+            return dtype(-numpy.inf) if sign else dtype(numpy.inf)
+        # conversion from mpz to longdouble is buggy, see
+        # aleaxit/gmpy#507, hence we convert mpz to int:
+        man = int(man)
+        largest = vectorize_with_mpmath.float_max[fp_format]
+        if fp_format == "longdouble":
+            # numpy longdouble does support comparing against large integers
+            largest = int(largest)
+        # make sure that ldexp(man, exp) does not produce infinities:
+        while man > largest:
+            man >>= 1
+            exp += 1
+
+        man = dtype(-man if sign else man)
+        r = numpy.ldexp(man, exp)
+        assert numpy.isfinite(r), (x, r, x._mpf_, man)
+        return r
+    elif ctx.isnan(x):
+        return dtype(numpy.nan)
+    elif ctx.isinf(x):
+        return dtype(-numpy.inf if x._mpf_[0] else numpy.inf)
+    else:
+        assert 0  # unreachable
+
+
 class vectorize_with_backend(numpy.vectorize):
 
     pyfunc_is_vectorized = False
@@ -155,16 +215,25 @@ class vectorize_with_mpmath(vectorize_with_backend):
     )
     map_complex_to_float = {v: k for k, v in map_float_to_complex.items()}
 
-    float_prec = dict(float16=11, float32=24, float64=53, float128=113, longdouble=113)
+    float_prec = dict(float16=11, float32=24, float64=53, float128=113, longdouble=64)
 
-    float_subexp = dict(float16=-23, float32=-148, float64=-1073, float128=-16444)
-    float_minexp = dict(float16=-13, float32=-125, float64=-1021, float128=-16381)
+    float_subexp = dict(float16=-23, float32=-148, float64=-1073, float128=-16444, longdouble=-16444)
+    float_minexp = dict(float16=-13, float32=-125, float64=-1021, float128=-16381, longdouble=-16381)
 
     float_maxexp = dict(
         float16=16,
         float32=128,
         float64=1024,
         float128=16384,
+        longdouble=16384,
+    )
+
+    float_max = dict(
+        float16=numpy.nextafter(numpy.float16(numpy.inf), numpy.float16(0)),
+        float32=numpy.nextafter(numpy.float32(numpy.inf), numpy.float32(0)),
+        float64=numpy.nextafter(numpy.float64(numpy.inf), numpy.float64(0)),
+        float128=numpy.nextafter(numpy.float128(numpy.inf), numpy.float128(0)),
+        longdouble=numpy.nextafter(numpy.longdouble(numpy.inf), numpy.longdouble(0)),
     )
 
     def __init__(self, *args, **kwargs):
@@ -229,20 +298,7 @@ class vectorize_with_mpmath(vectorize_with_backend):
             return numpy.fromiter(map(self.nptomp, x.flatten()), dtype=object).reshape(x.shape)
         elif isinstance(x, numpy.floating):
             ctx = self.get_context(x)
-            prec, rounding = ctx._prec_rounding
-            if numpy.isposinf(x):
-                return ctx.make_mpf(mpmath.libmp.finf)
-            elif numpy.isneginf(x):
-                return ctx.make_mpf(mpmath.libmp.fninf)
-            elif numpy.isnan(x):
-                return ctx.make_mpf(mpmath.libmp.fnan)
-            elif numpy.isfinite(x):
-                mantissa, exponent = numpy.frexp(x)
-                man = int(mpmath.ldexp(mantissa, prec))
-                exp = int(exponent - prec)
-                r = ctx.make_mpf(mpmath.libmp.from_man_exp(man, exp, prec, rounding))
-                assert ctx.isfinite(r), r._mpf_
-                return r
+            return float2mpf(ctx, x)
         elif isinstance(x, numpy.complexfloating):
             re, im = self.nptomp(x.real), self.nptomp(x.imag)
             return re.context.make_mpc((re._mpf_, im._mpf_))
@@ -279,25 +335,7 @@ class vectorize_with_mpmath(vectorize_with_backend):
             elif isinstance(x, ctx.mpf):
                 fp_format = self.contexts_inv[ctx]
                 dtype = getattr(numpy, fp_format)
-                if ctx.isfinite(x):
-                    sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
-                    assert bc >= 0, (sign, man, exp, bc, x._mpf_)
-                    zexp = self.float_minexp[fp_format] if self.flush_subnormals else self.float_subexp[fp_format]
-                    if exp + bc < zexp:
-                        return -ctx.zero if sign else ctx.zero
-                    if exp + bc > self.float_maxexp[fp_format]:
-                        return ctx.ninf if sign else ctx.inf
-                    # conversion from mpz to longdouble is buggy, see
-                    # aleaxit/gmpy#507, hence we convert mpz to int:
-                    man = int(man)
-                    man = dtype(-man if sign else man)
-                    r = numpy.ldexp(man, exp)
-                    assert numpy.isfinite(r), (x, r, x._mpf_, man)
-                    return r
-                elif ctx.isnan(x):
-                    return dtype(numpy.nan)
-                elif ctx.isinf(x):
-                    return dtype(-numpy.inf if x._mpf_[0] else numpy.inf)
+                return mpf2float(dtype, x, flush_subnormals=self.flush_subnormals)
         elif isinstance(x, (str, bool, int, float, complex, dict, list, set)):
             return x
 
