@@ -908,8 +908,10 @@ class Expr:
     def _is_boolean(self):
         if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "logical_not"}:
             return True
-        if self.kind in {"symbol", "constant", "select"}:
+        elif self.kind == "symbol":
             return self.operands[1].is_boolean
+        elif self.kind in {"constant", "select"}:
+            return self.operands[1]._is_boolean
         return False
 
     @property

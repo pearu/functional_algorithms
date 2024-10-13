@@ -291,6 +291,10 @@ def op_expand(
         else:
             left = kind_op(left, item)
 
+    if left is not None:
+        assert len(over_lst) == 0
+        yield left
+
     lst = []
     dct = {}
     for item in over_lst:
@@ -366,13 +370,13 @@ def op_unflatten(operands, kind):
     """
     lhs = None
     op = None
-
     for operand in operands:
         if lhs is None:
             lhs = operand
             op = getattr(lhs.context, kind)
         else:
             lhs = op(lhs, operand)
+    assert lhs is not None
     return lhs
 
 
