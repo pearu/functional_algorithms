@@ -19,3 +19,4 @@ from .textimage import TextImage
 from . import rewrite
 from .restrict import restrict
 from .signatures import filter_signatures
+from .assume import assume
