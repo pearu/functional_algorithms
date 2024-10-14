@@ -4,8 +4,8 @@ import struct
 import warnings
 from .utils import UNSPECIFIED, warn_once, value_types, float_types, integer_types, number_types
 from .typesystem import Type
-from .rewrite import RewriteContext
-
+from .rewrite import RewriteContext, op_flatten
+from .assume import check
 
 known_expression_kinds = set(
     """
@@ -223,7 +223,9 @@ def _is_cache(mth):
         name = mth.__name__
         r = self.props.get(name, UNSPECIFIED)
         if r is UNSPECIFIED:
-            self.props[name] = r = mth(self)
+            r = mth(self)
+            if r is not None:
+                self.props[name] = r
         return r
 
     return wrap
@@ -339,8 +341,10 @@ class Expr:
 
         # props is a dictionary that contains reference_name and
         # force_ref.  In general, its content could be anything. For
-        # instance, the results of `_is_foo` method calls are cached
-        # in props.
+        # instance, the results of `_is_positive/negative/...` method
+        # calls are cached in props. Also, `_is_gt/lt/...` lists are
+        # used to store assumptions:
+        #   for all y in x.props['_is_gt'], x > y is assumed to hold.
 
         # When ref is specified in props, it is used as a variable
         # name referencing the expression. When an expression with
@@ -691,6 +695,29 @@ class Expr:
     def is_inf(self):
         return self.context.logical_or(self.is_posinf, self.is_neginf)
 
+    def _assume_is_negative(self):
+        self.props.update(
+            _is_negative=True, _is_nonnegative=False, _is_positive=False, _is_zero=False, _is_nonzero=True, _is_one=False
+        )
+
+    def _assume_is_nonnegative(self):
+        self.props.update(_is_nonnegative=True, _is_negative=False)
+
+    def _assume_is_positive(self):
+        self.props.update(_is_positive=True, _is_nonpositive=False, _is_negative=False, _is_zero=False, _is_nonzero=True)
+
+    def _assume_is_nonpositive(self):
+        self.props.update(_is_nonpositive=True, _is_positive=False)
+
+    def _assume_is_zero(self):
+        self.props.update(_is_zero=True, _is_nonzero=False, _is_positive=False, _is_negative=False, _is_one=False)
+
+    def _assume_is_nonzero(self):
+        self.props.update(_is_nonzero=True, _is_zero=False)
+
+    def _assume_is_one(self):
+        self.props.update(_is_zero=False, _is_nonzero=True, _is_positive=True, _is_negative=False, _is_one=True)
+
     def _is(self, *props):
         result = True
         for prop in props:
@@ -800,6 +827,7 @@ class Expr:
     @property
     @_is_cache
     def _is_nonnegative(self):
+        # self >= 0
         assert not self.is_complex
         if self.kind == "constant":
             value, like = self.operands
@@ -889,6 +917,39 @@ class Expr:
             return False
         elif self.kind in {"square", "absolute"} and self.operands[0]._is_negative:
             return False
+
+        return check(self <= 0)
+
+        for k, lst in self.props.items():
+            if k == "_is_gt":
+                for x in lst:
+                    # self > x > 0 => self <= 0 is False
+                    # self > x >= 0 => self <= 0 is False
+                    if x._is_positive or x._is_nonnegative:
+                        return False
+            elif k == "_is_lt":
+                for x in lst:
+                    # self < x <= 0 => self <= 0 is True
+                    if x._is_nonpositive:
+                        return True
+            elif k == "_is_ge":
+                for x in lst:
+                    # self >= x > 0 => self <= 0 is False
+                    if x._is_positive:
+                        return False
+            elif k == "_is_le":
+                for x in lst:
+                    # self <= x <= 0 => self <= 0 is True
+                    if x._is_nonpositive:
+                        return True
+            elif k == "_is_eq":
+                for x in lst:
+                    # self == x <= 0 => self <= 0 is True
+                    if x._is_nonpositive:
+                        return True
+                    # self == x > 0 => self <= 0 is False
+                    if x._is_positive:
+                        return False
 
     @property
     @_is_cache

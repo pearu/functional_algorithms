@@ -7,6 +7,7 @@ from collections import defaultdict
 from .utils import UNSPECIFIED, boolean_types, float_types, complex_types
 from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
 from .typesystem import Type
+from . import rewrite
 
 
 class Context:
