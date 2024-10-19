@@ -12,7 +12,7 @@ from . import rewrite
 
 class Context:
 
-    def __init__(self, paths=[], enable_alt=None, default_constant_type=None, parameters=None):
+    def __init__(self, paths=[], enable_alt=None, default_constant_type=None, compare_float_type=None, parameters=None):
         """Parameters
         ----------
         paths : list
@@ -26,9 +26,14 @@ class Context:
         default_constant_type : {str, Type}
           Default type for constant expressions. Use together with
           enable_alt=True.
+        compare_float_type: {str, Type}
+          Type of float constants used in comparing constant
+          expressions when the type of float constant is not
+          explicitly specified.
         parameters : dict
           Parameters dictionary that can be used to parameterize
           algorithms.
+
         """
         self._expressions = {}
         self._stack_name = ""
@@ -38,6 +43,7 @@ class Context:
         self._alt = None
         self._enable_alt = enable_alt
         self._default_constant_type = default_constant_type
+        self._compare_float_type = compare_float_type
         self._default_like = None
         self.parameters = parameters or {}
         if "using" not in self.parameters:

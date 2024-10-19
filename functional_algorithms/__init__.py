@@ -1,4 +1,16 @@
-__all__ = ["Context", "Expr", "targets", "TextImage", "algorithms", "targets", "rewrite", "filter_signatures", "restrict"]
+__all__ = [
+    "Context",
+    "Expr",
+    "targets",
+    "TextImage",
+    "algorithms",
+    "targets",
+    "rewrite",
+    "filter_signatures",
+    "restrict",
+    "assume",
+    "check",
+]
 
 try:
     from ._version import __version__
@@ -19,4 +31,4 @@ from .textimage import TextImage
 from . import rewrite
 from .restrict import restrict
 from .signatures import filter_signatures
-from .assume import assume
+from .assumptions import assume, check

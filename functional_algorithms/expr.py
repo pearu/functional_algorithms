@@ -5,7 +5,8 @@ import warnings
 from .utils import UNSPECIFIED, warn_once, value_types, float_types, integer_types, number_types
 from .typesystem import Type
 from .rewrite import RewriteContext, op_flatten
-from .assume import check
+import functional_algorithms as fa
+
 
 known_expression_kinds = set(
     """
@@ -423,6 +424,9 @@ class Expr:
 
         result = self if deep_first else modifier(self)
 
+        if result is None:
+            raise RuntimeError(f"{modifier} returned None")
+
         if result is not self:
             pass
         elif self.kind == "symbol":
@@ -454,6 +458,9 @@ class Expr:
 
         if deep_first:
             result = modifier(result)
+
+            if result is None:
+                raise RuntimeError(f"{modifier} returned None")
 
         return rewrite_context(self, result)
 
@@ -731,6 +738,26 @@ class Expr:
 
     @property
     @_is_cache
+    def _is_posinf(self):
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, Expr):
+                return value._is_posinf
+            elif isinstance(value, str):
+                return value == "posinf"
+
+    @property
+    @_is_cache
+    def _is_neginf(self):
+        if self.kind == "constant":
+            value, like = self.operands
+            if isinstance(value, Expr):
+                return value._is_neginf
+            elif isinstance(value, str):
+                return value == "neginf"
+
+    @property
+    @_is_cache
     def _is_nonzero(self):
         r = self._is_zero
         if r is not None:
@@ -814,6 +841,7 @@ class Expr:
             if self._is_nonnegative:
                 return True
         elif self.kind in {"add", "subtract", "positive", "negative", "absolute", "multiply", "square"}:
+
             for x in self.operands:
                 r = x._is_finite
                 if r is None:
@@ -918,7 +946,8 @@ class Expr:
         elif self.kind in {"square", "absolute"} and self.operands[0]._is_negative:
             return False
 
-        return check(self <= 0)
+        return
+        return fa.check(self <= 0)
 
         for k, lst in self.props.items():
             if k == "_is_gt":
@@ -974,6 +1003,18 @@ class Expr:
         elif self.kind in {"constant", "select"}:
             return self.operands[1]._is_boolean
         return False
+
+    @property
+    def _is_constant(self):
+        if self.kind == "symbol":
+            return False
+        elif self.kind == "constant":
+            return True
+        else:
+            for item in self.operands:
+                if not item._is_constant:
+                    return False
+        return True
 
     @property
     def is_complex(self):
