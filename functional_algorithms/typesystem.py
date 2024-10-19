@@ -91,12 +91,22 @@ class Type:
         return type(self)(self.context, "float", bits)
 
     @property
+    def as_complex(self):
+        assert self.kind == "float", self
+        bits = self.bits * 2 if self.bits is not None else None
+        return type(self)(self.context, "complex", bits)
+
+    @property
     def is_float(self):
         return self.kind == "float"
 
     @property
     def is_complex(self):
         return self.kind == "complex"
+
+    @property
+    def is_real(self):
+        return self.is_float or self.is_integer
 
     @property
     def is_integer(self):
@@ -119,5 +129,5 @@ class Type:
     def is_same_kind(self, other):
         return self.kind == other.kind
 
-    def asdtype(self):
-        return getattr(numpy, str(self), None)
+    def asdtype(self, default=None):
+        return getattr(numpy, str(self), default)

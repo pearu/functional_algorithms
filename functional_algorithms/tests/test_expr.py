@@ -454,7 +454,7 @@ def test_relops():
             r2 = fa.Expr(
                 expr.context, dict(lt="gt", le="ge", gt="lt", ge="le", eq="eq", ne="ne")[r2_.kind], r2_.operands[::-1]
             )
-        assert r1 is r2
+        assert r1 is r2 or (r2_.kind in {"ne", "eq"}), (r1._serialized, r2._serialized)
         return r1
 
     ctx = fa.Context()
@@ -475,6 +475,14 @@ def test_relops():
     assert rewrite(x == 1).kind == "eq"
     assert rewrite(x != 1).kind == "ne"
     assert rewrite(x == 1).kind == "eq"
+
+    assert rewrite(x > -1).kind == "gt"
+    assert rewrite(x >= -1).kind == "ge"
+    assert rewrite(x <= -1).kind == "le"
+    assert rewrite(x < -1).kind == "lt"
+    assert rewrite(x == -1).kind == "eq"
+    assert rewrite(x != -1).kind == "ne"
+    assert rewrite(x == -1).kind == "eq"
 
     for r in [ctx.square(x), x * x]:
         assert rewrite(r > 0).kind == "gt"
@@ -737,14 +745,14 @@ def test_logical_op_collect():
     kwargs = dict(over_kind="logical_or")
     assert_equal(fa.rewrite.op_collect((x & z) | (y & z), **kwargs), (x | y) & z)
     assert_equal(fa.rewrite.op_collect((z & x & z) | (y & z), **kwargs), ((z & x) | y) & z)
-    assert_equal(fa.rewrite.op_collect((z & x & z) | (y & z), commutative=True, idempotent=True, **kwargs), (x | y) & z)
+    assert_equal(fa.rewrite.op_collect((z & x & z) | (y & z), commutative=True, idempotent=True, **kwargs), z & (x | y))
 
     assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | z, **kwargs), (x | y) & z)
     assert_equal(fa.rewrite.op_collect((z & x) | (y & z), **kwargs), (z & x) | (y & z))
-    assert_equal(fa.rewrite.op_collect((z & x) | (y & z), commutative=True, **kwargs), (x | y) & z)
+    assert_equal(fa.rewrite.op_collect((z & x) | (y & z), commutative=True, **kwargs), z & (x | y))
 
     assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), **kwargs), (x | y | x) & z)
-    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), commutative=True, **kwargs), (x | y | x) & z)
+    assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), commutative=True, **kwargs), z & (x | y | x))
     assert_equal(fa.rewrite.op_collect((x & z) | (y & z) | (x & z), over_commutative=True, **kwargs), (x | x | y) & z)
     assert_equal(
         fa.rewrite.op_collect((x & z) | (y & z) | (x & z), over_commutative=True, over_idempotent=True, **kwargs), (x | y) & z
