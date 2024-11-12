@@ -11,13 +11,15 @@ def : Pat<(square_0 NonComplexElementType:$z),
 def : Pat<(square_1 ComplexElementType:$z),
   (StableHLO_ComplexOp
     (StableHLO_SelectOp
-      (StableHLO_CompareOp
-       (StableHLO_AbsOp
-         (StableHLO_RealOp:$x $z)),
-       (StableHLO_AbsOp
-         (StableHLO_ImagOp:$y $z)),
-        StableHLO_ComparisonDirectionValue<"EQ">,
-        (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+      (StableHLO_AndOp
+        (StableHLO_IsFiniteOp
+          (StableHLO_RealOp:$x $z)),
+        (StableHLO_CompareOp
+         (StableHLO_AbsOp $x),
+         (StableHLO_AbsOp
+           (StableHLO_ImagOp:$y $z)),
+          StableHLO_ComparisonDirectionValue<"EQ">,
+          (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
       (StableHLO_ConstantLike<"0.0"> $x),
       (StableHLO_MulOp
         (StableHLO_SubtractOp $x, $y),

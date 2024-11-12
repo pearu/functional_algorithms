@@ -448,7 +448,7 @@ class mpmath_array_api:
     def square(self, x):
         ctx = x.context
         if isinstance(x, ctx.mpc):
-            if abs(x.real) == abs(x.imag):
+            if ctx.isfinite(x.real) and abs(x.real) == abs(x.imag):
                 return ctx.make_mpc((ctx.zero._mpf_, (x.real * x.imag * 2)._mpf_))
             return ctx.make_mpc((((x.real - x.imag) * (x.real + x.imag))._mpf_, (x.real * x.imag * 2)._mpf_))
         return x * x

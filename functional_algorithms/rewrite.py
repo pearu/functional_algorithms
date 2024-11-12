@@ -823,6 +823,9 @@ class Rewriter:
     def hypot(self, expr):
         pass
 
+    def is_finite(self, expr):
+        pass
+
 
 def rewrite(expr):
     """Return rewritten expression, otherwise return None."""
