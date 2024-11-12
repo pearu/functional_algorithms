@@ -104,6 +104,7 @@ kind_to_target = dict(
     ge="({0}) >= ({1})",
     eq="({0}) == ({1})",
     ne="({0}) != ({1})",
+    is_finite="math.isfinite({0})",
 )
 
 constant_to_target = dict(

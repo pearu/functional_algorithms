@@ -108,14 +108,16 @@ def complex_square(ctx, z: complex):
     y = z.imag
     # We'll use
     #   x * x - y * y = (x - y) * (x + y)
-    # but we'll still treat `abs(x) == abs(y)` case separately to
-    # avoid nan real part (e.g. as when taking x = inf and y =
-    # -inf) while it should be 0.
+
+    # We treat `abs(x) == abs(y)` case separately to avoid nan real
+    # part while it should be 0, for example, when taking x = largest
+    # and y = largest (x-y is 0 but x+y is inf). However, for infinite
+    # x and y, the correct real part is nan.
     #
     # Notice that 2 * (x * y) is not the same as 2 * x * y when `2
     # * x` overflows (e.g. take x = finfo(..).max) while `x * y`
     # doesn't (e.g. take y such that `abs(y) < 1`).
-    z_sq = ctx.complex(ctx.select(abs(x) == abs(y), 0, (x - y) * (x + y)), 2 * (x * y))
+    z_sq = ctx.complex(ctx.select(ctx.And(ctx.is_finite(x), abs(x) == abs(y)), 0, (x - y) * (x + y)), 2 * (x * y))
     return ctx(z_sq)
 
 

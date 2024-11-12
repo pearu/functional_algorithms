@@ -986,7 +986,7 @@ class Expr:
             return self.operands[1]
         if self.kind == "constant":
             return self.operands[1].get_type()
-        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor"}:
+        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "is_finite"}:
             return Type.fromobject(self.context, "boolean")
         elif self.kind in {
             "positive",

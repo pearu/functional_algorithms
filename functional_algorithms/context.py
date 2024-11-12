@@ -501,3 +501,6 @@ class Context:
 
     def downcast(self, x):
         return Expr(self, "downcast", (x,))
+
+    def is_finite(self, x):
+        return Expr(self, "is_finite", (x,))

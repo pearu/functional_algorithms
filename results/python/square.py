@@ -14,4 +14,6 @@ def square_0(z: float) -> float:
 def square_1(z: complex) -> complex:
     x: float = (z).real
     y: float = (z).imag
-    return complex((0.0) if ((abs(x)) == (abs(y))) else (((x) - (y)) * ((x) + (y))), (2.0) * ((x) * (y)))
+    return complex(
+        (0.0) if ((math.isfinite(x)) and ((abs(x)) == (abs(y)))) else (((x) - (y)) * ((x) + (y))), (2.0) * ((x) * (y))
+    )

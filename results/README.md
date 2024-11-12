@@ -80,18 +80,18 @@ Finally,
 | square<sub>2</sub> | float32 | 997347 | 2654 | - | - | - | using native square |
 | square | float64 | 999553 | 448 | - | - | - | - |
 | square | complex64 | 976865 | 25136 | - | - | - | - |
-| square<sub>2</sub> | complex64 | 940181 | 28836 | 16 | - | 32968 | using native square |
+| square<sub>2</sub> | complex64 | 940185 | 28836 | 16 | - | 32964 | using native square |
 | square | complex128 | 995705 | 6296 | - | - | - | - |
 | sqrt | float32 | 1000001 | - | - | - | - | using native sqrt |
 | sqrt | complex64 | 639573 | 362328 | 100 | - | - | using native sqrt |
 | angle | complex64 | 940289 | 61332 | 376 | 4 | - | - |
 | angle | complex128 | 989787 | 12214 | - | - | - | - |
-| log1p<sup>1</sup> | complex64 | 902529 | 97592<sup>48500</sup> | 1586<sup>1172</sup> | 104<sup>28</sup> | 190<sup>22</sup>!! | - |
+| log1p<sup>1</sup> | complex64 | 698489 | 61706<sup>50263</sup> | 2437<sup>1108</sup> | 1519<sup>1505</sup> | 237850<sup>237612</sup>!! | using native log1p |
 | log1p<sup>2</sup> | complex64 | 902529 | 97592<sup>42692</sup> | 1586<sup>78</sup> | 104<sup>6</sup> | 190<sup>2</sup>!! | - |
 | log1p<sup>3</sup> | complex64 | 902529 | 97592<sup>41452</sup> | 1586<sup>44</sup> | 104 | 190 | - |
 | log1p<sup>1</sup> | complex64 | 698489 | 61706<sup>50263</sup> | 2437<sup>1108</sup> | 1519<sup>1505</sup> | 237850<sup>237612</sup>!! | using native log1p |
-| log1p<sup>2</sup>[using={'native log1p'}] | complex64 | 698489 | 61706<sup>49384</sup> | 2437<sup>48</sup> | 1519<sup>984</sup> | 237850<sup>237376</sup>!! | using native log1p |
-| log1p<sup>3</sup>[using={'native log1p'}] | complex64 | 698489 | 61706<sup>49206</sup> | 2437<sup>8</sup> | 1519<sup>36</sup> | 237850<sup>235730</sup>!! | using native log1p |
+| log1p<sup>2</sup> | complex64 | 902529 | 97592<sup>42692</sup> | 1586<sup>78</sup> | 104<sup>6</sup> | 190<sup>2</sup>!! | - |
+| log1p<sup>3</sup> | complex64 | 902529 | 97592<sup>41452</sup> | 1586<sup>44</sup> | 104 | 190 | - |
 | log1p<sup>1</sup> | complex128 | 850341 | 151568<sup>139004</sup> | 86<sup>8</sup> | 4 | 2 | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
 | tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |

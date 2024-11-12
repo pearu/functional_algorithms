@@ -104,6 +104,7 @@ kind_to_target = dict(
     eq=None,
     ne=None,
     nextafter="CHLO_NextAfterOp",
+    is_finite="StableHLO_IsFiniteOp",
 )
 
 

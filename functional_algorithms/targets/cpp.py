@@ -109,7 +109,7 @@ kind_to_target = dict(
     ge="({0}) >= ({1})",
     eq="({0}) == ({1})",
     ne="({0}) != ({1})",
-    # is_finite="IsFinite({0})",
+    is_finite="std::isfinite({0})",
     # is_inf="IsInf({0})",
     # is_posinf="IsPosInf({0})",
     # is_neginf="IsNegInf({0})",

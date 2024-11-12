@@ -153,6 +153,7 @@ kind_to_target = dict(
     nextafter="numpy.nextafter({0}, {1})",
     upcast=upcast_func,
     downcast=downcast_func,
+    is_finite="numpy.isfinite({0})",
 )
 
 constant_to_target = dict(

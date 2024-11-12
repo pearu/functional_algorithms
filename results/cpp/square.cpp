@@ -19,7 +19,9 @@ std::complex<float> square_2(std::complex<float> z) {
   float x = (z).real();
   float y = (z).imag();
   return std::complex<float>(
-      (((std::abs(x)) == (std::abs(y))) ? (0.0) : (((x) - (y)) * ((x) + (y)))),
+      (((std::isfinite(x)) && ((std::abs(x)) == (std::abs(y))))
+           ? (0.0)
+           : (((x) - (y)) * ((x) + (y)))),
       (2.0) * ((x) * (y)));
 }
 
@@ -27,6 +29,8 @@ std::complex<double> square_3(std::complex<double> z) {
   double x = (z).real();
   double y = (z).imag();
   return std::complex<double>(
-      (((std::abs(x)) == (std::abs(y))) ? (0.0) : (((x) - (y)) * ((x) + (y)))),
+      (((std::isfinite(x)) && ((std::abs(x)) == (std::abs(y))))
+           ? (0.0)
+           : (((x) - (y)) * ((x) + (y)))),
       (2.0) * ((x) * (y)));
 }
