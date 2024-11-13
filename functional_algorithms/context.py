@@ -122,7 +122,10 @@ class Context:
                 assert expr.props["ref"] == ref_name  # sanity check
                 return expr
             counter = 0
-            ref_name_ = f"{ref_name}__{counter}"
+            # cannot use double-underscore (`__`) because such names
+            # appear reserved in stablehlo or llvm, see
+            # functional_algorithms#68
+            ref_name_ = f"_{ref_name}_{counter}_"
             while other is not None:
                 other = self._ref_values.get(ref_name_)
                 if other is expr:
@@ -130,7 +133,7 @@ class Context:
                     return expr
                 elif other is not None:
                     counter += 1
-                    ref_name_ = f"{ref_name}__{counter}"
+                    ref_name_ = f"_{ref_name}_{counter}_"
             ref_name = ref_name_
 
         # register reference name:
