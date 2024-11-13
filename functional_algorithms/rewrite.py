@@ -589,7 +589,11 @@ class Rewriter:
                     if value == "smallest_subnormal":
                         return expr.context.constant(dtype(fi.smallest_subnormal), like)
         elif typ.kind == "float" and typ.bits is None:
-            if not isinstance(value, float) and isinstance(value, number_types):
+            if (
+                not isinstance(value, float)
+                and isinstance(value, number_types)
+                and not expr.context.parameters.get("rewrite_keep_integer_literals", False)
+            ):
                 return expr.context.constant(float(value), like)
         elif typ.kind == "complex" and typ.bits is None:
             if not isinstance(value, complex) and isinstance(value, number_types):

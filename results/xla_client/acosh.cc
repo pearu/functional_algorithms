@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+// This file is generated using functional_algorithms tool (0.11.0), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -55,25 +55,25 @@ XlaOp acosh_1(XlaOp z) {
   XlaOp xp1 = Add(x, one);
   XlaOp xm1 = Sub(x, one);
   XlaOp abs_xp1 = Abs(xp1);
-  XlaOp mx__0 = Max(abs_xp1, y);
+  XlaOp _mx_0_ = Max(abs_xp1, y);
   XlaOp mn = Min(abs_xp1, y);
   XlaOp sqrt_two = ScalarLike(signed_x, std::sqrt(2));
-  XlaOp r__0 = Square(Div(mn, mx__0));
-  XlaOp sqa = Sqrt(Add(one, r__0));
+  XlaOp _r_0_ = Square(Div(mn, _mx_0_));
+  XlaOp sqa = Sqrt(Add(one, _r_0_));
   XlaOp two = ScalarLike(signed_x, two_);
-  XlaOp r =
-      Select(Eq(mx__0, mn), Mul(sqrt_two, mx__0),
-             Select(And(Eq(sqa, one), Gt(r__0, zero)),
-                    Add(mx__0, Div(Mul(mx__0, r__0), two)), Mul(mx__0, sqa)));
+  XlaOp r = Select(
+      Eq(_mx_0_, mn), Mul(sqrt_two, _mx_0_),
+      Select(And(Eq(sqa, one), Gt(_r_0_, zero)),
+             Add(_mx_0_, Div(Mul(_mx_0_, _r_0_), two)), Mul(_mx_0_, sqa)));
   XlaOp abs_xm1 = Abs(xm1);
-  XlaOp mx__1 = Max(abs_xm1, y);
-  XlaOp mn__0 = Min(abs_xm1, y);
-  XlaOp r__1 = Square(Div(mn__0, mx__1));
-  XlaOp sqa__0 = Sqrt(Add(one, r__1));
+  XlaOp _mx_1_ = Max(abs_xm1, y);
+  XlaOp _mn_0_ = Min(abs_xm1, y);
+  XlaOp _r_1_ = Square(Div(_mn_0_, _mx_1_));
+  XlaOp _sqa_0_ = Sqrt(Add(one, _r_1_));
   XlaOp s = Select(
-      Eq(mx__1, mn__0), Mul(sqrt_two, mx__1),
-      Select(And(Eq(sqa__0, one), Gt(r__1, zero)),
-             Add(mx__1, Div(Mul(mx__1, r__1), two)), Mul(mx__1, sqa__0)));
+      Eq(_mx_1_, _mn_0_), Mul(sqrt_two, _mx_1_),
+      Select(And(Eq(_sqa_0_, one), Gt(_r_1_, zero)),
+             Add(_mx_1_, Div(Mul(_mx_1_, _r_1_), two)), Mul(_mx_1_, _sqa_0_)));
   XlaOp a = Mul(half, Add(r, s));
   XlaOp ap1 = Add(a, one);
   XlaOp yy = Mul(y, y);
@@ -90,7 +90,7 @@ XlaOp acosh_1(XlaOp z) {
                      Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XlaOp sq = Sqrt(Mul(am1, ap1));
   XlaOp half_apx = Mul(half, Add(a, x));
-  XlaOp imag__0 = Atan2(
+  XlaOp _imag_0_ = Atan2(
       Select(Ge(Max(x, y), safe_max), y,
              Select(Le(x, one), Sqrt(Mul(half_apx, Add(Div(yy, rpxp1), smxm1))),
                     Mul(y, Sqrt(Add(Div(half_apx, rpxp1),
@@ -102,5 +102,6 @@ XlaOp acosh_1(XlaOp z) {
                  Mul(half, Log1p(Mul(xoy, xoy)))),
              Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
                     Log1p(Add(am1, sq)))),
-      Select(Lt(signed_y, ScalarLike(signed_y, zero_)), Neg(imag__0), imag__0));
+      Select(Lt(signed_y, ScalarLike(signed_y, zero_)), Neg(_imag_0_),
+             _imag_0_));
 }

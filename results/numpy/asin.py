@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+# This file is generated using functional_algorithms tool (0.11.0), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -47,7 +47,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
                 )
             ),
         )
-        zero: numpy.float64 = numpy.float64(0.0)
+        constant_f0: numpy.float64 = numpy.float64(0.0)
         safe_max_opt: numpy.float64 = (
             ((safe_max) * (numpy.float64(1e-06)))
             if ((x) < ((safe_max) * (numpy.float64(1000000000000.0))))
@@ -58,7 +58,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
         xoy: numpy.float64 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.inf), dtype=numpy.bool_))))
-            else (zero)
+            else (constant_f0)
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float64(5.966672584960166e-154))) and ((x) < (one))
         ap1: numpy.float64 = (a) + (one)
@@ -76,7 +76,7 @@ def asin_0(z: numpy.complex128) -> numpy.complex128:
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
-        result = make_complex(real, (-(imag)) if ((signed_y) < (zero)) else (imag))
+        result = make_complex(real, (-(imag)) if ((signed_y) < (constant_f0)) else (imag))
         return result
 
 
@@ -112,7 +112,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
                 )
             ),
         )
-        zero: numpy.float32 = numpy.float32(0.0)
+        constant_f0: numpy.float32 = numpy.float32(0.0)
         safe_max_opt: numpy.float32 = (
             ((safe_max) * (numpy.float32(1e-06)))
             if ((x) < ((safe_max) * (numpy.float32(1000000000000.0))))
@@ -123,7 +123,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
         xoy: numpy.float32 = (
             ((x) / (y))
             if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.inf), dtype=numpy.bool_))))
-            else (zero)
+            else (constant_f0)
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float32(4.3368087e-19))) and ((x) < (one))
         ap1: numpy.float32 = (a) + (one)
@@ -141,7 +141,7 @@ def asin_1(z: numpy.complex64) -> numpy.complex64:
             if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
             else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
         )
-        result = make_complex(real, (-(imag)) if ((signed_y) < (zero)) else (imag))
+        result = make_complex(real, (-(imag)) if ((signed_y) < (constant_f0)) else (imag))
         return result
 
 

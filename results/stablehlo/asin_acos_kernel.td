@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+// This file is generated using functional_algorithms tool (0.11.0), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -53,56 +53,56 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                            (StableHLO_SqrtOp:$sqa
                              (StableHLO_AddOp
                                $one,
-                               (StableHLO_MulOp:$r__0
+                               (StableHLO_MulOp:$_r_0_
                                  (StableHLO_DivOp:$mn_over_mx $mn, $mx),
                                  $mn_over_mx))),
                            $one,
                             StableHLO_ComparisonDirectionValue<"EQ">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                           (StableHLO_CompareOp
-                           $r__0,
+                           $_r_0_,
                            (StableHLO_ConstantLike<"0.0">:$zero $signed_x),
                             StableHLO_ComparisonDirectionValue<"GT">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
                         (StableHLO_AddOp
                           $mx,
                           (StableHLO_DivOp
-                            (StableHLO_MulOp $mx, $r__0),
+                            (StableHLO_MulOp $mx, $_r_0_),
                             (StableHLO_ConstantLike<"2.0">:$two $signed_x))),
                         (StableHLO_MulOp $mx, $sqa))),
                     (StableHLO_SelectOp:$s
                       (StableHLO_CompareOp
-                       (StableHLO_MaxOp:$mx__0
+                       (StableHLO_MaxOp:$_mx_0_
                          (StableHLO_AbsOp:$abs_xm1
                            (StableHLO_SubtractOp:$xm1 $x, $one)),
                          $y),
-                       (StableHLO_MinOp:$mn__0 $abs_xm1, $y),
+                       (StableHLO_MinOp:$_mn_0_ $abs_xm1, $y),
                         StableHLO_ComparisonDirectionValue<"EQ">,
                         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
-                      (StableHLO_MulOp $sqrt_two, $mx__0),
+                      (StableHLO_MulOp $sqrt_two, $_mx_0_),
                       (StableHLO_SelectOp
                         (StableHLO_AndOp
                           (StableHLO_CompareOp
-                           (StableHLO_SqrtOp:$sqa__0
+                           (StableHLO_SqrtOp:$_sqa_0_
                              (StableHLO_AddOp
                                $one,
-                               (StableHLO_MulOp:$r__1
-                                 (StableHLO_DivOp:$mn_over_mx__0 $mn__0, $mx__0),
-                                 $mn_over_mx__0))),
+                               (StableHLO_MulOp:$_r_1_
+                                 (StableHLO_DivOp:$_mn_over_mx_0_ $_mn_0_, $_mx_0_),
+                                 $_mn_over_mx_0_))),
                            $one,
                             StableHLO_ComparisonDirectionValue<"EQ">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
                           (StableHLO_CompareOp
-                           $r__1,
+                           $_r_1_,
                            $zero,
                             StableHLO_ComparisonDirectionValue<"GT">,
                             (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
                         (StableHLO_AddOp
-                          $mx__0,
+                          $_mx_0_,
                           (StableHLO_DivOp
-                            (StableHLO_MulOp $mx__0, $r__1),
+                            (StableHLO_MulOp $_mx_0_, $_r_1_),
                             $two)),
-                        (StableHLO_MulOp $mx__0, $sqa__0))))),
+                        (StableHLO_MulOp $_mx_0_, $_sqa_0_))))),
                 $x)),
             (StableHLO_AddOp
               (StableHLO_DivOp
@@ -119,7 +119,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                 (StableHLO_AddOp:$spxm1 $s, $xm1))))))),
     (StableHLO_SelectOp
       (StableHLO_CompareOp
-       (StableHLO_SelectOp:$mx__1
+       (StableHLO_SelectOp:$_mx_1_
          (StableHLO_CompareOp:$y_gt_safe_max_opt
           $y,
           (StableHLO_SelectOp:$safe_max_opt
@@ -146,7 +146,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
       (StableHLO_AddOp
         (StableHLO_AddOp
           (StableHLO_LogOp $two),
-          (StableHLO_LogOp $mx__1)),
+          (StableHLO_LogOp $_mx_1_)),
         (StableHLO_MulOp
           $half,
           (StableHLO_Log1pOp

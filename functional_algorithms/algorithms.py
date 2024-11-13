@@ -428,7 +428,7 @@ def complex_asin(ctx, z: complex):
     signed_y = z.imag.reference("signed_y", force=True)
     w = ctx.asin_acos_kernel(z)
     w_imag = w.imag
-    zero = ctx.constant(0, w_imag)
+    zero = ctx.constant(0, signed_x)
     real = ctx.atan2(signed_x, w.real).reference("real")
     imag = ctx.select(signed_y < zero, -w_imag, w_imag)
     return ctx.complex(real, imag)
@@ -1095,7 +1095,7 @@ def complex_atan(ctx, z: complex):
 
     atan(z) = -I * atanh(I * z)
     """
-    w = complex_atanh(ctx, ctx.complex(-z.imag, z.real))
+    w = ctx.atanh(ctx.complex(-z.imag, z.real))
     return ctx(ctx.complex(w.imag, -w.real))
 
 
