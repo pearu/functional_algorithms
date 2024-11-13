@@ -70,9 +70,9 @@ Finally,
 | asinh | complex64 | 808231 | 192742 | 996 | 32 | - | - |
 | asinh<sub>2</sub> | complex64 | 806919 | 194826 | 252 | 4 | - | using native asinh |
 | asinh | complex128 | 750491 | 250830 | 680 | - | - | - |
-| atan | complex64 | 851639 | 145498 | 4780 | 84 | - | - |
+| atan | complex64 | 902789 | 97576 | 1636 | - | - | - |
 | atan<sub>2</sub> | complex64 | 902789 | 97576 | 1636 | - | - | using native atan |
-| atan | complex128 | 936441 | 65256 | 304 | - | - | - |
+| atan | complex128 | 960561 | 41364 | 76 | - | - | - |
 | atanh | complex64 | 851639 | 145498 | 4780 | 84 | - | - |
 | atanh<sub>2</sub> | complex64 | 902789 | 97576 | 1636 | - | - | using native atanh |
 | atanh | complex128 | 936441 | 65256 | 304 | - | - | - |

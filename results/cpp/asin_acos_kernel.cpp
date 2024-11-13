@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+// This file is generated using functional_algorithms tool (0.11.0), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -25,26 +25,26 @@ std::complex<float> asin_acos_kernel_0(std::complex<float> z) {
   float mn = std::min(abs_xp1, y);
   float sqrt_two = 1.4142135;
   float mn_over_mx = (mn) / (mx);
-  float r__0 = (mn_over_mx) * (mn_over_mx);
-  float sqa = std::sqrt((one) + (r__0));
+  float _r_0_ = (mn_over_mx) * (mn_over_mx);
+  float sqa = std::sqrt((one) + (_r_0_));
   float zero = 0.0;
   float two = 2.0;
   float r = (((mx) == (mn)) ? ((sqrt_two) * (mx))
-                            : (((((sqa) == (one)) && ((r__0) > (zero)))
-                                    ? ((mx) + (((mx) * (r__0)) / (two)))
+                            : (((((sqa) == (one)) && ((_r_0_) > (zero)))
+                                    ? ((mx) + (((mx) * (_r_0_)) / (two)))
                                     : ((mx) * (sqa)))));
   float xm1 = (x) - (one);
   float abs_xm1 = std::abs(xm1);
-  float mx__0 = std::max(abs_xm1, y);
-  float mn__0 = std::min(abs_xm1, y);
-  float mn_over_mx__0 = (mn__0) / (mx__0);
-  float r__1 = (mn_over_mx__0) * (mn_over_mx__0);
-  float sqa__0 = std::sqrt((one) + (r__1));
-  float s =
-      (((mx__0) == (mn__0)) ? ((sqrt_two) * (mx__0))
-                            : (((((sqa__0) == (one)) && ((r__1) > (zero)))
-                                    ? ((mx__0) + (((mx__0) * (r__1)) / (two)))
-                                    : ((mx__0) * (sqa__0)))));
+  float _mx_0_ = std::max(abs_xm1, y);
+  float _mn_0_ = std::min(abs_xm1, y);
+  float _mn_over_mx_0_ = (_mn_0_) / (_mx_0_);
+  float _r_1_ = (_mn_over_mx_0_) * (_mn_over_mx_0_);
+  float _sqa_0_ = std::sqrt((one) + (_r_1_));
+  float s = (((_mx_0_) == (_mn_0_))
+                 ? ((sqrt_two) * (_mx_0_))
+                 : (((((_sqa_0_) == (one)) && ((_r_1_) > (zero)))
+                         ? ((_mx_0_) + (((_mx_0_) * (_r_1_)) / (two)))
+                         : ((_mx_0_) * (_sqa_0_)))));
   float a = (half) * ((r) + (s));
   float half_apx = (half) * ((a) + (x));
   float yy = (y) * (y);
@@ -55,7 +55,7 @@ std::complex<float> asin_acos_kernel_0(std::complex<float> z) {
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
-  float mx__1 = ((y_gt_safe_max_opt) ? (y) : (x));
+  float _mx_1_ = ((y_gt_safe_max_opt) ? (y) : (x));
   float xoy = (((y_gt_safe_max_opt) &&
                 (!((y) == (std::numeric_limits<float>::infinity()))))
                    ? ((x) / (y))
@@ -81,8 +81,8 @@ std::complex<float> asin_acos_kernel_0(std::complex<float> z) {
                    ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
                    : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
                                        ((half_apx) / (spxm1)))))))),
-      (((mx__1) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-           ? (((std::log(two)) + (std::log(mx__1))) +
+      (((_mx_1_) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(_mx_1_))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
            : (((logical_and_lt_y_safe_min_lt_x_one)
                    ? ((y) / (sq))
@@ -103,26 +103,26 @@ std::complex<double> asin_acos_kernel_1(std::complex<double> z) {
   double mn = std::min(abs_xp1, y);
   double sqrt_two = 1.4142135623730951;
   double mn_over_mx = (mn) / (mx);
-  double r__0 = (mn_over_mx) * (mn_over_mx);
-  double sqa = std::sqrt((one) + (r__0));
+  double _r_0_ = (mn_over_mx) * (mn_over_mx);
+  double sqa = std::sqrt((one) + (_r_0_));
   double zero = 0.0;
   double two = 2.0;
   double r = (((mx) == (mn)) ? ((sqrt_two) * (mx))
-                             : (((((sqa) == (one)) && ((r__0) > (zero)))
-                                     ? ((mx) + (((mx) * (r__0)) / (two)))
+                             : (((((sqa) == (one)) && ((_r_0_) > (zero)))
+                                     ? ((mx) + (((mx) * (_r_0_)) / (two)))
                                      : ((mx) * (sqa)))));
   double xm1 = (x) - (one);
   double abs_xm1 = std::abs(xm1);
-  double mx__0 = std::max(abs_xm1, y);
-  double mn__0 = std::min(abs_xm1, y);
-  double mn_over_mx__0 = (mn__0) / (mx__0);
-  double r__1 = (mn_over_mx__0) * (mn_over_mx__0);
-  double sqa__0 = std::sqrt((one) + (r__1));
-  double s =
-      (((mx__0) == (mn__0)) ? ((sqrt_two) * (mx__0))
-                            : (((((sqa__0) == (one)) && ((r__1) > (zero)))
-                                    ? ((mx__0) + (((mx__0) * (r__1)) / (two)))
-                                    : ((mx__0) * (sqa__0)))));
+  double _mx_0_ = std::max(abs_xm1, y);
+  double _mn_0_ = std::min(abs_xm1, y);
+  double _mn_over_mx_0_ = (_mn_0_) / (_mx_0_);
+  double _r_1_ = (_mn_over_mx_0_) * (_mn_over_mx_0_);
+  double _sqa_0_ = std::sqrt((one) + (_r_1_));
+  double s = (((_mx_0_) == (_mn_0_))
+                  ? ((sqrt_two) * (_mx_0_))
+                  : (((((_sqa_0_) == (one)) && ((_r_1_) > (zero)))
+                          ? ((_mx_0_) + (((_mx_0_) * (_r_1_)) / (two)))
+                          : ((_mx_0_) * (_sqa_0_)))));
   double a = (half) * ((r) + (s));
   double half_apx = (half) * ((a) + (x));
   double yy = (y) * (y);
@@ -133,7 +133,7 @@ std::complex<double> asin_acos_kernel_1(std::complex<double> z) {
       (((x) < ((safe_max) * (1000000000000.0))) ? ((safe_max) * (1e-06))
                                                 : ((safe_max) * (100.0)));
   bool y_gt_safe_max_opt = (y) >= (safe_max_opt);
-  double mx__1 = ((y_gt_safe_max_opt) ? (y) : (x));
+  double _mx_1_ = ((y_gt_safe_max_opt) ? (y) : (x));
   double xoy = (((y_gt_safe_max_opt) &&
                  (!((y) == (std::numeric_limits<double>::infinity()))))
                     ? ((x) / (y))
@@ -159,8 +159,8 @@ std::complex<double> asin_acos_kernel_1(std::complex<double> z) {
                    ? (std::sqrt((half_apx) * (((yy) / (rpxp1)) + (smxm1))))
                    : ((y) * (std::sqrt(((half_apx) / (rpxp1)) +
                                        ((half_apx) / (spxm1)))))))),
-      (((mx__1) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
-           ? (((std::log(two)) + (std::log(mx__1))) +
+      (((_mx_1_) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
+           ? (((std::log(two)) + (std::log(_mx_1_))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
            : (((logical_and_lt_y_safe_min_lt_x_one)
                    ? ((y) / (sq))

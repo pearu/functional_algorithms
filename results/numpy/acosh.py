@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+# This file is generated using functional_algorithms tool (0.11.0), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -58,7 +58,7 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
         am1: numpy.float64 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float64 = numpy.sqrt((am1) * (ap1))
         half_apx: numpy.float64 = (half) * ((a) + (x))
-        imag__0: numpy.float64 = numpy.arctan2(
+        _imag_0_: numpy.float64 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -76,7 +76,7 @@ def acosh_0(z: numpy.complex128) -> numpy.complex128:
                 if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
                 else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
             ),
-            (-(imag__0)) if ((signed_y) < (numpy.float64(0.0))) else (imag__0),
+            (-(_imag_0_)) if ((signed_y) < (numpy.float64(0.0))) else (_imag_0_),
         )
         return result
 
@@ -124,7 +124,7 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
         am1: numpy.float32 = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
         sq: numpy.float32 = numpy.sqrt((am1) * (ap1))
         half_apx: numpy.float32 = (half) * ((a) + (x))
-        imag__0: numpy.float32 = numpy.arctan2(
+        _imag_0_: numpy.float32 = numpy.arctan2(
             (
                 (y)
                 if ((max(x, y)) >= (safe_max))
@@ -142,7 +142,7 @@ def acosh_1(z: numpy.complex64) -> numpy.complex64:
                 if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
                 else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (numpy.log1p((am1) + (sq))))
             ),
-            (-(imag__0)) if ((signed_y) < (numpy.float32(0.0))) else (imag__0),
+            (-(_imag_0_)) if ((signed_y) < (numpy.float32(0.0))) else (_imag_0_),
         )
         return result
 
