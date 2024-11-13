@@ -101,6 +101,31 @@ def mpf2float(dtype, x, flush_subnormals=False):
         assert 0  # unreachable
 
 
+def str2float(value, typ):
+    assert isinstance(value, str), type(value)
+    if typ.is_float:
+        dtype = typ.asdtype()
+        if dtype is None:
+            dtype = numpy.float64
+        if dtype is not None:
+            fi = numpy.finfo(dtype)
+            if value in {"smallest", "smallest_normal"}:
+                return fi.smallest_normal
+            elif value == "smallest_subnormal":
+                return fi.smallest_subnormal
+            elif value == "eps":
+                return fi.eps
+            elif value == "largest":
+                return fi.max
+            elif value == "posinf":
+                return dtype(numpy.inf)
+            elif value == "neginf":
+                return dtype(-numpy.inf)
+            elif value == "pi":
+                return dtype(numpy.pi)
+    return value
+
+
 class vectorize_with_backend(numpy.vectorize):
 
     pyfunc_is_vectorized = False

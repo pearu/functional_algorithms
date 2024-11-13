@@ -2,7 +2,8 @@ import math
 import numpy
 from collections import defaultdict
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types, boolean_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types, str2float, warn_once
+import functional_algorithms as fa
 
 
 class Printer:
@@ -191,9 +192,11 @@ _any_relop_any = {
 }
 
 
-def op_rewrite(expr, commutative=False, idempotent=False, kind=None):
+def op_rewrite(expr, commutative=False, idempotent=False, identity=None, absorber=None, kind=None):
     """Normalizes expression."""
-    return op_unflatten(op_flatten(expr, commutative=commutative, idempotent=idempotent, kind=kind), kind)
+    return op_unflatten(
+        op_flatten(expr, commutative=commutative, idempotent=idempotent, kind=kind), kind, identity=identity, absorber=absorber
+    )
 
 
 def op_collect(expr, commutative=False, idempotent=False, over_commutative=False, over_idempotent=False, over_kind=None):
@@ -237,18 +240,25 @@ def op_collect(expr, commutative=False, idempotent=False, over_commutative=False
             row = new_row
         matrix.append(row)
 
-    left = []
-    while len(set([row[0] if row else None for row in matrix])) == 1:
-        left.append(dct[matrix[0][0]])
-        matrix = [row[1:] for row in matrix if len(row) > 1]
-
     right = []
-    while len(set([row[-1] if row else None for row in matrix])) == 1:
-        right.insert(0, dct[matrix[0][-1]])
-        matrix = [row[:-1] for row in matrix if len(row) > 1]
+    if commutative:
+        left_ = set.intersection(*map(set, matrix))
+        matrix = [sorted(row.difference(left_)) for row in map(set, matrix)]
+        left = [dct[key] for key in sorted(left_)]
+    else:
+        left = []
+        while len(set([row[0] if row else None for row in matrix])) == 1:
+            left.append(dct[matrix[0][0]])
+            matrix = [row[1:] for row in matrix if len(row) > 1]
+
+        while len(set([row[-1] if row else None for row in matrix])) == 1:
+            right.insert(0, dct[matrix[0][-1]])
+            matrix = [row[:-1] for row in matrix if len(row) > 1]
+
+    matrix = [row for row in matrix if row]
 
     if matrix:
-        middle = op_unflatten([op_unflatten([dct[key] for key in row], kind) for row in matrix], over_kind)
+        middle = op_unflatten([op_unflatten([dct[key] for key in row], kind) for row in matrix if row], over_kind)
         return op_unflatten(left + [middle] + right, kind)
     return op_unflatten(left + right, kind)
 
@@ -362,7 +372,7 @@ def op_flatten(expr, commutative=False, idempotent=False, kind=None, _kind=None)
         yield expr
 
 
-def op_unflatten(operands, kind):
+def op_unflatten(operands, kind, identity=None, absorber=None):
     """Return nested operation on operands. Inverse of op_flatten.
 
     For example:
@@ -371,12 +381,18 @@ def op_unflatten(operands, kind):
     lhs = None
     op = None
     for operand in operands:
+        if operand is absorber:
+            return absorber
+        if operand is identity:
+            continue
         if lhs is None:
             lhs = operand
             op = getattr(lhs.context, kind)
         else:
             lhs = op(lhs, operand)
-    assert lhs is not None
+    if lhs is None:
+        lhs = identity
+    assert lhs is not None  # specifying identity is recommended
     return lhs
 
 
@@ -499,7 +515,6 @@ class Rewriter:
 
     def _binary_op(self, expr, op):
         x, y = expr.operands
-
         if x.kind == "constant" and y.kind == "constant":
             xvalue, xlike = x.operands
             yvalue, ylike = y.operands
@@ -532,6 +547,10 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 0:
                     return -y_ if s == -1 else y_
 
+        if x is y:
+            # TODO: add isfinite check
+            return x.context.constant(0, x)  # assuming finite x!!!
+
     def multiply(self, expr):
         result = self._binary_op(expr, lambda x, y: x * y)
 
@@ -542,8 +561,12 @@ class Rewriter:
         for x_, y_ in [(x, y), (y, x)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, number_types) and value == 1:
-                    return y_
+                if isinstance(value, number_types):
+                    if value == 1:
+                        return y_
+                    if value == 0:
+                        # TODO: add isfinite check
+                        return x_  # assuming that y_ is finite!!!!
 
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))
@@ -552,11 +575,20 @@ class Rewriter:
         return self._binary_op(expr, lambda x, y: max(x, y))
 
     def divide(self, expr):
+        result = self._binary_op(expr, lambda x, y: x / y)
+
+        if result is not None:
+            return result
+
         x, y = expr.operands
         if y.kind == "constant":
             value, like = y.operands
             if isinstance(value, number_types) and value == 1:
                 return x
+
+        if x is y:
+            # TODO: add isfinite check
+            return x.context.constant(1, x)  # assuming finite x!!!
 
     def complex(self, expr):
         pass
@@ -564,6 +596,7 @@ class Rewriter:
     def constant(self, expr):
         value, like = expr.operands
         typ = like.get_type()
+
         if typ.kind in {"float", "complex"} and typ.bits is not None:
             dtype = typ.asdtype()
             if dtype is not None:
@@ -573,21 +606,22 @@ class Rewriter:
                 elif isinstance(value, str):
                     if value == "posinf":
                         return expr.context.constant(dtype(numpy.inf), like)
-                    if value == "neginf":
+                    elif value == "neginf":
                         return expr.context.constant(-dtype(numpy.inf), like)
-                    if value == "pi":
+                    elif value == "pi":
                         return expr.context.constant(dtype(numpy.pi), like)
-                    if value in {"undefined", "nan"}:
+                    elif value in {"undefined", "nan"}:
                         return expr.context.constant(dtype(numpy.nan), like)
                     fi = numpy.finfo(dtype)
                     if value == "eps":
                         return expr.context.constant(dtype(fi.eps), like)
-                    if value == "largest":
+                    elif value == "largest":
                         return expr.context.constant(dtype(fi.max), like)
-                    if value == "smallest":
+                    elif value == "smallest":
                         return expr.context.constant(dtype(fi.smallest_normal), like)
-                    if value == "smallest_subnormal":
+                    elif value == "smallest_subnormal":
                         return expr.context.constant(dtype(fi.smallest_subnormal), like)
+                    warn_once(f"unknown constant name: {value}")
         elif typ.kind == "float" and typ.bits is None:
             if not isinstance(value, float) and isinstance(value, number_types):
                 return expr.context.constant(float(value), like)
@@ -631,7 +665,9 @@ class Rewriter:
                 if isinstance(value, bool):
                     return y_ if value else ctx.constant(False)
 
-        operands = tuple(op_flatten(expr, commutative=True, idempotent=True))
+        r = op_rewrite(expr, commutative=True, idempotent=True, kind="logical_and")
+        if r is not expr:
+            return r
 
     def logical_or(self, expr):
         x, y = expr.operands
@@ -641,8 +677,12 @@ class Rewriter:
                 value, like = x_.operands
                 if isinstance(value, bool):
                     if value:
-                        return ctx.constant(True, ctx.symbol(None, "boolean"))
+                        return ctx.constant(True)
                     return y_
+
+        r = op_rewrite(expr, commutative=True, idempotent=True, kind="logical_or")
+        if r is not expr:
+            return r
 
     def logical_not(self, expr):
         (x,) = expr.operands
@@ -701,23 +741,42 @@ class Rewriter:
 
     def _compare(self, expr, relop, relop_index, swap_relop_index):
         x, y = expr.operands
+        ctx = expr.context
+
+        if x._is_constant and ctx._compare_float_type is not None:
+            x = x.rewrite(CompleteFloatType(ctx._compare_float_type), fa.rewrite)
+            assert x.kind == "constant", x
+
+        if y._is_constant and ctx._compare_float_type is not None:
+            y = y.rewrite(CompleteFloatType(ctx._compare_float_type), fa.rewrite)
+            assert y.kind == "constant", y
+
         if x.kind == "constant":
             xvalue, xlike = x.operands
+
+            if isinstance(xvalue, str):
+                xvalue = str2float(xvalue, xlike.get_type())
+
             if y.kind == "constant":
                 yvalue, ylike = y.operands
+
+                if isinstance(yvalue, str):
+                    yvalue = str2float(yvalue, ylike.get_type())
 
                 if isinstance(xvalue, _expr.Expr) or isinstance(yvalue, _expr.Expr):
                     r = self._compare(relop(xvalue, yvalue), relop, relop_index, swap_relop_index)
                     if isinstance(r, bool):
-                        return expr.context.constant(r)
+                        return ctx.constant(r)
                 else:
                     r = _constant_relop_constant.get((xvalue, yvalue))
                     if r is not None:
-                        return expr.context.constant(r[relop_index])
+                        return ctx.constant(r[relop_index])
 
                 if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
-                    r = bool(relop(xvalue, yvalue))
-                    return expr.context.constant(r)
+                    r = relop(xvalue, yvalue)
+
+                    if r is not None:
+                        return ctx.constant(bool(r))
 
             elif isinstance(xvalue, number_types):
                 for prop in ["positive", "negative", "nonpositive", "nonnegative", "finite"]:
@@ -726,7 +785,7 @@ class Rewriter:
                         if r is not None:
                             r = r[relop_index]
                             if r is not None:
-                                return expr.context.constant(r)
+                                return ctx.constant(r)
 
         elif y.kind == "constant":
             yvalue, ylike = y.operands
@@ -737,7 +796,7 @@ class Rewriter:
                         if r is not None:
                             r = r[swap_relop_index]
                             if r is not None:
-                                return expr.context.constant(r)
+                                return ctx.constant(r)
         else:
             for xprop, yprop in [
                 ("positive", "negative"),
@@ -758,7 +817,16 @@ class Rewriter:
                     if r is not None:
                         r = r[relop_index]
                         if r is not None:
-                            return expr.context.constant(r)
+                            return ctx.constant(r)
+
+        if expr.kind in {"eq", "ne"} and x._is_constant and y._is_constant is False:
+            return relop(*expr.operands[::-1])
+
+        if expr.kind in {"lt", "gt", "ne"} and x is y:
+            return ctx.constant(False)
+
+        if expr.kind in {"le", "ge", "eq"} and x is y:
+            return ctx.constant(True)
 
     def ge(self, expr):
         return self._compare(expr, lambda x, y: x >= y, 0, 2)
@@ -837,6 +905,12 @@ def rewrite(expr):
     while True:
         result = rewriter(result)
         if result is not None:
+            if last_result is not None:
+                if result is last_result:
+                    # as a fix, revise rewriter that ought to return
+                    # None when no rewrite is done:
+                    warn_once(f"breaking unexpected infinite recursion for `{expr.tostring(fa.targets.symbolic)}`")
+                    break
             last_result = result
         else:
             break
@@ -876,7 +950,27 @@ class RewriteContext:
             return self.cache[original.key]
 
 
+class CompleteFloatType:
+    """Substitute incomplete float type with a complete float type.
+
+    Incomplete type does not have bits specified.
+    """
+
+    def __init__(self, float_type):
+        self.float_type = float_type
+
+    def __rewrite_modifier__(self, expr):
+        if expr.kind == "symbol":
+            name, typ = expr.operands
+            if typ.is_float and typ.bits is None:
+                typ = type(typ).fromobject(typ.context, self.float_type)
+                assert typ.bits is not None, typ
+                return expr.context.symbol(name, typ)
+        return expr
+
+
 class Substitute:
+    """Substitute sub-expressions."""
 
     def __init__(self, matches, replacements):
         self.matches = matches
@@ -914,4 +1008,27 @@ class Substitute:
                     return expr.context.symbol(replacement, typ=typ)
                 else:
                     raise NotImplementedError(f"{type(replacement)=}")
+        return expr
+
+
+class Collector:
+    """Rewrite modifier that collects expressions."""
+
+    def __init__(self, ignore_constants=True, ignore_logical=True, ignore_relational=True):
+        self.ignore_constants = ignore_constants
+        self.ignore_logical = ignore_logical
+        self.ignore_relational = ignore_relational
+        self.data = dict()
+
+    def __rewrite_modifier__(self, expr):
+
+        if self.ignore_constants and expr.kind == "constant":
+            pass
+        elif self.ignore_logical and expr.kind in {"logical_and", "logical_or", "logical_not"}:
+            pass
+        elif self.ignore_relational and expr.kind in {"lt", "gt", "le", "ge", "eq", "ne"}:
+            pass
+        else:
+            self.data[expr.key] = expr
+
         return expr
