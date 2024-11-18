@@ -295,7 +295,6 @@ def test_float2mpf(real_dtype):
     fi = numpy.finfo(real_dtype)
     dtype_name = real_dtype.__name__
     dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
-
     for f in [
         -numpy.inf,
         -utils.vectorize_with_mpmath.float_max[dtype_name],
@@ -303,19 +302,35 @@ def test_float2mpf(real_dtype):
         -0.3,
         -fi.eps,
         -fi.smallest_normal,
+        -fi.smallest_subnormal * 15,
         -fi.smallest_subnormal,
         0,
         fi.smallest_subnormal,
+        fi.smallest_subnormal * 10,
         fi.smallest_normal,
         fi.eps,
         0.3,
         150,
         utils.vectorize_with_mpmath.float_max[dtype_name],
         numpy.inf,
+        numpy.nan,
     ]:
-
         v = real_dtype(f)
         m = utils.float2mpf(ctx, v)
         r = utils.mpf2float(real_dtype, m)
         assert type(r) is type(v)
-        assert r == v
+        if not numpy.isnan(f):
+            assert r == v
+
+        if real_dtype != numpy.longdouble:
+            assert utils.mpf2bin(m) == utils.float2bin(v)
+
+    if real_dtype in {numpy.float32, numpy.float64}:
+        for f in utils.real_samples(1000, dtype=real_dtype):
+            v = real_dtype(f)
+            m = utils.float2mpf(ctx, v)
+            r = utils.mpf2float(real_dtype, m)
+            assert type(r) is type(v)
+            if not numpy.isnan(f):
+                assert r == v
+            assert utils.mpf2bin(m) == utils.float2bin(v)

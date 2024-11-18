@@ -852,6 +852,9 @@ def complex_log1p(ctx, z: complex):
 
       log1p((mn / mx) ** 2) = log1p(select(mn == mx, one, (mn / mx) ** 2))
 
+    which is valid (eventhough, in general, `inf / inf` -> nan is
+    expected) because log(oo+I*oo).real must be oo, not nan.
+
     Problematic regions
     -------------------
 

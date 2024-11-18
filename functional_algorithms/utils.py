@@ -101,6 +101,70 @@ def mpf2float(dtype, x, flush_subnormals=False):
         assert 0  # unreachable
 
 
+def mpf2bin(s):
+    s = s._mpf_
+    if s == mpmath.libmp.libmpf.fzero:
+        return "0"
+    elif s == mpmath.libmp.libmpf.finf:
+        return "inf"
+    elif s == mpmath.libmp.libmpf.fninf:
+        return "-inf"
+    elif s == mpmath.libmp.libmpf.fnan:
+        return "nan"
+    sign = "-" if s[0] else ""
+    prec = s[1].bit_length()
+    s = mpmath.libmp.libmpf.normalize(*s, prec, mpmath.libmp.libmpf.round_nearest)
+    digits = bin(s[1])[2:]
+    if len(digits) > 1:
+        digits = digits[0] + "." + digits[1:]
+    exponent = s[2]
+    if s[1]:
+        exponent += s[1].bit_length() - 1
+    return f"{sign}{digits}p{exponent:+01d}"
+
+
+def float2bin(f):
+
+    total_bits, exponent_width, significant_width, uint = {
+        numpy.float16: (16, 5, 10, numpy.uint16),
+        numpy.float32: (32, 8, 23, numpy.uint32),
+        numpy.float64: (64, 11, 52, numpy.uint64),
+    }[type(f)]
+
+    digits = bin(f.view(uint))[2:]
+    if f >= 0:
+        sign = ""
+        digits = "0" * (total_bits - len(digits)) + digits
+    elif f < 0:
+        sign = "-"
+    else:
+        # nan
+        return "nan"
+    assert len(digits) == total_bits, (len(digits), total_bits)
+
+    exponent_bits = digits[1 : exponent_width + 1]
+    significant_bits = digits[exponent_width + 1 :].rstrip("0")
+
+    eb = 2 ** (exponent_width - 1)
+    e = int(exponent_bits, 2) - eb + 1
+    if e == eb:
+        assert significant_bits == "", (significant_bits, digits)
+        return f"{sign}inf"
+    elif e == -eb + 1:
+        if not significant_bits:
+            return "0"
+        # subnormal has no leading significant
+        k = len(significant_bits)
+        significant_bits = significant_bits.lstrip("0")
+        e -= k - len(significant_bits)
+        if significant_bits:
+            significant_bits = significant_bits[1:]
+
+    if significant_bits:
+        return f"{sign}1.{significant_bits}p{e:+01d}"
+    return f"{sign}1p{e:+01d}"
+
+
 class vectorize_with_backend(numpy.vectorize):
 
     pyfunc_is_vectorized = False
@@ -1297,7 +1361,7 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
         x, y = abs(x), abs(y)
         ix, iy = int(x.view(uint)), int(y.view(uint))
         if numpy.isfinite(x) and numpy.isfinite(y):
-            flush_subnormals if flush_subnormals is UNSPECIFIED else default_flush_subnormals
+            flush_subnormals = flush_subnormals if flush_subnormals is not UNSPECIFIED else default_flush_subnormals
             if flush_subnormals:
                 fi = numpy.finfo(x.dtype)
                 i = int(fi.smallest_normal.view(uint)) - 1  # 0 distance to largest subnormal
