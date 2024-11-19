@@ -101,6 +101,16 @@ def mpf2float(dtype, x, flush_subnormals=False):
         assert 0  # unreachable
 
 
+def tobinary(x):
+    """Return binary representation of a floating-point number instance."""
+    if isinstance(x, numpy.floating):
+        return float2bin(x)
+    elif isinstance(x, mpmath.mpf):
+        return mpf2bin(x)
+    else:
+        raise NotImplementedError(f"tobinary({type(x)})")
+
+
 def mpf2bin(s):
     s = s._mpf_
     if s == mpmath.libmp.libmpf.fzero:
@@ -125,25 +135,34 @@ def mpf2bin(s):
 
 def float2bin(f):
 
-    total_bits, exponent_width, significant_width, uint = {
-        numpy.float16: (16, 5, 10, numpy.uint16),
-        numpy.float32: (32, 8, 23, numpy.uint32),
-        numpy.float64: (64, 11, 52, numpy.uint64),
+    total_bits, exponent_width, integer_part_width, significant_width, uint = {
+        numpy.float16: (16, 5, 0, 10, numpy.uint16),
+        numpy.float32: (32, 8, 0, 23, numpy.uint32),
+        numpy.float64: (64, 11, 0, 52, numpy.uint64),
+        numpy.longdouble: (128, 15, 1, 63, None),
     }[type(f)]
 
-    digits = bin(f.view(uint))[2:]
+    def get_digits(x):
+        if isinstance(x, numpy.longdouble):
+            x1, x2 = numpy.frombuffer(x.tobytes(), dtype=numpy.uint64)
+            return bin(x1)[2:] + bin(x2)[2:]
+        return bin(x.view(uint))[2:]
+
+    digits = get_digits(f)
     if f >= 0:
         sign = ""
         digits = "0" * (total_bits - len(digits)) + digits
     elif f < 0:
         sign = "-"
+        digits = digits + "0" * (total_bits - len(digits))
     else:
         # nan
         return "nan"
-    assert len(digits) == total_bits, (len(digits), total_bits)
+    assert len(digits) == total_bits, (len(digits), total_bits, f)
 
-    exponent_bits = digits[1 : exponent_width + 1]
-    significant_bits = digits[exponent_width + 1 :].rstrip("0")
+    sign_width = 1
+    exponent_bits = digits[sign_width : sign_width + exponent_width]
+    significant_bits = digits[sign_width + exponent_width + integer_part_width :].rstrip("0")
 
     eb = 2 ** (exponent_width - 1)
     e = int(exponent_bits, 2) - eb + 1
@@ -163,6 +182,42 @@ def float2bin(f):
     if significant_bits:
         return f"{sign}1.{significant_bits}p{e:+01d}"
     return f"{sign}1p{e:+01d}"
+
+
+def split_veltkamp_max(x):
+    """Return maximal s such that
+
+      (2 ** s + 1) * x
+
+    is finite.
+    """
+    _, e = numpy.frexp(x)
+    p = int(-numpy.finfo(type(x)).machep)
+    s = min(int(numpy.finfo(type(x)).maxexp - e + 2), p - 2)
+
+    # TODO: find s without requiring the while loop
+    while s < p - 2 and numpy.isfinite(type(x)(2 ** (s + 1) + 1) * x):
+        s += 1
+    return s
+
+
+def split_veltkamp(x, s):
+    """Return xh and xl such that
+
+      x = xh + xl
+
+    where xh fits into p-s bits, xl fits into s bits, and p is the
+    precision of floating point system.
+    """
+    # https://inria.hal.science/hal-04480440v1
+    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[type(x)]
+    assert s >= 2 and s <= p - 2
+    C = type(x)(2**s + 1)
+    g = C * x  # for large x and s, this will overflow!
+    d = x - g
+    xh = g + d
+    xl = x - xh
+    return xh, xl
 
 
 class vectorize_with_backend(numpy.vectorize):
@@ -1040,8 +1095,8 @@ def real_samples(
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
-    assert dtype in {numpy.float32, numpy.float64}, dtype
-    utype = {numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
+    assert dtype in {numpy.float16, numpy.float32, numpy.float64}, dtype
+    utype = {numpy.float16: numpy.uint16, numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
     fi = numpy.finfo(dtype)
     user_specified_bounds = min_value is not None or max_value is not None
     num = size // 2 if not nonnegative and not user_specified_bounds else size

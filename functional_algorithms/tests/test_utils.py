@@ -334,3 +334,71 @@ def test_float2mpf(real_dtype):
             if not numpy.isnan(f):
                 assert r == v
             assert utils.mpf2bin(m) == utils.float2bin(v)
+
+
+def test_split_veltkamp(real_dtype):
+
+    fi = numpy.finfo(real_dtype)
+    dtype_name = real_dtype.__name__
+    dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
+    if dtype_name == "float128":
+        pytest.skip("NOT IMPL")
+    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[real_dtype]
+    for f in [
+        -utils.vectorize_with_mpmath.float_max[dtype_name],
+        -150,
+        -0.3,
+        -fi.eps,
+        -fi.smallest_normal,
+        -fi.smallest_subnormal * 15,
+        -fi.smallest_subnormal,
+        0,
+        fi.smallest_subnormal,
+        fi.smallest_subnormal * 10,
+        fi.smallest_normal,
+        fi.eps,
+        0.3,
+        150,
+        utils.vectorize_with_mpmath.float_max[dtype_name],
+        numpy.pi,
+    ]:
+        x = real_dtype(f)
+        s1 = (p + 1) // 2
+        for s in range(2, utils.split_veltkamp_max(x)):
+            xh, xl = utils.split_veltkamp(x, s)
+            assert x == xh + xl
+
+            bh = utils.tobinary(xh).split("p")[0].lstrip("-")
+            bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+            bh = bh[1 + bh.startswith("1.") :].lstrip("0")
+            bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+            if bh.endswith("1"):
+                bh = bh[:-1].rstrip("0")
+            if bl.endswith("1"):
+                bl = bl[:-1].rstrip("0")
+
+            if isinstance(x, numpy.longdouble) and s != s1:
+                continue
+
+            assert len(bh) <= p - s
+            assert len(bl) <= s
+
+    for x in utils.real_samples(1000, dtype=real_dtype, include_infinity=False):
+        if abs(x) > numpy.sqrt(fi.max):
+            # veltkamp splitting does not work reliably with large numbers
+            continue
+        s = (p + 1) // 2
+        xh, xl = utils.split_veltkamp(x, s)
+        assert x == xh + xl
+
+        bh = utils.tobinary(xh).split("p")[0].lstrip("-")
+        bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+        bh = bh[1 + bh.startswith("1.") :].lstrip("0")
+        bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+        if bh.endswith("1"):
+            bh = bh[:-1].rstrip("0")
+        if bl.endswith("1"):
+            bl = bl[:-1].rstrip("0")
+
+        assert len(bh) <= p - s
+        assert len(bl) <= s
