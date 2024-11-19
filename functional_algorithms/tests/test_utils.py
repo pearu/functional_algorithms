@@ -334,3 +334,133 @@ def test_float2mpf(real_dtype):
             if not numpy.isnan(f):
                 assert r == v
             assert utils.mpf2bin(m) == utils.float2bin(v)
+
+
+def test_split_veltkamp(real_dtype):
+
+    fi = numpy.finfo(real_dtype)
+    dtype_name = real_dtype.__name__
+    dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
+    if dtype_name == "float128":
+        pytest.skip("NOT IMPL")
+    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[real_dtype]
+    for f in [
+        -utils.vectorize_with_mpmath.float_max[dtype_name],
+        -150,
+        -0.3,
+        -fi.eps,
+        -fi.smallest_normal,
+        -fi.smallest_subnormal * 15,
+        -fi.smallest_subnormal,
+        0,
+        fi.smallest_subnormal,
+        fi.smallest_subnormal * 10,
+        fi.smallest_normal,
+        fi.eps,
+        0.3,
+        150,
+        utils.vectorize_with_mpmath.float_max[dtype_name],
+        numpy.pi,
+    ]:
+        x = real_dtype(f)
+        s1 = (p + 1) // 2
+        with numpy.errstate(over="ignore", invalid="ignore"):
+            max_s = utils.split_veltkamp_max(x)
+        for s in range(2, max_s):
+            xh, xl = utils.split_veltkamp(x, s)
+            assert x == xh + xl
+
+            bh = utils.tobinary(xh).split("p")[0].lstrip("-")
+            bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+            bh = bh[1 + bh.startswith("1.") :].lstrip("0")
+            bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+            if bh.endswith("1"):
+                bh = bh[:-1].rstrip("0")
+            if bl.endswith("1"):
+                bl = bl[:-1].rstrip("0")
+
+            if isinstance(x, numpy.longdouble) and s != s1:
+                continue
+
+            assert len(bh) <= p - s
+            assert len(bl) <= s
+
+    for x in utils.real_samples(1000, dtype=real_dtype, include_infinity=False):
+        if abs(x) > numpy.sqrt(fi.max):
+            # veltkamp splitting does not work reliably with large numbers
+            continue
+        s = (p + 1) // 2
+        xh, xl = utils.split_veltkamp(x, s)
+        assert x == xh + xl
+
+        bh = utils.tobinary(xh).split("p")[0].lstrip("-")
+        bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+        bh = bh[1 + bh.startswith("1.") :].lstrip("0")
+        bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+        if bh.endswith("1"):
+            bh = bh[:-1].rstrip("0")
+        if bl.endswith("1"):
+            bl = bl[:-1].rstrip("0")
+
+        assert len(bh) <= p - s
+        assert len(bl) <= s
+
+
+def test_multiply_dekker(real_dtype):
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    dtype_name = real_dtype.__name__
+    dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
+    if dtype_name == "float128":
+        pytest.skip("longdouble not supported")
+
+    ctx = mpmath.mp
+    ctx.prec = utils.vectorize_with_mpmath.float_prec[real_dtype.__name__] * 2
+
+    size = 100
+    for x in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
+        for y in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
+            with numpy.errstate(over="ignore", invalid="ignore"):
+                r1, r2 = utils.multiply_dekker(x, y)
+
+            x_mp = utils.float2mpf(ctx, x)
+            y_mp = utils.float2mpf(ctx, y)
+
+            r1_mp = utils.float2mpf(ctx, r1)
+            r2_mp = utils.float2mpf(ctx, r2)
+
+            if abs(r2) >= fi.smallest_normal:
+                assert x_mp * y_mp == r1_mp + r2_mp
+            else:
+                # Dekker product is inaccurate when r2 is subnormal
+                pass
+
+
+def test_square_dekker(real_dtype):
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    dtype_name = real_dtype.__name__
+    dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
+    if dtype_name == "float128":
+        pytest.skip("longdouble not supported")
+
+    ctx = mpmath.mp
+    ctx.prec = utils.vectorize_with_mpmath.float_prec[real_dtype.__name__] * 2
+
+    size = 100
+    for x in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
+        with numpy.errstate(over="ignore", invalid="ignore"):
+            r1, r2 = utils.square_dekker(x)
+
+        x_mp = utils.float2mpf(ctx, x)
+
+        r1_mp = utils.float2mpf(ctx, r1)
+        r2_mp = utils.float2mpf(ctx, r2)
+
+        if abs(r2) >= fi.smallest_normal:
+            assert x_mp * x_mp == r1_mp + r2_mp
+        else:
+            # Dekker product is inaccurate when r2 is subnormal
+            pass
