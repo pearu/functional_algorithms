@@ -263,6 +263,32 @@ def square_dekker(x):
     return r1, r2
 
 
+def add_twosum(x, y):
+    """Sum of x and y.
+
+    Return s, t such that
+
+      x + y = s + t
+    """
+    s = x + y
+    z = s - x
+    t = (x - (s - z)) + (y - z)
+    return s, t
+
+
+def double_twosum(x):
+    """
+
+    Return s, t such that
+
+      x + x = s + t
+    """
+    s = x + x
+    z = s - x
+    t = (x - (s - z)) + (x - z)
+    return s, t
+
+
 class vectorize_with_backend(numpy.vectorize):
 
     pyfunc_is_vectorized = False
