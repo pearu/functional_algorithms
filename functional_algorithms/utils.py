@@ -184,6 +184,11 @@ def float2bin(f):
     return f"{sign}1p{e:+01d}"
 
 
+def get_precision(x):
+    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[type(x)]
+    return p
+
+
 def split_veltkamp_max(x):
     """Return maximal s such that
 
@@ -210,7 +215,7 @@ def split_veltkamp(x, s):
     precision of floating point system.
     """
     # https://inria.hal.science/hal-04480440v1
-    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[type(x)]
+    p = get_precision(x)
     assert s >= 2 and s <= p - 2
     C = type(x)(2**s + 1)
     g = C * x  # for large x and s, this will overflow!
@@ -218,6 +223,44 @@ def split_veltkamp(x, s):
     xh = g + d
     xl = x - xh
     return xh, xl
+
+
+def multiply_dekker(x, y):
+    """Dekker's product.
+
+    Returns r1, r2 such that
+
+      x * y == r1 + r2
+    """
+    p = get_precision(x)
+    s = (p + 1) // 2
+    assert type(x) is type(y)
+    xh, xl = split_veltkamp(x, s)
+    yh, yl = split_veltkamp(y, s)
+    r1 = x * y
+    t1 = (-r1) + xh * yh
+    t2 = t1 + xh * yl
+    t3 = t2 + xl * yh
+    r2 = t3 + xl * yl
+    return r1, r2
+
+
+def square_dekker(x):
+    """Square using Dekker's product.
+
+    Returns r1, r2 such that
+
+      x * x == r1 + r2
+    """
+    p = get_precision(x)
+    s = (p + 1) // 2
+    xh, xl = split_veltkamp(x, s)
+    r1 = x * x
+    t1 = (-r1) + xh * xh
+    t2 = t1 + xh * xl
+    t3 = t2 + xl * xh
+    r2 = t3 + xl * xl
+    return r1, r2
 
 
 class vectorize_with_backend(numpy.vectorize):
