@@ -42,7 +42,11 @@ following math functions:
 - `atan(z: complex | float)`, using the relation `atan(z) = -I * atanh(z * I)`,
 - `atanh(z: complex | float)`, using a custom algorithm,
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
-- `square(z: complex | float)`.
+- `square(z: complex | float)` using a custom algorithm,
+- `log1p(z: complex)` using a custom algorithm that employs Dekker's product and 2Sum algorithms.
+
+All above algorithms are designed to be accurate upto maximal 3 ULP
+difference between computed and reference values.
 
 ## Supported targets
 
