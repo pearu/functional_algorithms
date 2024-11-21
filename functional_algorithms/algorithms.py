@@ -938,24 +938,25 @@ def complex_log1p(ctx, z: complex):
       abs(x) < sqrt(largest) * 0.1
       abs(y) < sqrt(largest) * 0.99
 
-    [verified numerically for float32 and float64 cases], except when
-    x is close to -1 (see Case C).
+    [verified numerically for float32 and float64], except when x is
+    close to -1 (see Case C).
 
     Case B
     ------
 
-    When abs(x) or abs(y) is larger than sqrt(largest), squareing
+    If abs(x) or abs(y) is larger than sqrt(largest), squareing
     these will overflow. To avoid such overflows, we'll apply
-    rescaling of log1p arguments. Before doing that, first notice that
-    when `abs(x) > sqrt(largest) > 4 / eps` holds then `x + 1 ~= x`.
-    When `abs(x) < 4 / eps` and `abs(y) > sqrt(largest)` then
-    `(x + 1) ** 2 + y ** 2 ~= y ** 2`. Proof:
+    rescaling of log1p arguments.
 
-      (x + 1) ** 2 + y ** 2 ~= y ** 2 iff y ** 2 > 4 * (x + 1) ** 2 / eps
+    First notice that if `abs(x) > sqrt(largest) > 4 / eps` holds then
+    `x + 1 ~= x`. Also, if `abs(x) < 4 / eps` then `(x + 1) ** 2 + y
+    ** 2 ~= y ** 2`. Proof:
 
-      The lower limit to `y ** 2` is largest.
-      The upper limit to `4 * (x + 1) ** 2 / eps` is `64 / eps ** 3`
-      which is smaller than largest. QED.
+      (x + 1) ** 2 + y ** 2 ~= y ** 2    iff y ** 2 > 4 * (x + 1) ** 2 / eps
+
+      The lower limit to `y ** 2` is largest.  The upper limit to
+      `4 * (x + 1) ** 2 / eps` is `64 / eps ** 3` which is smaller than
+      largest. QED.
 
     In conclusion, we can write
 
@@ -972,9 +973,9 @@ def complex_log1p(ctx, z: complex):
 
       real(log(x + I * y)) ~= 0.5 * log(x ** 2 + y ** 2)
         = 0.5 * log(mx ** 2 * (1 + (mn / mx) ** 2))
-        = log(mx) + 0.5 log1p((mn / mx) ** 2)
+        = log(mx) + 0.5 * log1p((mn / mx) ** 2)
 
-    When mn == inf and mx == inf, we'll define `mn / mx == 1` for the
+    If mn == inf and mx == inf, we'll define `mn / mx == 1` for the
     sake of reusing the above expression for complex infinities
     (recall, `real(log(+-inf +-inf * I)) == inf`).
 
@@ -983,21 +984,22 @@ def complex_log1p(ctx, z: complex):
 
     If x is close to -1, then we'll use
 
-      real(log1p(x + I * y)) = log((1 + x) ** 2 + y ** 2)
+      real(log1p(x + I * y)) = 0.5 * log((1 + x) ** 2 + y ** 2)
 
     which is accurate when the following inequalities hold:
 
       -1.5 < x < -0.5  or  abs(x + 1) < 0.5
       abs(y) < sqrt(largest)
 
-    For better overall accuracy from case A and as well as for
-    simplicity, we'll use this case only when `abs(x) + abs(y) < 0.2`.
+    [verified numerically for float32 and float64]. For simplicity,
+    we'll use the case C only when `abs(x) + abs(y) < 0.2`.
 
     Case D
     ------
 
-    If x is close to -2, the cancellation errors are avoided when
-    using the Case A method.
+    If x is close to -2, the cancellation errors are avoided by using
+    the Case A method [verified numerically for float32 and float64].
+
     """
     # TODO: improve the accuracy of arctan2(y, x + 1) when x is small
     # (x + 1 will be inaccurate) or when x and y are large. The ULP
