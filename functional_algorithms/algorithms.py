@@ -820,67 +820,226 @@ def fma(ctx, x, y, z):
     return x * y + z
 
 
+def get_veltkamp_splitter_constant(ctx, largest: float):
+    """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
+    the floating point number system.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+    fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
+    fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
+    fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
+    return ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference(
+        "veltkamp_splitter_constant", force=True
+    )
+
+
+def split_veltkamp(ctx, C, x):
+    """Veltkamp splitter: x = xh + xl"""
+    g = C * x
+    d = x - g
+    xh = g + d
+    xl = x - xh
+    return xh, xl
+
+
+def square_dekker(ctx, x, xh, xl):
+    """Square using Dekker's product:
+
+    x ** 2 = xxh + xxl
+    """
+    xxh = x * x
+    t1 = (-xxh) + xh * xh
+    t2 = t1 + xh * xl
+    t3 = t2 + xh * xl
+    xxl = t3 + xl * xl
+    return xxh.reference("square_dekker_high"), xxl.reference("square_dekker_low")
+
+
+def add_2sum(x, y, fast=False):
+    """Sum of x and y.
+
+    Return s, t such that
+
+      x + y = s + t
+
+    When fast is True, abs(x) >= abs(y) is assumed.
+    """
+    s = x + y
+    z = s - x
+    if fast:
+        t = y - z
+    else:
+        t = (x - (s - z)) + (y - z)
+    prefix = "add_fast2sum" if fast else "add_2sum"
+    return s.reference(prefix + "_high"), t.reference(prefix + "_low")
+
+
+def sum_2sum(seq, fast=False):
+    """Sum all items in a sequence using 2Sum algorithm."""
+    if len(seq) == 1:
+        s, t = seq[0], type(seq[0])(0)
+    elif len(seq) == 2:
+        s, t = add_2sum(seq[0], seq[1], fast=fast)
+    elif len(seq) >= 3:
+        s, t = add_2sum(seq[0], seq[1], fast=fast)
+        for n in seq[2:]:
+            s, t1 = add_2sum(s, n, fast=fast)
+            t = t + t1
+        s, t = add_2sum(s, t, fast=fast)
+    else:
+        assert 0  # unreachable
+    prefix = "sum_fast2sum" if fast else "sum_2sum"
+    return s.reference(prefix + "_high"), t.reference(prefix + "_low")
+
+
 @definition("log1p", domain="complex")
 def complex_log1p(ctx, z: complex):
     """Logarithm of 1 + z on complex input:
 
-      log1p(x + I * y) = 0.5 * log((x+1)**2 + y**2) + I * arctan2(y, x + 1)
+      log1p(x + I * y) = 0.5 * log((x + 1) ** 2 + y ** 2) + I * arctan2(y, x + 1)
 
     where
 
       x and y are real and imaginary parts of the input to log1p, and
       I is imaginary unit.
 
-    Let's define
+    For evaluating the real part of log1p accurately on the whole
+    complex plane, the following cases must be handled separately:
 
-      mx = max(abs(x + 1), abs(y))
-      mn = min(abs(x + 1), abs(y))
+    A) Avoid catastrophic cancellation errors when x is close `-0.5 * y * y`
+       and `abs(y) < 1`.
+    B) Avoid overflow from square when x or y are large in absolute value.
+    C) Avoid cancellation errors when x is close to -1 and y is not large.
+    D) Avoid cancellation errors when x is close to -2 and y is not large.
 
-    then the real part of the complex log1p value reads
+    Case A
+    ------
 
-      real(log(x + I * y)) = log(hypot(x + 1, y))
-        = log(mx * sqrt(1 + (mn / mx) ** 2))
+    The real part of log1p reads:
+
+      0.5 * log((x + 1) ** 2 + y ** 2) = 0.5 * log1p(x + x + x * x + y * y)
+
+    When abs(y) < 1 and abs(x + 0.5 * y ** 2) is small, catastrophic
+    cancellation errors occur when evaluating `x + x + x * x + y * y`
+    using floating-point arithmetics. To avoid these errors, we'll use
+    Dekker's product for computing `x * x` and `y * y` which
+    effectively doubles the precision of the used floating-point
+    system. In addition, the terms are summed together using 2Sum
+    algorithm that minimizes cancellation errors. We'll have
+
+      xxh, xxl = square_dekker(x)
+      yyh, yyl = square_dekker(y)
+      x + x + x * x + y * y = sum_2sum([x + x, yyh, xxh, yyl, xxl])
+
+    which is accurate when the following inequalities hold:
+
+      abs(x) < sqrt(largest) * 0.1
+      abs(y) < sqrt(largest) * 0.99
+
+    [verified numerically for float32 and float64], except when x is
+    close to -1 (see Case C).
+
+    Case B
+    ------
+
+    If abs(x) or abs(y) is larger than sqrt(largest), squareing
+    these will overflow. To avoid such overflows, we'll apply
+    rescaling of log1p arguments.
+
+    First notice that if `abs(x) > sqrt(largest) > 4 / eps` holds then
+    `x + 1 ~= x`. Also, if `abs(x) < 4 / eps` then `(x + 1) ** 2 + y
+    ** 2 ~= y ** 2`. Proof:
+
+      (x + 1) ** 2 + y ** 2 ~= y ** 2    iff y ** 2 > 4 * (x + 1) ** 2 / eps
+
+      The lower limit to `y ** 2` is largest.  The upper limit to
+      `4 * (x + 1) ** 2 / eps` is `64 / eps ** 3` which is smaller than
+      largest. QED.
+
+    In conclusion, we can write
+
+      (x + 1) ** 2 + y ** 2 ~= x ** 2 + y ** 2
+
+    whenever abs(x) or abs(y) is greater than sqrt(largest).
+
+    Define
+
+      mx = max(abs(x), abs(y))
+      mn = min(abs(x), abs(y))
+
+    then under the given restrictions we'll have
+
+      real(log(x + I * y)) ~= 0.5 * log(x ** 2 + y ** 2)
+        = 0.5 * log(mx ** 2 * (1 + (mn / mx) ** 2))
         = log(mx) + 0.5 * log1p((mn / mx) ** 2)
 
-    where
+    If mn == inf and mx == inf, we'll define `mn / mx == 1` for the
+    sake of reusing the above expression for complex infinities
+    (recall, `real(log(+-inf +-inf * I)) == inf`).
 
-      log(mx) = log(max(abs(x + 1), abs(y)))
-              = log1p(max(abs(x + 1) - 1, abs(y) - 1))
-              = log1p(select(x + 1 >= abs(y), x, mx - 1))
+    Case C
+    ------
 
-    To handle mn == mx == inf case, we'll use
+    If x is close to -1, then we'll use
 
-      log1p((mn / mx) ** 2) = log1p(select(mn == mx, one, (mn / mx) ** 2))
+      real(log1p(x + I * y)) = 0.5 * log((1 + x) ** 2 + y ** 2)
 
-    which is valid (eventhough, in general, `inf / inf` -> nan is
-    expected) because log(oo+I*oo).real must be oo, not nan.
+    which is accurate when the following inequalities hold:
 
-    Problematic regions
-    -------------------
+      -1.5 < x < -0.5  or  abs(x + 1) < 0.5
+      abs(y) < sqrt(largest)
 
-    Notice that when abs(y) < 1 and abs(x + 0.5 * y ** 2) is small,
-    catastrophic cancellation errors occur in evaluating the real part
-    of complex log1p:
+    [verified numerically for float32 and float64]. For simplicity,
+    we'll use the case C only when `abs(x) + abs(y) < 0.2`.
 
-      log(hypot(x + 1, y)) = 0.5 * log1p(2 * x + y * y + x * x)
+    Case D
+    ------
 
-    where the magnitude of the correct value `x * x` is smaller than
-    the rounding errors occurring from addition `2 * x + y * y`,
-    especially when using FP32. A similar phenomenon is expected when
-    x is close to -2 and abs(y) is small so that rounding errors from
-    `2 * x + x ** 2` dominate over `y ** 2`.
+    If x is close to -2, the cancellation errors are avoided by using
+    the Case A method [verified numerically for float32 and float64].
+
     """
+    # TODO: improve the accuracy of arctan2(y, x + 1) when x is small
+    # (x + 1 will be inaccurate) or when x and y are large. The ULP
+    # difference is 3 due to these errors for float32 inputs
+    # 1.7378703e-07+0.119728915j and 3.5712988e+36-1.7536198e+36j, for
+    # instance.
+    fast = ctx.parameters.get("use_fast2sum", False)
+
     x = z.real
     y = z.imag
     one = ctx.constant(1, x)
     half = ctx.constant(0.5, x)
     xp1 = x + one
     axp1 = abs(xp1)
+
+    largest = ctx.constant("largest", x).reference("largest")
+    safe_max = ctx.sqrt(largest) * 0.01
+
+    # Case A and D
+    C = get_veltkamp_splitter_constant(ctx, largest)
+    x2h = x + x
+    xh, xl = split_veltkamp(ctx, C, x)
+    yh, yl = split_veltkamp(ctx, C, y)
+    xxh, xxl = square_dekker(ctx, x, xh, xl)
+    yyh, yyl = square_dekker(ctx, y, yh, yl)
+    s, _ = sum_2sum([x2h, yyh, xxh, yyl, xxl], fast=fast)
+    re_A = half * ctx.log1p(s)
+
+    # Case B
+    ax = abs(x)
     ay = abs(y)
-    mx = ctx.maximum(axp1, ay)
-    mn = ctx.minimum(axp1, ay)
+    mx = ctx.maximum(ax, ay)
+    mn = ctx.minimum(ax, ay)
     r = mn / mx
-    re = ctx.log1p(ctx.select(xp1 >= ay, x, mx - one)) + half * ctx.log1p(ctx.select(ctx.eq(mn, mx), one, r * r))
+    re_B = ctx.log(mx) + half * ctx.log1p(ctx.select(ctx.eq(mn, mx), one, r * r))
+
+    # Case C
+    re_C = half * ctx.log(xp1 * xp1 + y * y)
+
+    re = ctx.select(mx > safe_max, re_B, ctx.select(axp1 + ay < 0.2, re_C, re_A))
     im = ctx.atan2(y, xp1)
     return ctx(ctx.complex(re, im))
 

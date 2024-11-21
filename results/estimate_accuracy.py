@@ -91,6 +91,7 @@ def get_inputs():
         # ("log1p", np.float32, {}),  # real_log1p is not implemented
         # ("log1p", np.float64, {}),  # ditto
         ("log1p", np.complex64, {}),
+        ("log1p", np.complex64, dict(use_fast2sum=True)),
         ("log1p", np.complex64, dict(use_native_log1p=True)),
         ("log1p", np.complex128, {}),
         # ("tan", np.float32, dict()),  # real_tan is not implemented
@@ -123,9 +124,6 @@ def get_inputs():
     ]:
         validation_parameters = fa.utils.function_validation_parameters(func_name, dtype)
         max_bound_ulp_width = validation_parameters["max_bound_ulp_width"]
-        if func_name == "log1p" and dtype is np.complex128:
-            # the original max_bound_ulp_width value is required for log1p extra samples
-            max_bound_ulp_width = 1
 
         def param2str(parameters):
             r = []
@@ -227,7 +225,6 @@ Finally,
             continue
         print(f"{row_prefix}")
         ctx = fa.Context(paths=[fa.algorithms], parameters=parameters)
-
         impl = getattr(fa.algorithms, func_name)
 
         if ctx.parameters.get(f"use_native_{func_name}", False):
@@ -236,6 +233,9 @@ Finally,
             @functools.wraps(impl)
             def impl(ctx, *args, **kwargs):
                 return getattr(ctx, func_name)(*args, **kwargs)
+
+        if ctx.parameters.get(f"use_fast2sum", False):
+            ctx.parameters["using"].add(f"fast2sum")
 
         graph = ctx.trace(impl, dtype)
         graph2 = graph.rewrite(
@@ -311,7 +311,7 @@ Finally,
 
         # notes column
         using = ctx.parameters.get("using")
-        cols.append(f'using {", ".join(using)}' if using else "-")
+        cols.append(f'using {", ".join(sorted(using))}' if using else "-")
 
         print(row_prefix + " | ".join(cols) + " |", file=f)
         print(row_prefix + " | ".join(cols) + " |")
