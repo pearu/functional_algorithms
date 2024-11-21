@@ -34,9 +34,9 @@ def binary_func_name(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=[False, True])
+@pytest.fixture(scope="function", params=["no-ftz", "ftz"])
 def flush_subnormals(request):
-    return request.param
+    return {"no-ftz": False, "ftz": True}[request.param]
 
 
 def test_unary(dtype_name, unary_func_name, flush_subnormals):

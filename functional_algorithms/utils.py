@@ -185,8 +185,18 @@ def float2bin(f):
 
 
 def get_precision(x):
-    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[type(x)]
+    if isinstance(x, numpy.floating):
+        x = type(x)
+    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[x]
     return p
+
+
+def get_veltkamp_splitter_constant(x):
+    p = get_precision(x)
+    s = (p + 1) // 2
+    if isinstance(x, numpy.floating):
+        x = type(x)
+    return x(2**s + 1)
 
 
 def split_veltkamp_max(x):
@@ -206,7 +216,7 @@ def split_veltkamp_max(x):
     return s
 
 
-def split_veltkamp(x, s):
+def split_veltkamp(x, s=None, C=None):
     """Return xh and xl such that
 
       x = xh + xl
@@ -215,9 +225,10 @@ def split_veltkamp(x, s):
     precision of floating point system.
     """
     # https://inria.hal.science/hal-04480440v1
-    p = get_precision(x)
-    assert s >= 2 and s <= p - 2
-    C = type(x)(2**s + 1)
+    if C is None:
+        p = get_precision(x)
+        assert s >= 2 and s <= p - 2
+        C = type(x)(2**s + 1)
     g = C * x  # for large x and s, this will overflow!
     d = x - g
     xh = g + d
@@ -245,16 +256,19 @@ def multiply_dekker(x, y):
     return r1, r2
 
 
-def square_dekker(x):
+def square_dekker(x, C=None):
     """Square using Dekker's product.
 
     Returns r1, r2 such that
 
       x * x == r1 + r2
     """
-    p = get_precision(x)
-    s = (p + 1) // 2
-    xh, xl = split_veltkamp(x, s)
+    if C is None:
+        p = get_precision(x)
+        s = (p + 1) // 2
+        xh, xl = split_veltkamp(x, s)
+    else:
+        xh, xl = split_veltkamp(x, C=C)
     r1 = x * x
     t1 = (-r1) + xh * xh
     t2 = t1 + xh * xl
@@ -263,7 +277,7 @@ def square_dekker(x):
     return r1, r2
 
 
-def add_twosum(x, y):
+def add_2sum(x, y):
     """Sum of x and y.
 
     Return s, t such that
@@ -276,9 +290,51 @@ def add_twosum(x, y):
     return s, t
 
 
-def double_twosum(x):
-    """
+def add_fast2sum(x, y):
+    """Sum of x and y where abs(x) >= abs(y)
 
+    Return s, t such that
+
+      x + y = s + t
+    """
+    s = x + y
+    z = s - x
+    t = y - z
+    return s, t
+
+
+def sum_2sum(seq):
+    """Sum all items in a sequence using 2Sum algorithm."""
+    if len(seq) == 1:
+        return seq[0], type(seq[0])(0)
+    elif len(seq) == 2:
+        return add_2sum(*seq)
+    elif len(seq) >= 3:
+        s, t = add_2sum(*seq[:2])
+        for n in seq[2:]:
+            s, t1 = add_2sum(s, n)
+            t = t + t1
+        return add_2sum(s, t)
+    assert 0  # unreachable
+
+
+def sum_fast2sum(seq):
+    """Sum all items in a sequence using Fast2Sum algorithm."""
+    if len(seq) == 1:
+        return seq[0], type(seq[0])(0)
+    elif len(seq) == 2:
+        return add_fast2sum(*seq)
+    elif len(seq) >= 3:
+        s, t = add_fast2sum(*seq[:2])
+        for n in seq[2:]:
+            s, t1 = add_fast2sum(s, n)
+            t = t + t1
+        return add_fast2sum(s, t)
+    assert 0  # unreachable
+
+
+def double_2sum(x):
+    """
     Return s, t such that
 
       x + x = s + t
@@ -286,6 +342,18 @@ def double_twosum(x):
     s = x + x
     z = s - x
     t = (x - (s - z)) + (x - z)
+    return s, t
+
+
+def double_fast2sum(x):
+    """
+    Return s, t such that
+
+      x + x = s + t
+    """
+    s = x + x
+    z = s - x
+    t = x - z
     return s, t
 
 
@@ -1736,7 +1804,6 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier = 2
     elif func_name == "log1p":
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
-        max_bound_ulp_width = dict(complex64=3, complex128=3).get(dtype_name, max_bound_ulp_width)
     elif func_name in {"atanh", "atan"}:
         extra_prec_multiplier = 20
     elif func_name in {"tanh", "tan"}:
