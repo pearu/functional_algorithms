@@ -852,9 +852,9 @@ def square_dekker(ctx, x, xh, xl):
     xxh = x * x
     t1 = (-xxh) + xh * xh
     t2 = t1 + xh * xl
-    t3 = t2 + xl * xh
+    t3 = t2 + xh * xl
     xxl = t3 + xl * xl
-    return xxh, xxl
+    return xxh.reference("square_dekker_high"), xxl.reference("square_dekker_low")
 
 
 def add_2sum(x, y, fast=False):
@@ -872,22 +872,26 @@ def add_2sum(x, y, fast=False):
         t = y - z
     else:
         t = (x - (s - z)) + (y - z)
-    return s, t
+    prefix = "add_fast2sum" if fast else "add_2sum"
+    return s.reference(prefix + "_high"), t.reference(prefix + "_low")
 
 
 def sum_2sum(seq, fast=False):
     """Sum all items in a sequence using 2Sum algorithm."""
     if len(seq) == 1:
-        return seq[0], type(seq[0])(0)
+        s, t = seq[0], type(seq[0])(0)
     elif len(seq) == 2:
-        return add_2sum(seq[0], seq[1], fast=fast)
+        s, t = add_2sum(seq[0], seq[1], fast=fast)
     elif len(seq) >= 3:
         s, t = add_2sum(seq[0], seq[1], fast=fast)
         for n in seq[2:]:
             s, t1 = add_2sum(s, n, fast=fast)
             t = t + t1
-        return add_2sum(s, t, fast=fast)
-    assert 0  # unreachable
+        s, t = add_2sum(s, t, fast=fast)
+    else:
+        assert 0  # unreachable
+    prefix = "sum_fast2sum" if fast else "sum_2sum"
+    return s.reference(prefix + "_high"), t.reference(prefix + "_low")
 
 
 @definition("log1p", domain="complex")
