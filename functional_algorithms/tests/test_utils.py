@@ -15,6 +15,26 @@ def dtype(request):
     return request.param
 
 
+def test_diff_ulp(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+    fi = numpy.finfo(real_dtype)
+
+    assert utils.diff_ulp(real_dtype(0), fi.tiny, flush_subnormals=True) == 1
+    assert utils.diff_ulp(real_dtype(0), numpy.nextafter(fi.tiny, fi.max), flush_subnormals=True) == 2
+
+    assert utils.diff_ulp(real_dtype(0), -fi.tiny, flush_subnormals=True) == 1
+    assert utils.diff_ulp(real_dtype(0), fi.smallest_subnormal, flush_subnormals=False) == 1
+    assert utils.diff_ulp(real_dtype(0), -fi.smallest_subnormal, flush_subnormals=False) == 1
+
+    assert utils.diff_ulp(fi.tiny, fi.tiny, flush_subnormals=True) == 0
+    assert utils.diff_ulp(fi.tiny, fi.tiny, flush_subnormals=False) == 0
+    assert utils.diff_ulp(fi.tiny, numpy.nextafter(fi.tiny, fi.max), flush_subnormals=True) == 1
+    assert utils.diff_ulp(fi.tiny, numpy.nextafter(fi.tiny, fi.max), flush_subnormals=False) == 1
+
+    assert utils.diff_ulp(-fi.tiny, fi.tiny, flush_subnormals=True) == 2
+
+
 def _check_real_samples(
     r,
     include_infinity=None,

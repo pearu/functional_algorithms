@@ -36,16 +36,23 @@ def test_unary(unary_func_name, backend, device, dtype):
     max_valid_ulp_count = params["max_valid_ulp_count"]
     extra_prec_multiplier = params["extra_prec_multiplier"]
     samples_limits = params["samples_limits"]
-    # JAX flushes subnormals to zero
-    include_subnormal = backend != "jax"
+    # JAX with CPU flushes subnormals to zero
+    include_subnormal = False if device == "cpu" and backend == "jax" else True
+    # include_subnormal = True
 
-    mpmath = fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier)
+    mpmath = fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=not include_subnormal)
 
     reference = getattr(mpmath, unary_func_name)
     npy_reference = getattr(fa.utils.numpy_with_numpy(), unary_func_name)
 
-    re_blocks, im_blocks = 101, 51
+    re_blocks, im_blocks = 101, 52
     re_blocksize, im_blocksize = 20, 20
+
+    if 0:
+        # for testing
+        re_blocks, im_blocks = 51, 26
+        re_blocksize, im_blocksize = 5, 5
+
     re_size, im_size = re_blocks * re_blocksize, im_blocks * im_blocksize
 
     if dtype in {numpy.complex64, numpy.complex128}:
@@ -57,9 +64,47 @@ def test_unary(unary_func_name, backend, device, dtype):
     assert samples.shape == (im_size, re_size)
 
     expected = reference.call(samples)
-    result = func(samples)
 
-    ulp = fa.utils.diff_ulp(result, expected, flush_subnormals=not include_subnormal)
+    if backend == "jax" and device == "cpu" and include_subnormal:
+        # XLA CPU client enables FTZ to follow TF convention. To
+        # disable FTZ, replace all occurances of
+        #   tsl::port::ScopedFlushDenormal flush;
+        # with
+        #   tsl::port::ScopedDontFlushDenormal flush;
+        # in xla/pjrt/cpu/cpu_client.cc.
+        #
+        # However, disabling FTZ in XLA CPU client is effective only for the first
+        # part of samples evaluations. To workaround this, we'll evaluate
+        # JAX functions blockwise:
+        eval_blocksize = im_size
+        assert re_size < 2**14
+        while eval_blocksize * re_size > 2**14:
+            for p in [2, 3, 5, 7, 11, 13, 17, 19, 23]:
+                if eval_blocksize % p == 0:
+                    eval_blocksize //= p
+                    break
+            else:
+                assert 0  # adjust re/im_size/blocksize parameters to avoid this
+        assert im_size % eval_blocksize == 0, (im_size, eval_blocksize)
+        result = numpy.concatenate(
+            tuple(func(samples[k * eval_blocksize : (k + 1) * eval_blocksize]) for k in range(im_size // eval_blocksize))
+        )
+    else:
+        result = func(samples)
+
+    if 0:
+        # for sanity check
+        for j in range(im_size):
+            for i in range(re_size):
+                r = func(samples[j, i])[()]
+                assert numpy.array_equal(r, result[j, i], equal_nan=True), (
+                    (j, i),
+                    samples[j, i],
+                    r,
+                    result[j, i],
+                )
+
+    ulp = fa.utils.diff_ulp(result, expected, flush_subnormals=not include_subnormal, equal_nan=True)
 
     if numpy.all(ulp == 0):
         return
@@ -71,11 +116,11 @@ def test_unary(unary_func_name, backend, device, dtype):
     bulp = numpy.zeros((im_blocks, re_blocks), dtype=ulp.dtype)
     for j, blocks in enumerate(numpy.split(ulp, im_blocks, axis=0)):
         for i, block in enumerate(numpy.split(blocks, re_blocks, axis=1)):
+            samples_block = samples[j * im_blocksize : (j + 1) * im_blocksize, i * re_blocksize : (i + 1) * re_blocksize]
             ind = numpy.unravel_index(numpy.argmax(block, axis=None), block.shape)
-            j_, i_ = j * im_blocksize + ind[0], i * re_blocksize + ind[1]
-            bsamples[j, i] = samples[j_, i_]
-            bulp[j, i] = ulp[j_, i_]
-
+            assert block[ind[0], ind[1]] == numpy.max(block)
+            bsamples[j, i] = samples_block[ind[0], ind[1]]
+            bulp[j, i] = block[ind[0], ind[1]]
     try:
         fa_reference = getattr(fa.utils.numpy_with_algorithms(dtype=dtype), unary_func_name)
     except Exception as msg:
@@ -138,6 +183,8 @@ def test_unary(unary_func_name, backend, device, dtype):
                 np_value = npy_reference(samples[re, im])
             r = func(samples[re, im])
             e = reference(samples[re, im])
+            u = fa.utils.diff_ulp(r, e, flush_subnormals=not include_subnormal, equal_nan=True)
+            assert u == value, (u, value, (re, im))
             if fa_reference is not None:
                 fa_value = fa_reference(samples[re, im])
                 rows.append((value, samples[re, im], r, e, np_value, fa_value))
