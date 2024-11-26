@@ -442,8 +442,8 @@ class vectorize_with_backend(numpy.vectorize):
                 assert self.device.upper() in str(getattr(a, "device", "cpu")).upper()
             mp_args.append(a)
 
-        with self.backend_context(context):
-            with warnings.catch_warnings(action="ignore"):
+        with warnings.catch_warnings(action="ignore"):
+            with self.backend_context(context):
                 if self.pyfunc_is_vectorized:
                     result = self.pyfunc(*mp_args, **kwargs)
                 else:
@@ -1536,7 +1536,7 @@ def isfloat(value):
     return isinstance(value, (float, numpy.floating))
 
 
-def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
+def diff_ulp(x, y, flush_subnormals=UNSPECIFIED, equal_nan=False) -> int:
     """Return ULP distance between two floating point numbers.
 
     For complex inputs, return largest ULP among real and imaginary
@@ -1545,11 +1545,14 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
     When flush_subnormals is set to True, ULP difference does not
     account for subnormals while subnormal values are rounded to
     nearest normal, ties to even.
+
+    When equal_nan is set to True, ULP difference between nan values
+    of both quiet and signaling kinds is defined as 0.
     """
     if isinstance(x, numpy.floating):
         uint = {numpy.float64: numpy.uint64, numpy.float32: numpy.uint32, numpy.float16: numpy.uint16}[x.dtype.type]
-        sx = -1 if x <= 0 else 1
-        sy = -1 if y <= 0 else 1
+        sx = -1 if x < 0 else (1 if x > 0 else 0)
+        sy = -1 if y < 0 else (1 if y > 0 else 0)
         x, y = abs(x), abs(y)
         ix, iy = int(x.view(uint)), int(y.view(uint))
         if numpy.isfinite(x) and numpy.isfinite(y):
@@ -1561,18 +1564,26 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED) -> int:
                 iy = iy - i if iy > i else (0 if 2 * iy <= i else 1)
             if sx != sy:
                 # distance is measured through 0 value
-                return ix + iy
-            return ix - iy if ix >= iy else iy - ix
+                result = ix + iy
+            else:
+                result = ix - iy if ix >= iy else iy - ix
+            return result
         elif ix == iy and sx == sy:
             return 0
+        elif numpy.isnan(x) and numpy.isnan(y):
+            if equal_nan:
+                return 0
         return {numpy.float64: 2**64, numpy.float32: 2**32, numpy.float16: 2**16}[x.dtype.type]
     elif isinstance(x, numpy.complexfloating):
         return max(
-            diff_ulp(x.real, y.real, flush_subnormals=flush_subnormals),
-            diff_ulp(x.imag, y.imag, flush_subnormals=flush_subnormals),
+            diff_ulp(x.real, y.real, flush_subnormals=flush_subnormals, equal_nan=equal_nan),
+            diff_ulp(x.imag, y.imag, flush_subnormals=flush_subnormals, equal_nan=equal_nan),
         )
     elif isinstance(x, numpy.ndarray) and isinstance(y, numpy.ndarray):
-        return numpy.array([diff_ulp(x_, y_, flush_subnormals=flush_subnormals) for x_, y_ in zip(x, y)])
+        if x.shape == () and y.shape == ():
+            return numpy.array(diff_ulp(x[()], y[()], flush_subnormals=flush_subnormals, equal_nan=equal_nan))
+        assert x.shape == y.shape, (x.shape, y.shape)
+        return numpy.array([diff_ulp(x_, y_, flush_subnormals=flush_subnormals, equal_nan=equal_nan) for x_, y_ in zip(x, y)])
 
     raise NotImplementedError(type(x))
 
