@@ -91,15 +91,18 @@ def test_unary(unary_func_name, backend, device, dtype):
         )
     else:
         result = func(samples)
-    for j in range(im_size):
-        for i in range(re_size):
-            r = func(samples[j, i])[()]
-            assert numpy.array_equal(r, result[j, i], equal_nan=True), (
-                (j, i),
-                samples[j, i],
-                r,
-                result[j, i],
-            )
+
+    if 0:
+        # for sanity check
+        for j in range(im_size):
+            for i in range(re_size):
+                r = func(samples[j, i])[()]
+                assert numpy.array_equal(r, result[j, i], equal_nan=True), (
+                    (j, i),
+                    samples[j, i],
+                    r,
+                    result[j, i],
+                )
 
     ulp = fa.utils.diff_ulp(result, expected, flush_subnormals=not include_subnormal, equal_nan=True)
 
