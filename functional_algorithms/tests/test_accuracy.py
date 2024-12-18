@@ -36,9 +36,20 @@ def test_unary(unary_func_name, backend, device, dtype):
     max_valid_ulp_count = params["max_valid_ulp_count"]
     extra_prec_multiplier = params["extra_prec_multiplier"]
     samples_limits = params["samples_limits"]
-    # JAX with CPU flushes subnormals to zero
-    include_subnormal = False if device == "cpu" and backend == "jax" else True
-    # include_subnormal = True
+
+    # detect the FTZ mode of array backend: if FTZ is enabled, don't
+    # generate samples containing subnormals as well as exclude
+    # subnormals in comparing results (read: ulp distance between 0
+    # and smallest normal is defined as 1).
+    fi = numpy.finfo(dtype)
+    x = numpy.sqrt(fi.smallest_normal) * dtype(0.5)
+    v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device), "square")(x)
+    v2 = numpy.square(x)
+    d = fa.utils.diff_ulp(v1, v2)
+    if d > 1000:
+        include_subnormal = False
+    else:
+        include_subnormal = True
 
     mpmath = fa.utils.numpy_with_mpmath(extra_prec_multiplier=extra_prec_multiplier, flush_subnormals=not include_subnormal)
 
@@ -49,7 +60,7 @@ def test_unary(unary_func_name, backend, device, dtype):
     re_blocksize, im_blocksize = 20, 20
 
     if 0:
-        # for testing
+        # used for testing
         re_blocks, im_blocks = 51, 26
         re_blocksize, im_blocksize = 5, 5
 
@@ -190,11 +201,9 @@ def test_unary(unary_func_name, backend, device, dtype):
                 rows.append((value, samples[re, im], r, e, np_value, fa_value))
             else:
                 rows.append((value, samples[re, im], r, e, np_value))
-            if len(rows) > max_rows:
-                break
-        if len(rows) > max_rows:
-            rows.append(("...",) * len(rows[0]))
-            break
+
+    if len(rows) > max_rows:
+        rows = rows[: max_rows // 2] + [(f"...",) * len(rows[0])] + rows[-max_rows // 2 :]
     col_widths = [max(len(str(row[col])) for row in rows) for col in range(len(rows[0]))]
     rows.insert(1, tuple("-" * w for w in col_widths))
     col_fmt = "| " + " | ".join([f"{{{i}:>{w}}}" for i, w in enumerate(col_widths)]) + " |"

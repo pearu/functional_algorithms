@@ -1584,8 +1584,13 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED, equal_nan=False) -> int:
             return numpy.array(diff_ulp(x[()], y[()], flush_subnormals=flush_subnormals, equal_nan=equal_nan))
         assert x.shape == y.shape, (x.shape, y.shape)
         return numpy.array([diff_ulp(x_, y_, flush_subnormals=flush_subnormals, equal_nan=equal_nan) for x_, y_ in zip(x, y)])
-
-    raise NotImplementedError(type(x))
+    elif isinstance(x, numpy.ndarray) and isinstance(y, (numpy.complexfloating, numpy.floating)):
+        if x.shape == ():
+            return numpy.array(diff_ulp(x[()], y, flush_subnormals=flush_subnormals, equal_nan=equal_nan))
+    elif isinstance(x, (numpy.complexfloating, numpy.floating)) and isinstance(y, numpy.ndarray):
+        if y.shape == ():
+            return numpy.array(diff_ulp(x, y[()], flush_subnormals=flush_subnormals, equal_nan=equal_nan))
+    raise NotImplementedError((type(x), type(y)))
 
 
 def make_complex(r, i):
