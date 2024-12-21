@@ -88,6 +88,24 @@ class definition:
         return wrapper
 
 
+@definition("conj", domain="complex")
+def complex_conj(ctx, z: complex):
+    """Conjugate of complex inputs."""
+    return ctx.complex(z.real, -z.imag)
+
+
+@definition("conj", domain="real")
+def real_conj(ctx, z: float):
+    """Conjugate of real inputs."""
+    return NotImplemented
+
+
+@definition("conj")
+def conj(ctx, z: float | complex):
+    """Conjugate of real and complex inputs."""
+    assert 0  # unreachable
+
+
 @definition("square", domain="real")
 def real_square(ctx, x: float):
     """Square on real input: x * x"""
@@ -1304,5 +1322,129 @@ def tanh(ctx, z: complex | float):
     """Hyperbolic tangent on complex and real inputs.
 
     See complex_atan for more information.
+    """
+    assert 0  # unreachable
+
+
+@definition("sqrt", domain="real")
+def real_sqrt(ctx, z: float):
+    """Square root on real inputs"""
+    return NotImplemented
+
+
+@definition("sqrt", domain="complex")
+def complex_sqrt(ctx, z: complex):
+    """Square root on complex inputs:
+
+      sqrt(z) = sqrt((hypot(x, y) + x)/2) + I * sgn(y) * sqrt((hypot(x, y) - x) / 2)
+
+    where sgn(y) = 1 if y >= 0, and sgn(y) = -1 otherwise.
+
+
+    Algorithm
+    ---------
+
+    In the above formula, catastrophic cancellation errors occur in
+    the imaginary part when x is positive, and in the real part when x
+    is negative. To avoid these, let us define
+
+      u = sqrt((hypot(x, y) + abs(x))/2)
+      v = sgn(y) * sqrt((hypot(x, y) - abs(x))/2)
+
+    and find
+
+      u * v = sgn(y) * sqrt(hypot(x, y) ** 2 - x ** 2) / 2 = y / 2
+
+    That is, if x > 0, then we have
+
+      sqrt(z) = u + I * y / u / 2
+
+    and if x < 0,
+
+      sqrt(z) = abs(y) / u / 2 + I * sgn(y) * u
+
+    If abs(x) and abs(y) are smaller that smallest normal, then as a
+    result of underflow, u will be zero and v will be undefined. On
+    the other hand, if abs(x) and abs(y) are close to largest floating
+    point number, then `hypot(x, y) + abs(x)` will overflow, and u
+    will be `inf`. To address the issues from underflow and overflow,
+    we'll use the following formula:
+
+    1. abs(x) == abs(y), or abs(x) == inf and abs(y) == inf, then
+
+      u_eq = sqrt(abs(x)) * sqrt((1 + sqrt(2))/2)
+      abs(y) / u = sqrt(abs(x)) / sqrt((1 + sqrt(2))/2)
+
+    2. If abs(x) > abs(y) and u == 0 (the underflow case) or u == inf
+      (the overflow case), denote r = abs(y) / abs(x), then
+
+      u_gt = sqrt(abs(x)) * sqrt((1 + hypot(1, r)) / 2)
+      abs(y) / u = sqrt(abs(y)) * sqrt(r) / sqrt((1 + hypot(1, r)) / 2)
+
+    3. If abs(x) < abs(y) and u == 0 (the underflow case) or u == inf
+      (the overflow case), denote r = abs(x) / abs(y), then
+
+      u_lt = sqrt(abs(y)) * sqrt((r + sqrt(1, r)) / 2)
+      abs(y) / u = sqrt(abs(y)) / sqrt((r + sqrt(1, r)) / 2)
+    """
+    x = z.real
+    y = z.imag
+    ax = abs(x)
+    ay = abs(y)
+    sq_ax = ctx.sqrt(ax)
+    sq_ay = ctx.sqrt(ay)
+
+    one = ctx.constant(1, x)
+    two = ctx.constant(2, x)
+
+    if ctx.alt is None:
+        sq_2 = ctx.sqrt(two)
+        sq_12 = ctx.sqrt(one + sq_2)
+    else:
+        sq_2_ = ctx.alt.sqrt(2)
+        sq_12_ = ctx.alt.sqrt(1 + sq_2_)
+        sq_2 = ctx.constant(sq_2_, x)
+        sq_12 = ctx.constant(sq_12_, x)
+
+    u_general = ctx.sqrt((ctx.hypot(ax, ay) / two + ax / two))
+    ay_div_u_general = ay / (u_general * two)
+
+    r = ctx.select(ax == ay, one, ctx.select(ax < ay, ax / ay, ay / ax))
+    sq_r = ctx.select(ax == ay, one, ctx.select(ax < ay, sq_ax / sq_ay, sq_ay / sq_ax))
+
+    h = ctx.hypot(one, r)
+
+    u_eq = sq_ax * sq_12 / sq_2
+    ay_div_eq = sq_ay / (sq_12 * sq_2)
+
+    sq_1h = ctx.sqrt(one + h)
+    u_gt = sq_ax * (sq_1h / sq_2)
+    ay_div_u_gt = sq_ay * sq_r / (sq_1h * sq_2)
+
+    sq_rh = ctx.sqrt(r + h)
+    u_lt = sq_ay * (sq_rh / sq_2)
+    ay_div_u_lt = sq_ay / (sq_rh * sq_2)
+
+    u = ctx.select(
+        ax == ay, u_eq, ctx.select(ctx.Or(u_general == 0, u_general.is_posinf), ctx.select(ax > ay, u_gt, u_lt), u_general)
+    )
+    ay_div_u = ctx.select(
+        ax == ay,
+        ay_div_eq,
+        ctx.select(
+            ctx.Or(u_general == 0, u_general.is_posinf), ctx.select(ax > ay, ay_div_u_gt, ay_div_u_lt), ay_div_u_general
+        ),
+    )
+
+    re = ctx.select(x >= 0, u, ay_div_u)
+    im = ctx.select(x < 0, ctx.select(y < 0, -u, u), ctx.select(y < 0, -ay_div_u, ay_div_u))
+    return ctx(ctx.complex(re, im))
+
+
+@definition("sqrt")
+def sqrt(ctx, z: complex | float):
+    """Square root on complex and real inputs.
+
+    See complex_sqrt for more information.
     """
     assert 0  # unreachable

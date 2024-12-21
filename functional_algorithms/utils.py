@@ -1,3 +1,4 @@
+import contextlib
 import itertools
 import numpy
 import math
@@ -652,6 +653,26 @@ class vectorize_with_jax(vectorize_with_backend):
         return jax.default_device(jax.devices(self.device)[0])
 
 
+class vectorize_with_numpy(vectorize_with_backend):
+
+    def backend_context(self, context):
+        return contextlib.nullcontext()
+
+    def context_from_backend(self, obj):
+        return contextlib.nullcontext()
+
+    def numpy_to_backend(self, arr):
+        return arr
+
+    def numpy_from_backend(self, obj):
+        assert isinstance(obj, numpy.ndarray), type(obj)
+        return obj
+
+    @property
+    def backend_types(self):
+        return (numpy.ndarray,)
+
+
 class mpmath_array_api:
     """Array API interface to mpmath functions including workarounds to
     mpmath bugs.
@@ -1103,19 +1124,20 @@ class numpy_with_algorithms:
         name = dict(arcsinh="asinh", arccos="acos", arcsin="asin", arccosh="acosh", arctan="atan", arctanh="atanh").get(
             name, name
         )
-        if name in self._vfunc_cache:
-            return self._vfunc_cache[name]
+        dtype = self.params["dtype"]
+        key = name, dtype.__name__
+        if key in self._vfunc_cache:
+            return self._vfunc_cache[key]
 
         import functional_algorithms as fa
         import numpy
 
-        dtype = self.params["dtype"]
         ctx = fa.Context(paths=[fa.algorithms])
         graph = ctx.trace(getattr(fa.algorithms, name), dtype)
         graph2 = graph.rewrite(fa.targets.numpy, fa.rewrite)
-        func = fa.targets.numpy.as_function(graph2, debug=0)
-        vfunc = numpy.vectorize(func)
-        self._vfunc_cache[name] = vfunc
+        func = fa.targets.numpy.as_function(graph2, debug=self.params.get("debug", 0))
+        vfunc = vectorize_with_numpy(func)
+        self._vfunc_cache[key] = vfunc
         return vfunc
 
 
@@ -1947,3 +1969,14 @@ class Clusters:
 
     def __iter__(self):
         return iter(self.clusters)
+
+    def split(self):
+        """Split clusters by discarding the their center points."""
+        result = type(self)()
+        for index, cluster in enumerate(self.clusters):
+            center = cluster.center_point()
+            for point in cluster.points:
+                if point == center:
+                    continue
+                result.add(point)
+        return result
