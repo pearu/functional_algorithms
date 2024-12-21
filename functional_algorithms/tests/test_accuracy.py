@@ -1,10 +1,11 @@
 import numpy
 import functional_algorithms as fa
+import os
 import pytest
 import warnings
 
 
-@pytest.fixture(scope="function", params=["jax"])
+@pytest.fixture(scope="function", params=["jax", "functional_algorithms"])
 def backend(request):
     return request.param
 
@@ -25,9 +26,17 @@ def dtype(request):
 
 
 def test_unary(unary_func_name, backend, device, dtype):
-    pytest.importorskip(backend)
+    if backend == "functional_algorithms":
+        backend = "algorithms"
+    else:
+        pytest.importorskip(backend)
 
-    func = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device), unary_func_name)
+    try:
+        func = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), unary_func_name)
+    except NotImplementedError as msg:
+        pytest.skip(f"{unary_func_name}: {msg}")
+    except AttributeError as msg:
+        pytest.skip(f"{unary_func_name}: {msg}")
 
     if not func.backend_is_available(device):
         pytest.skip(f"{device} support is unavailable")
@@ -43,7 +52,7 @@ def test_unary(unary_func_name, backend, device, dtype):
     # and smallest normal is defined as 1).
     fi = numpy.finfo(dtype)
     x = numpy.sqrt(fi.smallest_normal) * dtype(0.5)
-    v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device), "square")(x)
+    v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), "square")(x)
     v2 = numpy.square(x)
     d = fa.utils.diff_ulp(v1, v2)
     if d > 1000:
@@ -56,11 +65,10 @@ def test_unary(unary_func_name, backend, device, dtype):
     reference = getattr(mpmath, unary_func_name)
     npy_reference = getattr(fa.utils.numpy_with_numpy(), unary_func_name)
 
-    re_blocks, im_blocks = 101, 52
-    re_blocksize, im_blocksize = 20, 20
-
-    if 0:
-        # used for testing
+    if int(os.environ.get("FA_HIGH_RESOLUTION", "0")):
+        re_blocks, im_blocks = 101, 52
+        re_blocksize, im_blocksize = 20, 20
+    else:
         re_blocks, im_blocks = 51, 26
         re_blocksize, im_blocksize = 5, 5
 
@@ -156,7 +164,7 @@ def test_unary(unary_func_name, backend, device, dtype):
     print(timage)
     print()
 
-    if fa_reference is not None:
+    if fa_reference is not None and backend != "algorithms":
         rows = [
             (
                 "ULP-difference",
@@ -188,7 +196,7 @@ def test_unary(unary_func_name, backend, device, dtype):
         clusters = fa.utils.Clusters()
         for re, im in zip(*numpy.where(ulp == value)):
             clusters.add((re, im))
-        for cluster in clusters:
+        for cluster in clusters.clusters + clusters.split().clusters:
             re, im = cluster.center_point()
             with warnings.catch_warnings(action="ignore"):
                 np_value = npy_reference(samples[re, im])

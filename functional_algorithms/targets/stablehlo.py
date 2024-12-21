@@ -20,6 +20,7 @@ trace_arguments = dict(
     log1p=[(":float",), (":complex",)],
     hypot=[(":float", ":float")],
     square=[(":float",), (":complex",)],
+    sqrt=[(":complex",)],
 )
 
 

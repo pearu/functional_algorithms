@@ -29,6 +29,7 @@ trace_arguments = dict(
     atan=[(":float", ":float"), (":complex", ":complex")],
     atanh=[(":float", ":float"), (":complex", ":complex")],
     complex_log1p=[(":complex", ":complex")],
+    complex_sqrt=[(":complex", ":complex")],
 )
 
 source_file_extension = ".cc"

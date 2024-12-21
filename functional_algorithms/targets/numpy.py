@@ -78,6 +78,10 @@ trace_arguments = dict(
     log1p=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
     hypot=[(":float32", ":float32"), (":float64", ":float64")],
     square=[(":complex128",), (":complex64",), (":float64",), (":float32",)],
+    sqrt=[
+        (":complex128",),
+        (":complex64",),
+    ],
 )
 
 

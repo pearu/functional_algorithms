@@ -83,9 +83,9 @@ def get_inputs():
         # ("sqrt", np.float32, {}),     # real_sqrt is not implemented
         ("sqrt", np.float32, dict(use_native_sqrt=True)),
         # ("sqrt", np.float64, {}),     # real_sqrt is not implemented
-        # ("sqrt", np.complex64, {}),   # complex_sqrt is not implemented
+        ("sqrt", np.complex64, {}),
         ("sqrt", np.complex64, dict(use_native_sqrt=True)),
-        # ("sqrt", np.complex128, {}),  # complex_sqrt is not implemented
+        ("sqrt", np.complex128, {}),
         ("angle", np.complex64, {}),
         ("angle", np.complex128, {}),
         # ("log1p", np.float32, {}),  # real_log1p is not implemented
