@@ -84,7 +84,7 @@ Finally,
 | square | complex128 | 995705 | 6296 | - | - | - | - |
 | sqrt | float32 | 1000001 | - | - | - | - | using native sqrt |
 | sqrt | complex64 | 639573 | 362328 | 100 | - | - | using native sqrt |
-| sqrt<sub>2</sub> | complex64 | 639573 | 362328 | 100 | - | - | using native sqrt |
+| sqrt<sub>2</sub> | complex64 | 644997 | 356784 | 212 | 8 | - | - |
 | sqrt | complex128 | 637905 | 364008 | 88 | - | - | - |
 | angle | complex64 | 940289 | 61332 | 376 | 4 | - | - |
 | angle | complex128 | 989787 | 12214 | - | - | - | - |
