@@ -143,8 +143,9 @@ class Printer:
             sargs = ", ".join(sargs)
 
             lines = []
+            expander_name = expr.props.get("expander_name", "")
             chlo_name = expr.props.get("name", f"CHLO_{name.ref.title()}")
-            lines.append(f"{tab}def : Pat<({chlo_name} {sargs}),")
+            lines.append(f"{tab}def {expander_name}: Pat<({chlo_name} {sargs}),")
 
             for line in self.tostring(body, tab=tab + "  ").splitlines():
                 sline = line.lstrip()
