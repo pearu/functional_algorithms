@@ -217,4 +217,4 @@ def test_unary(unary_func_name, backend, device, dtype):
     col_fmt = "| " + " | ".join([f"{{{i}:>{w}}}" for i, w in enumerate(col_widths)]) + " |"
     print("\n".join([col_fmt.format(*map(str, row)) for row in rows]))
 
-    # pytest.xfail("inaccurate or incorrect results")
+    pytest.xfail("inaccurate or incorrect results")
