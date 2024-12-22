@@ -1332,14 +1332,36 @@ def real_sqrt(ctx, z: float):
     return NotImplemented
 
 
+def complex_sqrt_polar(ctx, z: complex):
+    """Square root on complex inputs:
+
+      sqrt(z) = sqrt(r) * (cos(t) + I * sin(t))
+
+    where
+
+      z = x + I * y
+      r = hypot(x, y)
+      t = arctan2(y, x) / 2
+
+    See pearu/functional_algorithms#53 for why not to use this algorithm
+    """
+    x = z.real
+    y = z.imag
+    r = ctx.hypot(x, y)
+    r_sq = ctx.sqrt(r)
+    t = ctx.atan2(y, x) / 2
+    re = r_sq * ctx.cos(t)
+    im = r_sq * ctx.sin(t)
+    return ctx(ctx.complex(re, im))
+
+
 @definition("sqrt", domain="complex")
 def complex_sqrt(ctx, z: complex):
     """Square root on complex inputs:
 
       sqrt(z) = sqrt((hypot(x, y) + x)/2) + I * sgn(y) * sqrt((hypot(x, y) - x) / 2)
 
-    where sgn(y) = 1 if y >= 0, and sgn(y) = -1 otherwise.
-
+    where z = x + I * y, sgn(y) = 1 if y >= 0, and sgn(y) = -1 otherwise.
 
     Algorithm
     ---------
@@ -1387,6 +1409,9 @@ def complex_sqrt(ctx, z: complex):
       u_lt = sqrt(abs(y)) * sqrt((r + sqrt(1, r)) / 2)
       abs(y) / u = sqrt(abs(y)) / sqrt((r + sqrt(1, r)) / 2)
     """
+    if 0:
+        # Reproducer of pearu/functional_algorithms#53
+        return complex_sqrt_polar(ctx, z)
     x = z.real
     y = z.imag
     ax = abs(x)
