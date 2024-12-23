@@ -3,6 +3,7 @@ import functional_algorithms as fa
 import os
 import pytest
 import warnings
+import contextlib
 
 
 @pytest.fixture(scope="function", params=["jax", "functional_algorithms"])
@@ -25,11 +26,37 @@ def dtype(request):
     return request.param
 
 
-def test_unary(unary_func_name, backend, device, dtype):
+if fa.fpu.MXCSRRegister.is_available():
+    fpu_params = ["default", "enable-FZ", "enable-DAZ"]
+else:
+    fpu_params = ["default"]
+
+
+@pytest.fixture(scope="function", params=fpu_params)
+def fpu(request):
+    return request.param
+
+
+def test_unary(unary_func_name, backend, device, dtype, fpu):
     if backend == "functional_algorithms":
         backend = "algorithms"
     else:
         pytest.importorskip(backend)
+
+    register_params = dict()
+    register = lambda *args, **kwargs: contextlib.nullcontext()
+    if fpu != "default":
+        if backend not in {"algorithms"} or device != "cpu":
+            pytest.skip(f"{unary_func_name}: fpu {fpu} mode N/A for {backend=} {device=}")
+        register = fa.fpu.MXCSRRegister()
+        if "enable-FZ" in fpu:
+            register_params.update(FZ=True)
+        if "disable-FZ" in fpu:
+            register_params.update(FZ=False)
+        if "enable-DAZ" in fpu:
+            register_params.update(DAZ=True)
+        if "disable-DAZ" in fpu:
+            register_params.update(DAZ=False)
 
     try:
         func = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), unary_func_name)
@@ -52,7 +79,8 @@ def test_unary(unary_func_name, backend, device, dtype):
     # and smallest normal is defined as 1).
     fi = numpy.finfo(dtype)
     x = numpy.sqrt(fi.smallest_normal) * dtype(0.5)
-    v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), "square")(x)
+    with register(**register_params):
+        v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), "square")(x)
     v2 = numpy.square(x)
     d = fa.utils.diff_ulp(v1, v2)
     if d > 1000:
@@ -109,7 +137,8 @@ def test_unary(unary_func_name, backend, device, dtype):
             tuple(func(samples[k * eval_blocksize : (k + 1) * eval_blocksize]) for k in range(im_size // eval_blocksize))
         )
     else:
-        result = func(samples)
+        with register(**register_params):
+            result = func(samples)
 
     if 0:
         # for sanity check
@@ -200,7 +229,8 @@ def test_unary(unary_func_name, backend, device, dtype):
             re, im = cluster.center_point()
             with warnings.catch_warnings(action="ignore"):
                 np_value = npy_reference(samples[re, im])
-            r = func(samples[re, im])
+            with register(**register_params):
+                r = func(samples[re, im])
             e = reference(samples[re, im])
             u = fa.utils.diff_ulp(r, e, flush_subnormals=not include_subnormal, equal_nan=True)
             assert u == value, (u, value, (re, im))
@@ -217,4 +247,6 @@ def test_unary(unary_func_name, backend, device, dtype):
     col_fmt = "| " + " | ".join([f"{{{i}:>{w}}}" for i, w in enumerate(col_widths)]) + " |"
     print("\n".join([col_fmt.format(*map(str, row)) for row in rows]))
 
-    pytest.xfail("inaccurate or incorrect results")
+    if fpu == "default":
+        pytest.xfail("inaccurate or incorrect results")
+    # otherwise the inaccurate results are expected due to FTZ or DAZ mode

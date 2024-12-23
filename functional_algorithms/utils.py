@@ -368,6 +368,7 @@ class vectorize_with_backend(numpy.vectorize):
 
     def __init__(self, *args, **kwargs):
         self.device = kwargs.pop("device", "cpu")
+        kwargs.pop("dtype", None)
         super().__init__(*args, **kwargs)
 
     @property
