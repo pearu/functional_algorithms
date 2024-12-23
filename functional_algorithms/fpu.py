@@ -5,9 +5,11 @@ This module is based on the research done in
 
 import contextlib
 import ctypes
+import errno
 import mmap
-import sys
+import os
 import platform
+import sys
 
 
 class MXCSRRegister:
