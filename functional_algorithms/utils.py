@@ -186,7 +186,9 @@ def float2bin(f):
 
 
 def get_precision(x):
-    if isinstance(x, numpy.floating):
+    if isinstance(x, numpy.ndarray):
+        x = x.dtype.type
+    elif isinstance(x, numpy.floating):
         x = type(x)
     p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[x]
     return p
@@ -237,18 +239,22 @@ def split_veltkamp(x, s=None, C=None):
     return xh, xl
 
 
-def multiply_dekker(x, y):
+def multiply_dekker(x, y, C=None):
     """Dekker's product.
 
     Returns r1, r2 such that
 
       x * y == r1 + r2
     """
-    p = get_precision(x)
-    s = (p + 1) // 2
-    assert type(x) is type(y)
-    xh, xl = split_veltkamp(x, s)
-    yh, yl = split_veltkamp(y, s)
+    if C is None:
+        p = get_precision(x)
+        s = (p + 1) // 2
+        assert type(x) is type(y)
+        xh, xl = split_veltkamp(x, s)
+        yh, yl = split_veltkamp(y, s)
+    else:
+        xh, xl = split_veltkamp(x, C=C)
+        yh, yl = split_veltkamp(y, C=C)
     r1 = x * y
     t1 = (-r1) + xh * yh
     t2 = t1 + xh * yl

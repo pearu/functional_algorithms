@@ -1,6 +1,5 @@
 """
-This module is based on the research done in
-  https://moyix.blogspot.com/2022/09/someones-been-messing-with-my-subnormals.html
+Manage FPU registers.
 """
 
 import contextlib
@@ -12,13 +11,33 @@ import platform
 import sys
 
 
+def context(FZ=None, DAZ=None):
+    """Return a context with modified FPU registers.
+
+    Parameters
+    ----------
+    FZ: {bool, None}
+      Set flush-to-zero register bit.
+    DAZ: {bool, None}
+      Set denormals-are-zeros register bit.
+    """
+    if MXCSRRegister.is_available():
+        return MXCSRRegister()(FZ=FZ, DAZ=DAZ)
+    raise NotImplementedError(f"setting FPU registers on {platform.machine()} platform")
+
+
 class MXCSRRegister:
-    """A tool to manage MXCSR register."""
+    """A tool to manage MXCSR register.
+
+    This implementation is based on the research in
+      https://moyix.blogspot.com/2022/09/someones-been-messing-with-my-subnormals.html
+    """
 
     @staticmethod
     def is_available():
         return platform.machine() == "x86_64" and sys.maxsize > 2**32
 
+    # TODO: make MXCSRRegister a singleton?
     def __init__(self):
         if not self.is_available():
             raise RuntimeError(f"{type(self).__name__} requires x86_64 platform")
