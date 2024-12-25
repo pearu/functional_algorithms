@@ -48,7 +48,7 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
     if fpu != "default":
         if backend not in {"algorithms"} or device != "cpu":
             pytest.skip(f"{unary_func_name}: fpu {fpu} mode N/A for {backend=} {device=}")
-        register = fa.fpu.MXCSRRegister()
+        register = fa.fpu.context
         if "enable-FZ" in fpu:
             register_params.update(FZ=True)
         if "disable-FZ" in fpu:
