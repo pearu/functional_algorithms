@@ -58,8 +58,9 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
         if "disable-DAZ" in fpu:
             register_params.update(DAZ=False)
 
+    numpy_with_backend = getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype)
     try:
-        func = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), unary_func_name)
+        func = getattr(numpy_with_backend, unary_func_name)
     except NotImplementedError as msg:
         pytest.skip(f"{unary_func_name}: {msg}")
     except AttributeError as msg:
@@ -80,7 +81,7 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
     fi = numpy.finfo(dtype)
     x = numpy.sqrt(fi.smallest_normal) * dtype(0.5)
     with register(**register_params):
-        v1 = getattr(getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype), "square")(x)
+        v1 = getattr(numpy_with_backend, "square")(x)
     v2 = numpy.square(x)
     d = fa.utils.diff_ulp(v1, v2)
     if d > 1000:

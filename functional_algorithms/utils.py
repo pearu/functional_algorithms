@@ -374,6 +374,7 @@ class vectorize_with_backend(numpy.vectorize):
 
     def __init__(self, *args, **kwargs):
         self.device = kwargs.pop("device", "cpu")
+
         kwargs.pop("dtype", None)
         super().__init__(*args, **kwargs)
 
@@ -500,6 +501,10 @@ class vectorize_with_mpmath(vectorize_with_backend):
         longdouble=numpy.nextafter(numpy.longdouble(numpy.inf), numpy.longdouble(0)),
     )
 
+    @classmethod
+    def backend_is_available(cls, device):
+        return device == "cpu"
+
     def __init__(self, *args, **kwargs):
         self.extra_prec_multiplier = kwargs.pop("extra_prec_multiplier", 0)
         self.extra_prec = kwargs.pop("extra_prec", 0)
@@ -508,7 +513,6 @@ class vectorize_with_mpmath(vectorize_with_backend):
         self._contexts = None
         self._contexts_inv = None
         super().__init__(*args, **kwargs)
-        assert self.device == "cpu", self.device
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -1002,11 +1006,12 @@ class numpy_with_mpmath:
         name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
             name, name
         )
-        if name in self._vfunc_cache:
-            return self._vfunc_cache[name]
+        key = name, tuple(sorted(self.params.items()))
+        if key in self._vfunc_cache:
+            return self._vfunc_cache[key]
         if hasattr(mpmath_array_api, name):
             vfunc = vectorize_with_mpmath(getattr(mpmath_array_api(), name), **self.params)
-            self._vfunc_cache[name] = vfunc
+            self._vfunc_cache[key] = vfunc
             return vfunc
         raise NotImplementedError(f"vectorize_with_mpmath.{name}")
 
@@ -1085,12 +1090,13 @@ class numpy_with_jax:
         name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
             name, name
         )
-        if name in self._vfunc_cache:
-            return self._vfunc_cache[name]
+        key = name, tuple(sorted(self.params.items()))
+        if key in self._vfunc_cache:
+            return self._vfunc_cache[key]
         import jax
 
         vfunc = vectorize_with_jax(getattr(jax.numpy, name), **self.params)
-        self._vfunc_cache[name] = vfunc
+        self._vfunc_cache[key] = vfunc
         return vfunc
 
 
@@ -1108,12 +1114,13 @@ class numpy_with_numpy:
         name = dict(asinh="arcsinh", acos="arccos", asin="arcsin", acosh="arccosh", atan="arctan", atanh="arctanh").get(
             name, name
         )
-        if name in self._vfunc_cache:
-            return self._vfunc_cache[name]
+        key = name, tuple(sorted(self.params.items()))
+        if key in self._vfunc_cache:
+            return self._vfunc_cache[key]
         import numpy
 
         vfunc = numpy.vectorize(getattr(numpy, name), **self.params)
-        self._vfunc_cache[name] = vfunc
+        self._vfunc_cache[key] = vfunc
         return vfunc
 
 
@@ -1132,7 +1139,7 @@ class numpy_with_algorithms:
             name, name
         )
         dtype = self.params["dtype"]
-        key = name, dtype.__name__
+        key = name, tuple(sorted(self.params.items()))
         if key in self._vfunc_cache:
             return self._vfunc_cache[key]
 
@@ -1853,6 +1860,8 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier = 20
     elif func_name in {"tanh", "tan"}:
         extra_prec_multiplier = 20
+    elif func_name == "loq1p":
+        max_valid_ulp_count = 4
     return dict(
         extra_prec_multiplier=extra_prec_multiplier,
         max_valid_ulp_count=max_valid_ulp_count,
