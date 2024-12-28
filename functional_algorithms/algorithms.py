@@ -1314,7 +1314,7 @@ def tanh(ctx, z: complex | float):
 @definition("sqrt", domain="real")
 def real_sqrt(ctx, z: float):
     """Square root on real inputs"""
-    return NotImplemented
+    return ctx.sqrt(z)
 
 
 def complex_sqrt_polar(ctx, z: complex):

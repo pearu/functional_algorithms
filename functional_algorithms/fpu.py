@@ -11,7 +11,7 @@ import platform
 import sys
 
 
-def context(FZ=None, DAZ=None):
+def context(FZ=None, DAZ=None, RN=None):
     """Return a context with modified FPU registers.
 
     Parameters
@@ -22,7 +22,7 @@ def context(FZ=None, DAZ=None):
       Set denormals-are-zeros register bit.
     """
     if MXCSRRegister.is_available():
-        return MXCSRRegister()(FZ=FZ, DAZ=DAZ)
+        return MXCSRRegister()(FZ=FZ, DAZ=DAZ, RN=RN)
     raise NotImplementedError(f"setting FPU registers on {platform.machine()} platform")
 
 
@@ -109,10 +109,27 @@ class MXCSRRegister:
         IE = int(bits[15])  # Invalid Operation Flag
         return f"{type(self).__name__}[{FZ=} {RN=} {DAZ=} {DE=}]"
 
-    def __call__(self, FZ=None, DAZ=None):
+    def __call__(self, FZ=None, DAZ=None, RN=None):
 
         current = self.get_mxcsr()
         new_value = current.value
+
+        if RN is not None:
+            r = dict(nearest=0, down=1, up=2, towardszero=3)[RN]
+            if r == 0:
+                new_value &= ~(1 << 14)
+                new_value &= ~(1 << 13)
+            elif r == 1:
+                new_value &= ~(1 << 14)
+                new_value |= 1 << 13
+            elif r == 2:
+                new_value |= 1 << 14
+                new_value &= ~(1 << 13)
+            elif r == 3:
+                new_value |= 1 << 14
+                new_value |= 1 << 13
+            else:
+                assert 0  # unreachable
 
         if FZ is not None:
             if FZ:

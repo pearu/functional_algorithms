@@ -57,6 +57,10 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
             register_params.update(DAZ=True)
         if "disable-DAZ" in fpu:
             register_params.update(DAZ=False)
+    else:
+        if device == "cpu":
+            register = fa.fpu.context
+            register_params.update(RN="nearest")
 
     numpy_with_backend = getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype)
     try:
