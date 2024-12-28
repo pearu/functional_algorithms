@@ -789,21 +789,6 @@ def acosh(ctx, z: complex | float):
     assert 0  # unreachable
 
 
-@definition("sqrt", domain="real")
-def real_sqrt(ctx, z: float):
-    return NotImplemented
-
-
-@definition("sqrt", domain="complex")
-def complex_sqrt(ctx, z: complex):
-    return NotImplemented
-
-
-@definition("sqrt")
-def sqrt(ctx, z: complex | float):
-    assert 0  # unreachable
-
-
 @definition("angle", domain="complex")
 def angle(ctx, z: complex):
     return ctx.atan2(z.imag, z.real)
