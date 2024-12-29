@@ -1056,6 +1056,93 @@ def log1p(ctx, z: complex | float):
     assert 0  # unreachable
 
 
+@definition("log", domain="complex")
+def complex_log(ctx, z: complex):
+    """Logarithm of z on complex input:
+
+      log(x + I * y) = log(hypot(x, y)) + I * arctan2(y, x)
+
+    where
+
+      x and y are real and imaginary parts of the input to log1p, and
+      I is imaginary unit.
+
+    For evaluating the real part of log accurately on the whole
+    complex plane, we'll use the following formula:
+
+    Case A
+    ------
+
+    If `hypot(x, y)` is close to one, we'll use Dekker product and
+    2Sum algorithm to double the precision of computations to minimize
+    cancellation errors:
+
+      xxh, xxl = square_dekker(x)
+      yyh, yyl = square_dekker(y)
+      s = -1 + x * x + y * y = sum_2sum([-1, yyh, xxh, yyl, xxl])
+
+    so that
+
+      real(log(x + I * y)) = 1/2 * log1p(s)
+
+    when abs(s) < 0.5.
+
+    Case B
+    ------
+
+    Otherwise, we'll use
+
+      real(log(x + I * y)) = log(mx) + 1/2 * log1p((mn / mx) ** 2)
+
+    where
+
+      mx = max(abs(x), abs(y))
+      mn = min(abs(x), abs(y))
+
+    For `mx == mn == inf` or `mx == mn == 0` case, we'll define `mn / mx == 1`.
+
+    """
+    fast = ctx.parameters.get("use_fast2sum", True)
+    x = z.real
+    y = z.imag
+
+    one = ctx.constant(1.0, x)
+    half = ctx.constant(0.5, x)
+    largest = ctx.constant("largest", x).reference("largest")
+    C = get_veltkamp_splitter_constant(ctx, largest)
+
+    xh, xl = split_veltkamp(ctx, C, x)
+    yh, yl = split_veltkamp(ctx, C, y)
+    xxh, xxl = square_dekker(ctx, x, xh, xl)
+    yyh, yyl = square_dekker(ctx, y, yh, yl)
+    s, _ = sum_2sum([-one, yyh, xxh, yyl, xxl], fast=fast)
+    re_A = half * ctx.log1p(s)
+
+    mx = ctx.maximum(abs(x), abs(y))
+    mn = ctx.minimum(abs(x), abs(y))
+    mn_over_mx = ctx.select(mn == mx, one, mn / mx)
+    re_B = ctx.log(mx) + half * ctx.log1p(mn_over_mx * mn_over_mx)
+
+    re = ctx.select(abs(s) < 0.5, re_A, re_B)
+    im = ctx.atan2(y, x)
+    return ctx(ctx.complex(re, im))
+
+
+@definition("log")
+def real_log(ctx, x: float):
+    """log(x)"""
+    return NotImplemented
+
+
+@definition("log")
+def log(ctx, z: complex | float):
+    """log(z)
+
+    See complex_log for more information.
+    """
+    assert 0  # unreachable
+
+
 def atanh_imag_is_half_pi(ctx, x: float):
     """Return smallest positive x such that imag(atanh(I*x)) == pi/2
 

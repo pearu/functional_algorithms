@@ -94,6 +94,10 @@ def get_inputs():
         ("log1p", np.complex64, dict(use_fast2sum=True)),
         ("log1p", np.complex64, dict(use_native_log1p=True)),
         ("log1p", np.complex128, {}),
+        ("log", np.complex64, {}),
+        ("log", np.complex64, dict(use_fast2sum=False)),
+        ("log", np.complex64, dict(use_native_log=True)),
+        ("log", np.complex128, {}),
         # ("tan", np.float32, dict()),  # real_tan is not implemented
         ("tan", np.float32, dict(use_native_tan=True)),  # tan(x)
         ("tan", np.float32, dict(use_native_tan=True, use_upcast_tan=True)),  # float(tan(double(x)))
@@ -234,8 +238,11 @@ Finally,
             def impl(ctx, *args, **kwargs):
                 return getattr(ctx, func_name)(*args, **kwargs)
 
-        if ctx.parameters.get(f"use_fast2sum", False):
-            ctx.parameters["using"].add(f"fast2sum")
+        if "use_fast2sum" in ctx.parameters:
+            if ctx.parameters["use_fast2sum"]:
+                ctx.parameters["using"].add(f"fast2sum")
+            else:
+                ctx.parameters["using"].add(f"2sum")
 
         graph = ctx.trace(impl, dtype)
         graph2 = graph.rewrite(
