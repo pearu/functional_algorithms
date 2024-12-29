@@ -29,6 +29,7 @@ trace_arguments = dict(
     # square=[(":float", ":float"), (":complex", ":complex")],
     # asin=[(":float", ":float"), (":complex", ":complex")],
     complex_sqrt=[(":complex", ":complex")],
+    complex_log=[(":complex", ":complex")],
 )
 
 source_file_extension = ".cpp"

@@ -230,6 +230,8 @@ def split_veltkamp(x, s=None, C=None):
     # https://inria.hal.science/hal-04480440v1
     if C is None:
         p = get_precision(x)
+        if s is None:
+            s = (p + 1) // 2
         assert s >= 2 and s <= p - 2
         C = type(x)(2**s + 1)
     g = C * x  # for large x and s, this will overflow!
@@ -769,6 +771,34 @@ class mpmath_array_api:
             if isinstance(r, ctx.mpf):
                 # Workaround log1p(0j) -> 0
                 r = ctx.make_mpc((r._mpf_, ctx.zero._mpf_))
+        return r
+
+    def log(self, x):
+        ctx = x.context
+        if isinstance(x, ctx.mpc):
+            # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
+            if ctx.isinf(x.real) and ctx.isinf(x.imag):
+                pi = ctx.pi
+                if x.real > 0 and x.imag > 0:
+                    return ctx.make_mpc((x.real._mpf_, (pi / 4)._mpf_))
+                if x.real > 0 and x.imag < 0:
+                    return ctx.make_mpc((x.real._mpf_, (-pi / 4)._mpf_))
+                if x.real < 0 and x.imag < 0:
+                    return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
+                if x.real < 0 and x.imag > 0:
+                    return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
+
+        else:
+            if x < 0:
+                # otherwise, mpmath.log returns a complex value
+                return ctx.nan
+
+        r = ctx.log(x)
+        if isinstance(x, ctx.mpc):
+            if isinstance(r, ctx.mpf):
+                assert 0  # unreachable
+                # Workaround log(0j) -> 0
+                # r = ctx.make_mpc((r._mpf_, ctx.zero._mpf_))
         return r
 
     def tan(self, x):
@@ -1861,6 +1891,8 @@ def function_validation_parameters(func_name, dtype, device=None):
     elif func_name == "log1p":
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
         max_valid_ulp_count = 4
+    elif func_name == "log":
+        max_valid_ulp_count = 3
     elif func_name in {"atanh", "atan"}:
         extra_prec_multiplier = 20
     elif func_name in {"tanh", "tan"}:

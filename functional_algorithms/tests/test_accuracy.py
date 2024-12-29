@@ -196,9 +196,18 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
 
     if numpy.all(ulp == 0):
         return
+    print(f"maximal ULP difference: {ulp.max()}")
     if numpy.all(ulp <= max_valid_ulp_count):
-        print(f"maximal ULP difference: {ulp.max()}")
         return
+
+    limit_u = None
+    for i, u in enumerate(sorted(numpy.unique(ulp.flatten()))):
+        if i > 10:
+            limit_u = u
+            break
+        print(f"ULP difference == {u}: {(ulp == u).sum()}")
+    if limit_u is not None:
+        print(f"ULP difference >= {limit_u}: {(ulp >= limit_u).sum()}")
 
     if complex_plane:
         bsamples = numpy.zeros((im_blocks, re_blocks), dtype=samples.dtype)

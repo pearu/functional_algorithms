@@ -42,10 +42,11 @@ following math functions:
 - `atan(z: complex | float)`, using the relation `atan(z) = -I * atanh(z * I)`,
 - `atanh(z: complex | float)`, using a custom algorithm,
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
-- `square(z: complex | float)` using a custom algorithm,
-- `log1p(z: complex)` using a custom algorithm that employs Dekker's product and 2Sum algorithms.
+- `log(z: complex)` using a custom algorithm that employs Dekker's product and Fast2Sum algorithm,
+- `log1p(z: complex)` using a custom algorithm that employs Dekker's product and 2Sum algorithm,
 - `sqrt(z: complex)` using the relation `sqrt(z) = u + I * z.imag / u / 2
-  if z.real >= 0 else abs(z.imag) / u / 2 + I * sgn(z.imag) * u` where `u = sqrt((abs(z) + abs(z.real)) / 2)`
+  if z.real >= 0 else abs(z.imag) / u / 2 + I * sgn(z.imag) * u` where `u = sqrt((abs(z) + abs(z.real)) / 2)`.
+- `square(z: complex | float)` using a custom algorithm.
 
 All above algorithms are designed to be accurate upto maximal 3 ULP
 difference between computed and reference values.
@@ -55,7 +56,7 @@ states. For instance, the following algorithms are inaccurate on
 specific regions of complex plane when `denormals-are-zeros` bit is
 set:
 
-- `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `log1p`, `sqrt`, `square`,
+- `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `log`, `log1p`, `sqrt`, `square`,
 
 The following algorithms are inaccurate on specific regions of complex
 plane when `flush-to-zero` bit is set:

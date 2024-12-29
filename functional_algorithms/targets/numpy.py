@@ -82,6 +82,10 @@ trace_arguments = dict(
         (":complex128",),
         (":complex64",),
     ],
+    log=[
+        (":complex128",),
+        (":complex64",),
+    ],
 )
 
 

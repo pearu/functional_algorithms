@@ -92,6 +92,10 @@ Finally,
 | log1p<sub>2</sub> | complex64 | 899925 | 100395 | 1673 | 8 | - | using fast2sum |
 | log1p<sub>3</sub> | complex64 | 698489 | 61706 | 2437 | 1519 | 237850 | using native log1p |
 | log1p | complex128 | 846741 | 155252 | 8 | - | - | - |
+| log | complex64 | 906839 | 94768 | 390 | 4 | - | - |
+| log<sub>2</sub> | complex64 | 906839 | 94768 | 390 | 4 | - | using 2sum |
+| log<sub>3</sub> | complex64 | 774651 | 227350 | - | - | - | using native log |
+| log | complex128 | 805933 | 196068 | - | - | - | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
 | tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |
 | real_naive_tan | float32 | 819251 | 179168 | 1580 | 2 | - | - |
