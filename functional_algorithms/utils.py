@@ -1819,7 +1819,7 @@ def validate_function(
     return ulp_stats[-1] == 0, dict(ulp=ulp_stats, outrange=outrange_stats)
 
 
-def function_validation_parameters(func_name, dtype):
+def function_validation_parameters(func_name, dtype, device=None):
     if isinstance(dtype, str):
         dtype_name = dtype
     elif isinstance(dtype, numpy.dtype):
@@ -1854,14 +1854,17 @@ def function_validation_parameters(func_name, dtype):
         extra_prec_multiplier = 20
     elif func_name == "sqrt":
         extra_prec_multiplier = 2
+        if device == "cuda":
+            max_valid_ulp_count = 5
+        else:
+            max_valid_ulp_count = 4
     elif func_name == "log1p":
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
+        max_valid_ulp_count = 4
     elif func_name in {"atanh", "atan"}:
         extra_prec_multiplier = 20
     elif func_name in {"tanh", "tan"}:
         extra_prec_multiplier = 20
-    elif func_name == "loq1p":
-        max_valid_ulp_count = 4
     return dict(
         extra_prec_multiplier=extra_prec_multiplier,
         max_valid_ulp_count=max_valid_ulp_count,

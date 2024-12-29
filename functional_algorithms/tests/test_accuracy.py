@@ -72,7 +72,7 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
 
     if not func.backend_is_available(device):
         pytest.skip(f"{device} support is unavailable")
-    params = fa.utils.function_validation_parameters(unary_func_name, dtype)
+    params = fa.utils.function_validation_parameters(unary_func_name, dtype, device=device)
 
     max_valid_ulp_count = params["max_valid_ulp_count"]
     extra_prec_multiplier = params["extra_prec_multiplier"]
