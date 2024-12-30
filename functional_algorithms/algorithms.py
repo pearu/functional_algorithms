@@ -1143,6 +1143,70 @@ def log(ctx, z: complex | float):
     assert 0  # unreachable
 
 
+@definition("log10", domain="complex")
+def complex_log10(ctx, z: complex):
+    """Base 10 logarithm of z on complex input:
+
+    log10(z) = log(z) / log(10)
+    """
+    lnz = ctx.log(z)
+    x = lnz.real
+    y = lnz.imag
+    if ctx.alt is None:
+        ln10 = ctx.log(ctx.constant(10, x))
+    else:
+        ln10_ = ctx.alt.log(10)
+        ln10 = ctx.constant(ln10_, x)
+    return ctx(ctx.complex(x / ln10, y / ln10))
+
+
+@definition("log10")
+def real_log10(ctx, x: float):
+    """log10(x)"""
+    return NotImplemented
+
+
+@definition("log10")
+def log10(ctx, z: complex | float):
+    """log10(z)
+
+    See complex_log10 for more information.
+    """
+    assert 0  # unreachable
+
+
+@definition("log2", domain="complex")
+def complex_log2(ctx, z: complex):
+    """Base 2 logarithm of z on complex input:
+
+    log2(z) = log(z) / log(2)
+    """
+    lnz = ctx.log(z)
+    x = lnz.real
+    y = lnz.imag
+    if ctx.alt is None:
+        ln2 = ctx.log(ctx.constant(2, x))
+    else:
+        ln2_ = ctx.alt.log(2)
+        ln2 = ctx.constant(ln2_, x)
+    return ctx(ctx.complex(x / ln2, y / ln2))
+
+
+@definition("log2")
+def real_log2(ctx, x: float):
+    """log2(x)"""
+    return NotImplemented
+
+
+@definition("log2")
+def log2(ctx, z: complex | float):
+    """log2(z)
+
+    See complex_log2 for more information.
+    """
+    assert 0  # unreachable
+
+
 def atanh_imag_is_half_pi(ctx, x: float):
     """Return smallest positive x such that imag(atanh(I*x)) == pi/2
 

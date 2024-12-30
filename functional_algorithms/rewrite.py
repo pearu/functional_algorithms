@@ -616,6 +616,22 @@ class Rewriter:
         (x,) = expr.operands
         if x.kind == "constant":
             value, like = x.operands
+            if isinstance(value, number_types):
+                if value == 1:
+                    return x.context.constant(0, like)
+                # return self._eval(like, "log", value)
+
+    def log10(self, expr):
+        (x,) = expr.operands
+        if x.kind == "constant":
+            value, like = x.operands
+            if isinstance(value, number_types) and value == 1:
+                return x.context.constant(0, like)
+
+    def log2(self, expr):
+        (x,) = expr.operands
+        if x.kind == "constant":
+            value, like = x.operands
             if isinstance(value, number_types) and value == 1:
                 return x.context.constant(0, like)
 

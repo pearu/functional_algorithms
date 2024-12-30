@@ -746,21 +746,26 @@ class mpmath_array_api:
     def expm1(self, x):
         return x.context.expm1(x)
 
+    def _log_at_inf(self, re, im):
+        # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
+        ctx = re.context
+        pi = ctx.pi
+        if re > 0 and im > 0:
+            return ctx.make_mpc((re._mpf_, (pi / 4)._mpf_))
+        elif re > 0 and im < 0:
+            return ctx.make_mpc((re._mpf_, (-pi / 4)._mpf_))
+        elif re < 0 and im < 0:
+            return ctx.make_mpc(((-re)._mpf_, (-3 * pi / 4)._mpf_))
+        elif re < 0 and im > 0:
+            return ctx.make_mpc(((-re)._mpf_, (3 * pi / 4)._mpf_))
+        else:
+            assert 0  # unreachable
+
     def log1p(self, x):
         ctx = x.context
         if isinstance(x, ctx.mpc):
-            # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
             if ctx.isinf(x.real) and ctx.isinf(x.imag):
-                pi = ctx.pi
-                if x.real > 0 and x.imag > 0:
-                    return ctx.make_mpc((x.real._mpf_, (pi / 4)._mpf_))
-                if x.real > 0 and x.imag < 0:
-                    return ctx.make_mpc((x.real._mpf_, (-pi / 4)._mpf_))
-                if x.real < 0 and x.imag < 0:
-                    return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
-                if x.real < 0 and x.imag > 0:
-                    return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
-
+                return self._log_at_inf(x.real, x.imag)
         else:
             if x < -1:
                 # otherwise, mpmath.log1p returns a complex value
@@ -776,30 +781,13 @@ class mpmath_array_api:
     def log(self, x):
         ctx = x.context
         if isinstance(x, ctx.mpc):
-            # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
             if ctx.isinf(x.real) and ctx.isinf(x.imag):
-                pi = ctx.pi
-                if x.real > 0 and x.imag > 0:
-                    return ctx.make_mpc((x.real._mpf_, (pi / 4)._mpf_))
-                if x.real > 0 and x.imag < 0:
-                    return ctx.make_mpc((x.real._mpf_, (-pi / 4)._mpf_))
-                if x.real < 0 and x.imag < 0:
-                    return ctx.make_mpc(((-x.real)._mpf_, (-3 * pi / 4)._mpf_))
-                if x.real < 0 and x.imag > 0:
-                    return ctx.make_mpc(((-x.real)._mpf_, (3 * pi / 4)._mpf_))
-
+                return self._log_at_inf(x.real, x.imag)
         else:
             if x < 0:
                 # otherwise, mpmath.log returns a complex value
                 return ctx.nan
-
-        r = ctx.log(x)
-        if isinstance(x, ctx.mpc):
-            if isinstance(r, ctx.mpf):
-                assert 0  # unreachable
-                # Workaround log(0j) -> 0
-                # r = ctx.make_mpc((r._mpf_, ctx.zero._mpf_))
-        return r
+        return ctx.log(x)
 
     def tan(self, x):
         ctx = x.context
@@ -831,10 +819,10 @@ class mpmath_array_api:
         return ctx.tanh(x)
 
     def log2(self, x):
-        return x.context.ln(x) / x.context.ln2
+        return self.log(x) / x.context.ln2
 
     def log10(self, x):
-        return x.context.ln(x) / x.context.ln10
+        return self.log(x) / x.context.ln10
 
     def exp2(self, x):
         return x.context.exp(x * x.context.ln2)
@@ -1891,7 +1879,7 @@ def function_validation_parameters(func_name, dtype, device=None):
     elif func_name == "log1p":
         extra_prec_multiplier = 10  # remove when mpmath#803 becomes available
         max_valid_ulp_count = 4
-    elif func_name == "log":
+    elif func_name in {"log", "log10", "log2"}:
         max_valid_ulp_count = 3
     elif func_name in {"atanh", "atan"}:
         extra_prec_multiplier = 20
