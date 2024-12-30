@@ -96,6 +96,14 @@ Finally,
 | log<sub>2</sub> | complex64 | 906839 | 94768 | 390 | 4 | - | using 2sum |
 | log<sub>3</sub> | complex64 | 774651 | 227350 | - | - | - | using native log |
 | log | complex128 | 805933 | 196068 | - | - | - | - |
+| log10 | complex64 | 351671 | 650092 | 238 | - | - | - |
+| log10<sub>2</sub> | complex64 | 351671 | 650092 | 238 | - | - | using 2sum |
+| log10<sub>3</sub> | complex64 | 320879 | 672346 | 8776 | - | - | using native log10 |
+| log10 | complex128 | 327949 | 626922 | 47130 | - | - | - |
+| log2 | complex64 | 661149 | 340692 | 160 | - | - | - |
+| log2<sub>2</sub> | complex64 | 661149 | 340692 | 160 | - | - | using 2sum |
+| log2<sub>3</sub> | complex64 | 635345 | 366376 | 280 | - | - | using native log2 |
+| log2 | complex128 | 653873 | 348126 | 2 | - | - | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
 | tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |
 | real_naive_tan | float32 | 819251 | 179168 | 1580 | 2 | - | - |

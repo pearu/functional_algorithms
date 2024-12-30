@@ -22,6 +22,8 @@ trace_arguments = dict(
     square=[(":float",), (":complex",)],
     sqrt=[(":complex",)],
     log=[(":complex",)],
+    log10=[(":complex",)],
+    log2=[(":complex",)],
 )
 
 
