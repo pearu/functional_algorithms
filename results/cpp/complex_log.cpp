@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -15,11 +15,18 @@ std::complex<double> complex_log_0(std::complex<double> z) {
   double constant_fneg1 = -1.0;
   double y = (z).imag();
   double square_dekker_high = (y) * (y);
-  double _add_fast2sum_high_2_ = (constant_fneg1) + (square_dekker_high);
   double x = (z).real();
   double _square_dekker_high_0_ = (x) * (x);
-  double _add_fast2sum_high_1_ =
-      (_add_fast2sum_high_2_) + (_square_dekker_high_0_);
+  bool gt_square_dekker_high__square_dekker_high_0_ =
+      (square_dekker_high) > (_square_dekker_high_0_);
+  double mxh = ((gt_square_dekker_high__square_dekker_high_0_)
+                    ? (square_dekker_high)
+                    : (_square_dekker_high_0_));
+  double _add_fast2sum_high_2_ = (constant_fneg1) + (mxh);
+  double mnh =
+      ((gt_square_dekker_high__square_dekker_high_0_) ? (_square_dekker_high_0_)
+                                                      : (square_dekker_high));
+  double _add_fast2sum_high_1_ = (_add_fast2sum_high_2_) + (mnh);
   double largest = std::numeric_limits<double>::max();
   double veltkamp_splitter_constant =
       (((largest) > (1e+308)) ? (134217729.0)
@@ -47,10 +54,9 @@ std::complex<double> complex_log_0(std::complex<double> z) {
       ((xl) * (xl));
   double add_fast2sum_high = (_add_fast2sum_high_0_) + (_square_dekker_low_0_);
   double add_fast2sum_low =
-      (square_dekker_high) - ((_add_fast2sum_high_2_) - (constant_fneg1));
+      (mxh) - ((_add_fast2sum_high_2_) - (constant_fneg1));
   double _add_fast2sum_low_0_ =
-      (_square_dekker_high_0_) -
-      ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_));
+      (mnh) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_));
   double _add_fast2sum_low_1_ =
       (square_dekker_low) - ((_add_fast2sum_high_0_) - (_add_fast2sum_high_1_));
   double _add_fast2sum_low_2_ =

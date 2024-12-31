@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.11.1), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -71,10 +71,7 @@ def log1p_0(z: numpy.complex128) -> numpy.complex128:
         )
         result = make_complex(
             (
-                (
-                    (numpy.log(mx))
-                    + ((half) * (numpy.log1p((one) if (numpy.equal(mn, mx, dtype=numpy.bool_)) else ((r) * (r)))))
-                )
+                ((numpy.log(mx)) + ((half) * (numpy.log1p((one) if (numpy.equal(mn, mx)) else ((r) * (r))))))
                 if ((mx) > (numpy.float64(1.3407807929942595e152)))
                 else (
                     ((half) * (numpy.log(((xp1) * (xp1)) + (square_dekker_high))))
@@ -143,10 +140,7 @@ def log1p_1(z: numpy.complex64) -> numpy.complex64:
         )
         result = make_complex(
             (
-                (
-                    (numpy.log(mx))
-                    + ((half) * (numpy.log1p((one) if (numpy.equal(mn, mx, dtype=numpy.bool_)) else ((r) * (r)))))
-                )
+                ((numpy.log(mx)) + ((half) * (numpy.log1p((one) if (numpy.equal(mn, mx)) else ((r) * (r))))))
                 if ((mx) > (numpy.float32(1.8446742e17)))
                 else (
                     ((half) * (numpy.log(((xp1) * (xp1)) + (square_dekker_high))))

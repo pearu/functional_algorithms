@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -14,12 +14,16 @@ XlaOp complex_log_0(XlaOp z) {
   XlaOp constant_constant_fneg1 = ScalarLike(x, -1.0);
   XlaOp y = Imag(z);
   XlaOp square_dekker_high = Mul(y, y);
-  XlaOp _add_fast2sum_high_2_ =
-      Add(constant_constant_fneg1, square_dekker_high);
   XlaOp x = Real(z);
   XlaOp _square_dekker_high_0_ = Mul(x, x);
-  XlaOp _add_fast2sum_high_1_ =
-      Add(_add_fast2sum_high_2_, _square_dekker_high_0_);
+  XlaOp gt_square_dekker_high__square_dekker_high_0_ =
+      Gt(square_dekker_high, _square_dekker_high_0_);
+  XlaOp mxh = Select(gt_square_dekker_high__square_dekker_high_0_,
+                     square_dekker_high, _square_dekker_high_0_);
+  XlaOp _add_fast2sum_high_2_ = Add(constant_constant_fneg1, mxh);
+  XlaOp mnh = Select(gt_square_dekker_high__square_dekker_high_0_,
+                     _square_dekker_high_0_, square_dekker_high);
+  XlaOp _add_fast2sum_high_1_ = Add(_add_fast2sum_high_2_, mnh);
   FloatType constant_largest = std::numeric_limits<FloatType>::max();
   XlaOp veltkamp_splitter_constant =
       ScalarLike(x, (((constant_largest) > (1e+308))
@@ -47,11 +51,10 @@ XlaOp complex_log_0(XlaOp z) {
           multiply_xh_xl),
       Mul(xl, xl));
   XlaOp add_fast2sum_high = Add(_add_fast2sum_high_0_, _square_dekker_low_0_);
-  XlaOp add_fast2sum_low = Sub(
-      square_dekker_high, Sub(_add_fast2sum_high_2_, constant_constant_fneg1));
+  XlaOp add_fast2sum_low =
+      Sub(mxh, Sub(_add_fast2sum_high_2_, constant_constant_fneg1));
   XlaOp _add_fast2sum_low_0_ =
-      Sub(_square_dekker_high_0_,
-          Sub(_add_fast2sum_high_1_, _add_fast2sum_high_2_));
+      Sub(mnh, Sub(_add_fast2sum_high_1_, _add_fast2sum_high_2_));
   XlaOp _add_fast2sum_low_1_ =
       Sub(square_dekker_low, Sub(_add_fast2sum_high_0_, _add_fast2sum_high_1_));
   XlaOp _add_fast2sum_low_2_ =

@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -43,9 +43,7 @@ def asin_acos_kernel_0(z: numpy.complex128) -> numpy.complex128:
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float64 = (y) if (y_gt_safe_max_opt) else (x)
         xoy: numpy.float64 = (
-            ((x) / (y))
-            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.inf), dtype=numpy.bool_))))
-            else (numpy.float64(0.0))
+            ((x) / (y)) if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float64(numpy.inf))))) else (numpy.float64(0.0))
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float64(5.966672584960166e-154))) and ((x) < (one))
         ap1: numpy.float64 = (a) + (one)
@@ -105,9 +103,7 @@ def asin_acos_kernel_1(z: numpy.complex64) -> numpy.complex64:
         y_gt_safe_max_opt: numpy.bool_ = (y) >= (safe_max_opt)
         mx: numpy.float32 = (y) if (y_gt_safe_max_opt) else (x)
         xoy: numpy.float32 = (
-            ((x) / (y))
-            if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.inf), dtype=numpy.bool_))))
-            else (numpy.float32(0.0))
+            ((x) / (y)) if ((y_gt_safe_max_opt) and (not (numpy.equal(y, numpy.float32(numpy.inf))))) else (numpy.float32(0.0))
         )
         logical_and_lt_y_safe_min_lt_x_one: numpy.bool_ = ((y) < (numpy.float32(4.3368087e-19))) and ((x) < (one))
         ap1: numpy.float32 = (a) + (one)

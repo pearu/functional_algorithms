@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -28,10 +28,10 @@ def hypot_0(x: numpy.float32, y: numpy.float32) -> numpy.float32:
         sqa: numpy.float32 = numpy.sqrt((constant_f1) + (r))
         result = (
             ((numpy.float32(1.4142135)) * (mx))
-            if (numpy.equal(mx, mn, dtype=numpy.bool_))
+            if (numpy.equal(mx, mn))
             else (
                 ((mx) + (((mx) * (r)) / (numpy.float32(2.0))))
-                if ((numpy.equal(sqa, constant_f1, dtype=numpy.bool_)) and ((r) > (numpy.float32(0.0))))
+                if ((numpy.equal(sqa, constant_f1)) and ((r) > (numpy.float32(0.0))))
                 else ((mx) * (sqa))
             )
         )
@@ -51,10 +51,10 @@ def hypot_1(x: numpy.float64, y: numpy.float64) -> numpy.float64:
         sqa: numpy.float64 = numpy.sqrt((constant_f1) + (r))
         result = (
             ((numpy.float64(1.4142135623730951)) * (mx))
-            if (numpy.equal(mx, mn, dtype=numpy.bool_))
+            if (numpy.equal(mx, mn))
             else (
                 ((mx) + (((mx) * (r)) / (numpy.float64(2.0))))
-                if ((numpy.equal(sqa, constant_f1, dtype=numpy.bool_)) and ((r) > (numpy.float64(0.0))))
+                if ((numpy.equal(sqa, constant_f1)) and ((r) > (numpy.float64(0.0))))
                 else ((mx) * (sqa))
             )
         )

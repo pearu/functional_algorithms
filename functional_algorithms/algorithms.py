@@ -1115,7 +1115,12 @@ def complex_log(ctx, z: complex):
     yh, yl = split_veltkamp(ctx, C, y)
     xxh, xxl = square_dekker(ctx, x, xh, xl)
     yyh, yyl = square_dekker(ctx, y, yh, yl)
-    s, _ = sum_2sum([-one, yyh, xxh, yyl, xxl], fast=fast)
+    # for better accuracy in JAX (see pearu/functional_algorithms#46),
+    # larger of xxh and yyh must appear earlier in the input to
+    # sum_2sum:
+    mxh = ctx.select(yyh > xxh, yyh, xxh)
+    mnh = ctx.select(yyh > xxh, xxh, yyh)
+    s, _ = sum_2sum([-one, mxh, mnh, yyl, xxl], fast=fast)
     re_A = half * ctx.log1p(s)
 
     mx = ctx.maximum(abs(x), abs(y))

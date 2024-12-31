@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -16,10 +16,17 @@ def : Pat<(log_0 ComplexElementType:$z),
                (StableHLO_AddOp:$_add_fast2sum_high_1_
                  (StableHLO_AddOp:$_add_fast2sum_high_2_
                    (StableHLO_ConstantLike<"-1.0">:$constant_fneg1 (StableHLO_RealOp:$x $z)),
-                   (StableHLO_MulOp:$square_dekker_high
-                     (StableHLO_ImagOp:$y $z),
-                     $y)),
-                 (StableHLO_MulOp:$_square_dekker_high_0_ $x, $x)),
+                   (StableHLO_SelectOp:$mxh
+                     (StableHLO_CompareOp:$gt_square_dekker_high__square_dekker_high_0_
+                      (StableHLO_MulOp:$square_dekker_high
+                        (StableHLO_ImagOp:$y $z),
+                        $y),
+                      (StableHLO_MulOp:$_square_dekker_high_0_ $x, $x),
+                       StableHLO_ComparisonDirectionValue<"GT">,
+                       (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+                     $square_dekker_high,
+                     $_square_dekker_high_0_)),
+                 (StableHLO_SelectOp:$mnh $gt_square_dekker_high__square_dekker_high_0_, $_square_dekker_high_0_, $square_dekker_high)),
                (StableHLO_AddOp:$square_dekker_low
                  (StableHLO_AddOp
                    (StableHLO_AddOp
@@ -70,10 +77,10 @@ def : Pat<(log_0 ComplexElementType:$z),
              (StableHLO_AddOp
                (StableHLO_AddOp
                  (StableHLO_SubtractOp:$add_fast2sum_low
-                   $square_dekker_high,
+                   $mxh,
                    (StableHLO_SubtractOp $_add_fast2sum_high_2_, $constant_fneg1)),
                  (StableHLO_SubtractOp:$_add_fast2sum_low_0_
-                   $_square_dekker_high_0_,
+                   $mnh,
                    (StableHLO_SubtractOp $_add_fast2sum_high_1_, $_add_fast2sum_high_2_))),
                (StableHLO_SubtractOp:$_add_fast2sum_low_1_
                  $square_dekker_low,
