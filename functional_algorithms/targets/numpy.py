@@ -164,7 +164,7 @@ kind_to_target = dict(
     le="({0}) <= ({1})",
     gt="({0}) > ({1})",
     ge="({0}) >= ({1})",
-    eq="numpy.equal({0}, {1}, dtype=numpy.bool_)",
+    eq="numpy.equal({0}, {1})",
     ne="({0}) != ({1})",
     nextafter="numpy.nextafter({0}, {1})",
     upcast=upcast_func,
@@ -200,7 +200,7 @@ type_to_target = dict(
 )
 
 
-def as_function(graph, debug=0):
+def as_function(graph, debug=0, numpy=numpy):
     """Return function graph as Python callable."""
     assert graph.kind == "apply"
     d = dict(

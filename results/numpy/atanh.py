@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.10.2.dev9+g7001467.d20241002), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -46,14 +46,8 @@ def atanh_0(z: numpy.complex128) -> numpy.complex128:
                                 else (
                                     (zero)
                                     if (
-                                        (
-                                            (numpy.equal(x, constant_posinf, dtype=numpy.bool_))
-                                            or (numpy.equal(x, constant_neginf, dtype=numpy.bool_))
-                                        )
-                                        or (
-                                            (numpy.equal(y, constant_posinf, dtype=numpy.bool_))
-                                            or (numpy.equal(y, constant_neginf, dtype=numpy.bool_))
-                                        )
+                                        ((numpy.equal(x, constant_posinf)) or (numpy.equal(x, constant_neginf)))
+                                        or ((numpy.equal(y, constant_posinf)) or (numpy.equal(y, constant_neginf)))
                                     )
                                     else (((one) / (((ax) / (y)) + ((y) / (ax)))) / (y))
                                 )
@@ -104,14 +98,8 @@ def atanh_1(z: numpy.complex64) -> numpy.complex64:
                                 else (
                                     (zero)
                                     if (
-                                        (
-                                            (numpy.equal(x, constant_posinf, dtype=numpy.bool_))
-                                            or (numpy.equal(x, constant_neginf, dtype=numpy.bool_))
-                                        )
-                                        or (
-                                            (numpy.equal(y, constant_posinf, dtype=numpy.bool_))
-                                            or (numpy.equal(y, constant_neginf, dtype=numpy.bool_))
-                                        )
+                                        ((numpy.equal(x, constant_posinf)) or (numpy.equal(x, constant_neginf)))
+                                        or ((numpy.equal(y, constant_posinf)) or (numpy.equal(y, constant_neginf)))
                                     )
                                     else (((one) / (((ax) / (y)) + ((y) / (ax)))) / (y))
                                 )

@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.11.1), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -11,10 +11,13 @@ def log_0(z: complex) -> complex:
     constant_fneg1: float = -1.0
     y: float = (z).imag
     square_dekker_high: float = (y) * (y)
-    _add_fast2sum_high_2_: float = (constant_fneg1) + (square_dekker_high)
     x: float = (z).real
     _square_dekker_high_0_: float = (x) * (x)
-    _add_fast2sum_high_1_: float = (_add_fast2sum_high_2_) + (_square_dekker_high_0_)
+    gt_square_dekker_high__square_dekker_high_0_: bool = (square_dekker_high) > (_square_dekker_high_0_)
+    mxh: float = (square_dekker_high) if (gt_square_dekker_high__square_dekker_high_0_) else (_square_dekker_high_0_)
+    _add_fast2sum_high_2_: float = (constant_fneg1) + (mxh)
+    mnh: float = (_square_dekker_high_0_) if (gt_square_dekker_high__square_dekker_high_0_) else (square_dekker_high)
+    _add_fast2sum_high_1_: float = (_add_fast2sum_high_2_) + (mnh)
     largest: float = sys.float_info.max
     veltkamp_splitter_constant: float = (
         (134217729.0) if ((largest) > (1e308)) else ((4097.0) if ((largest) > (1e38)) else (65.0))
@@ -35,8 +38,8 @@ def log_0(z: complex) -> complex:
         (xl) * (xl)
     )
     add_fast2sum_high: float = (_add_fast2sum_high_0_) + (_square_dekker_low_0_)
-    add_fast2sum_low: float = (square_dekker_high) - ((_add_fast2sum_high_2_) - (constant_fneg1))
-    _add_fast2sum_low_0_: float = (_square_dekker_high_0_) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
+    add_fast2sum_low: float = (mxh) - ((_add_fast2sum_high_2_) - (constant_fneg1))
+    _add_fast2sum_low_0_: float = (mnh) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
     _add_fast2sum_low_1_: float = (square_dekker_low) - ((_add_fast2sum_high_0_) - (_add_fast2sum_high_1_))
     _add_fast2sum_low_2_: float = (_square_dekker_low_0_) - ((add_fast2sum_high) - (_add_fast2sum_high_0_))
     sum_fast2sum_high: float = (add_fast2sum_high) + (

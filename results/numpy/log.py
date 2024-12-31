@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.11.1), see
+# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -21,10 +21,17 @@ def log_0(z: numpy.complex128) -> numpy.complex128:
         constant_fneg1: numpy.float64 = numpy.float64(-1.0)
         y: numpy.float64 = (z).imag
         square_dekker_high: numpy.float64 = (y) * (y)
-        _add_fast2sum_high_2_: numpy.float64 = (constant_fneg1) + (square_dekker_high)
         x: numpy.float64 = (z).real
         _square_dekker_high_0_: numpy.float64 = (x) * (x)
-        _add_fast2sum_high_1_: numpy.float64 = (_add_fast2sum_high_2_) + (_square_dekker_high_0_)
+        gt_square_dekker_high__square_dekker_high_0_: numpy.bool_ = (square_dekker_high) > (_square_dekker_high_0_)
+        mxh: numpy.float64 = (
+            (square_dekker_high) if (gt_square_dekker_high__square_dekker_high_0_) else (_square_dekker_high_0_)
+        )
+        _add_fast2sum_high_2_: numpy.float64 = (constant_fneg1) + (mxh)
+        mnh: numpy.float64 = (
+            (_square_dekker_high_0_) if (gt_square_dekker_high__square_dekker_high_0_) else (square_dekker_high)
+        )
+        _add_fast2sum_high_1_: numpy.float64 = (_add_fast2sum_high_2_) + (mnh)
         veltkamp_splitter_constant: numpy.float64 = numpy.float64(134217729.0)
         multiply_veltkamp_splitter_constant_y: numpy.float64 = (veltkamp_splitter_constant) * (y)
         yh: numpy.float64 = (multiply_veltkamp_splitter_constant_y) + ((y) - (multiply_veltkamp_splitter_constant_y))
@@ -42,8 +49,8 @@ def log_0(z: numpy.complex128) -> numpy.complex128:
             (((-(_square_dekker_high_0_)) + ((xh) * (xh))) + (multiply_xh_xl)) + (multiply_xh_xl)
         ) + ((xl) * (xl))
         add_fast2sum_high: numpy.float64 = (_add_fast2sum_high_0_) + (_square_dekker_low_0_)
-        add_fast2sum_low: numpy.float64 = (square_dekker_high) - ((_add_fast2sum_high_2_) - (constant_fneg1))
-        _add_fast2sum_low_0_: numpy.float64 = (_square_dekker_high_0_) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
+        add_fast2sum_low: numpy.float64 = (mxh) - ((_add_fast2sum_high_2_) - (constant_fneg1))
+        _add_fast2sum_low_0_: numpy.float64 = (mnh) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
         _add_fast2sum_low_1_: numpy.float64 = (square_dekker_low) - ((_add_fast2sum_high_0_) - (_add_fast2sum_high_1_))
         _add_fast2sum_low_2_: numpy.float64 = (_square_dekker_low_0_) - ((add_fast2sum_high) - (_add_fast2sum_high_0_))
         sum_fast2sum_high: numpy.float64 = (add_fast2sum_high) + (
@@ -54,7 +61,7 @@ def log_0(z: numpy.complex128) -> numpy.complex128:
         abs_y: numpy.float64 = numpy.abs(y)
         mx: numpy.float64 = max(abs_x, abs_y)
         mn: numpy.float64 = min(abs_x, abs_y)
-        mn_over_mx: numpy.float64 = (numpy.float64(1.0)) if (numpy.equal(mn, mx, dtype=numpy.bool_)) else ((mn) / (mx))
+        mn_over_mx: numpy.float64 = (numpy.float64(1.0)) if (numpy.equal(mn, mx)) else ((mn) / (mx))
         result = make_complex(
             (
                 ((half) * (numpy.log1p(sum_fast2sum_high)))
@@ -72,10 +79,17 @@ def log_1(z: numpy.complex64) -> numpy.complex64:
         constant_fneg1: numpy.float32 = numpy.float32(-1.0)
         y: numpy.float32 = (z).imag
         square_dekker_high: numpy.float32 = (y) * (y)
-        _add_fast2sum_high_2_: numpy.float32 = (constant_fneg1) + (square_dekker_high)
         x: numpy.float32 = (z).real
         _square_dekker_high_0_: numpy.float32 = (x) * (x)
-        _add_fast2sum_high_1_: numpy.float32 = (_add_fast2sum_high_2_) + (_square_dekker_high_0_)
+        gt_square_dekker_high__square_dekker_high_0_: numpy.bool_ = (square_dekker_high) > (_square_dekker_high_0_)
+        mxh: numpy.float32 = (
+            (square_dekker_high) if (gt_square_dekker_high__square_dekker_high_0_) else (_square_dekker_high_0_)
+        )
+        _add_fast2sum_high_2_: numpy.float32 = (constant_fneg1) + (mxh)
+        mnh: numpy.float32 = (
+            (_square_dekker_high_0_) if (gt_square_dekker_high__square_dekker_high_0_) else (square_dekker_high)
+        )
+        _add_fast2sum_high_1_: numpy.float32 = (_add_fast2sum_high_2_) + (mnh)
         veltkamp_splitter_constant: numpy.float32 = numpy.float32(4097.0)
         multiply_veltkamp_splitter_constant_y: numpy.float32 = (veltkamp_splitter_constant) * (y)
         yh: numpy.float32 = (multiply_veltkamp_splitter_constant_y) + ((y) - (multiply_veltkamp_splitter_constant_y))
@@ -93,8 +107,8 @@ def log_1(z: numpy.complex64) -> numpy.complex64:
             (((-(_square_dekker_high_0_)) + ((xh) * (xh))) + (multiply_xh_xl)) + (multiply_xh_xl)
         ) + ((xl) * (xl))
         add_fast2sum_high: numpy.float32 = (_add_fast2sum_high_0_) + (_square_dekker_low_0_)
-        add_fast2sum_low: numpy.float32 = (square_dekker_high) - ((_add_fast2sum_high_2_) - (constant_fneg1))
-        _add_fast2sum_low_0_: numpy.float32 = (_square_dekker_high_0_) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
+        add_fast2sum_low: numpy.float32 = (mxh) - ((_add_fast2sum_high_2_) - (constant_fneg1))
+        _add_fast2sum_low_0_: numpy.float32 = (mnh) - ((_add_fast2sum_high_1_) - (_add_fast2sum_high_2_))
         _add_fast2sum_low_1_: numpy.float32 = (square_dekker_low) - ((_add_fast2sum_high_0_) - (_add_fast2sum_high_1_))
         _add_fast2sum_low_2_: numpy.float32 = (_square_dekker_low_0_) - ((add_fast2sum_high) - (_add_fast2sum_high_0_))
         sum_fast2sum_high: numpy.float32 = (add_fast2sum_high) + (
@@ -105,7 +119,7 @@ def log_1(z: numpy.complex64) -> numpy.complex64:
         abs_y: numpy.float32 = numpy.abs(y)
         mx: numpy.float32 = max(abs_x, abs_y)
         mn: numpy.float32 = min(abs_x, abs_y)
-        mn_over_mx: numpy.float32 = (numpy.float32(1.0)) if (numpy.equal(mn, mx, dtype=numpy.bool_)) else ((mn) / (mx))
+        mn_over_mx: numpy.float32 = (numpy.float32(1.0)) if (numpy.equal(mn, mx)) else ((mn) / (mx))
         result = make_complex(
             (
                 ((half) * (numpy.log1p(sum_fast2sum_high)))
