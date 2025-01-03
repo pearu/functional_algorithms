@@ -106,6 +106,9 @@ def get_inputs():
         ("log2", np.complex64, dict(use_fast2sum=False)),
         ("log2", np.complex64, dict(use_native_log2=True)),
         ("log2", np.complex128, {}),
+        ("exp", np.complex64, {}),
+        ("exp", np.complex64, dict(use_native_exp=True)),
+        ("exp", np.complex128, {}),
         # ("tan", np.float32, dict()),  # real_tan is not implemented
         ("tan", np.float32, dict(use_native_tan=True)),  # tan(x)
         ("tan", np.float32, dict(use_native_tan=True, use_upcast_tan=True)),  # float(tan(double(x)))

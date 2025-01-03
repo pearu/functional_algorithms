@@ -313,7 +313,11 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
                     table.append((value, samples[re, im], r, e, np_value))
 
         if len(table) > max_rows:
-            table = table[: max_rows // 2] + [(f"...",) * len(table[0])] + table[-max_rows // 2 :]
+            table = (
+                table[: max_rows // 2]
+                + [(f"<snip {len(table) - max_rows} rows>",) + ("...",) * (len(table[0]) - 1)]
+                + table[-max_rows // 2 :]
+            )
         col_widths = [max(len(str(row[col])) for row in table) for col in range(len(table[0]))]
         table.insert(1, tuple("-" * w for w in col_widths))
         col_fmt = "| " + " | ".join([f"{{{i}:>{w}}}" for i, w in enumerate(col_widths)]) + " |"

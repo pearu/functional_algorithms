@@ -32,6 +32,7 @@ trace_arguments = dict(
     complex_log=[(":complex", ":complex")],
     complex_log10=[(":complex", ":complex")],
     complex_log2=[(":complex", ":complex")],
+    complex_exp=[(":complex", ":complex")],
 )
 
 source_file_extension = ".cpp"

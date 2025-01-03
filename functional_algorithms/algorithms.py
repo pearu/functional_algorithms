@@ -1614,3 +1614,59 @@ def sqrt(ctx, z: complex | float):
     See complex_sqrt for more information.
     """
     assert 0  # unreachable
+
+
+@definition("exp")
+def exp(ctx, z: complex | float):
+    assert 0  # unreachable
+
+
+@definition("exp", domain="complex")
+def complex_exp(ctx, z: complex):
+    """Exponential on complex inputs:
+
+      exp(z) = exp(x) * (cos(y) + I * sin(y))
+
+    where z = x + I * y.
+
+    Algorithm
+    ---------
+
+    While the above expression is accurate for a large part of the
+    complex plane, there is two cases that require special attention.
+
+    First, when `y == 0`, we'll define
+
+      imag(exp(z)) = 0
+
+    that otherwise for overflowing `exp(x)` would evaluate to nan.
+
+    Second, the overflow case `exp(x) -> inf` is compensated when `y`
+    is close to the zeros of `cos(y)` or `sin(y)` and the real or
+    imaginary parts of `exp(z)` ought to be finite. Therefore, for the
+    `exp(x) -> inf` case, we'll use
+
+      exp(z) = exp(x / 2) * (cos(y) + I * sin(y)) * exp(x / 2)
+
+    Notice that for `y != 0`, neither `cos(y)` nor `sin(y)` is never
+    zero on the set of floating point numbers.
+    """
+    x = z.real
+    y = z.imag
+    zero = ctx.constant(0, x)
+    half = ctx.constant(0.5, x)
+
+    cs = ctx.cos(y)
+    sn = ctx.sin(y)
+
+    e2 = ctx.exp(x * half)
+    e = ctx.exp(x)
+
+    re = ctx.select(e.is_posinf, e2 * cs * e2, e * cs)
+    im = ctx.select(e.is_posinf, e2 * sn * e2, e * sn)
+    return ctx(ctx.complex(re, ctx.select(y == zero, zero, im)))
+
+
+@definition("exp", domain="real")
+def real_exp(ctx, z: float):
+    return NotImplemented

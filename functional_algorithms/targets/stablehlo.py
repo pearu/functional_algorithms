@@ -24,6 +24,7 @@ trace_arguments = dict(
     log=[(":complex",)],
     log10=[(":complex",)],
     log2=[(":complex",)],
+    exp=[(":complex",)],
 )
 
 
@@ -75,14 +76,14 @@ kind_to_target = dict(
     atan="CHLO_AtanOp",
     atanh="CHLO_AtanhOp",
     atan2="StableHLO_Atan2Op",
-    cos=NotImplemented,
+    cos="StableHLO_CosineOp",
     cosh=NotImplemented,
-    sin=NotImplemented,
+    sin="StableHLO_SineOp",
     sinh=NotImplemented,
     tan=NotImplemented,
     tanh=NotImplemented,
-    exp=NotImplemented,
-    expm1=NotImplemented,
+    exp="StableHLO_ExpOp",
+    expm1="StableHLO_Expm1Op",
     log="StableHLO_LogOp",
     log1p="StableHLO_Log1pOp",
     log2=NotImplemented,
