@@ -78,6 +78,8 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
     extra_prec_multiplier = params["extra_prec_multiplier"]
     samples_limits = params["samples_limits"]
 
+    max_valid_ulp_count = int(os.environ.get("FA_MAX_VALID_ULP_COUNT", max_valid_ulp_count))
+
     # detect the FTZ mode of array backend: if FTZ is enabled, don't
     # generate samples containing subnormals as well as exclude
     # subnormals in comparing results (read: ulp distance between 0

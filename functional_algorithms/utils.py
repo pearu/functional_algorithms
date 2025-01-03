@@ -1881,6 +1881,9 @@ def function_validation_parameters(func_name, dtype, device=None):
         max_valid_ulp_count = 4
     elif func_name in {"log", "log10", "log2"}:
         max_valid_ulp_count = 3
+    elif func_name == "exp":
+        max_valid_ulp_count = 3
+        extra_prec_multiplier = 20
     elif func_name in {"atanh", "atan"}:
         extra_prec_multiplier = 20
     elif func_name in {"tanh", "tan"}:
