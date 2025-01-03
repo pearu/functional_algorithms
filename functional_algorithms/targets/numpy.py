@@ -94,6 +94,10 @@ trace_arguments = dict(
         (":complex128",),
         (":complex64",),
     ],
+    exp=[
+        (":complex128",),
+        (":complex64",),
+    ],
 )
 
 

@@ -36,6 +36,7 @@ trace_arguments = dict(
     log=[(":float",), (":complex",)][1:],
     log10=[(":float",), (":complex",)][1:],
     log2=[(":float",), (":complex",)][1:],
+    exp=[(":float",), (":complex",)][1:],
 )
 
 

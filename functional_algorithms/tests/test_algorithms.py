@@ -32,6 +32,7 @@ def dtype_name(request):
         "log",
         "log10",
         "log2",
+        "exp",
     ],
 )
 def func_name(request):
@@ -57,6 +58,7 @@ def func_name(request):
         "log",
         "log10",
         "log2",
+        "exp",
     ],
 )
 def unary_func_name(request):

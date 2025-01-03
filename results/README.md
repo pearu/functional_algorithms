@@ -104,14 +104,17 @@ Finally,
 | log2<sub>2</sub> | complex64 | 661149 | 340692 | 160 | - | - | using 2sum |
 | log2<sub>3</sub> | complex64 | 635345 | 366376 | 280 | - | - | using native log2 |
 | log2 | complex128 | 653873 | 348126 | 2 | - | - | - |
+| exp | complex64 | 909996 | 85651 | 6172 | 182 | - | - |
+| exp<sub>2</sub> | complex64 | 942481 | 59116 | 400 | - | 4 | using native exp |
+| exp | complex128 | 983355 | 18298 | 348 | - | - | - |
 | tan | float32 | 866723 | 132062 | 1168 | 48 | - | using native tan |
-| tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tan, native tan |
+| tan<sub>2</sub> | float32 | 1000001 | - | - | - | - | using native tan, upcast tan |
 | real_naive_tan | float32 | 819251 | 179168 | 1580 | 2 | - | - |
-| real_naive_tan<sub>2</sub> | float32 | 825895 | 173622 | 484 | - | - | using upcast sin, upcast cos |
-| real_naive_tan<sub>3</sub> | float32 | 1000001 | - | - | - | - | using upcast sin, upcast divide, upcast cos |
+| real_naive_tan<sub>2</sub> | float32 | 825895 | 173622 | 484 | - | - | using upcast cos, upcast sin |
+| real_naive_tan<sub>3</sub> | float32 | 1000001 | - | - | - | - | using upcast cos, upcast divide, upcast sin |
 | tan | complex64 | 783819 | 197524 | 19806 | 792 | 60 | using native tan |
-| tan<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using upcast tan, native tan |
+| tan<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using native tan, upcast tan |
 | tanh | float32 | 985109 | 14892 | - | - | - | using native tanh |
-| tanh<sub>2</sub> | float32 | 1000001 | - | - | - | - | using upcast tanh, native tanh |
+| tanh<sub>2</sub> | float32 | 1000001 | - | - | - | - | using native tanh, upcast tanh |
 | tanh | complex64 | 783819 | 197524 | 19806 | 792 | 60 | using native tanh |
-| tanh<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using upcast tanh, native tanh |
+| tanh<sub>2</sub> | complex64 | 1001409 | 592 | - | - | - | using native tanh, upcast tanh |
