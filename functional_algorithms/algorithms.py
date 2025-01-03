@@ -1669,4 +1669,4 @@ def complex_exp(ctx, z: complex):
 
 @definition("exp", domain="real")
 def real_exp(ctx, z: float):
-    return NotImplemented
+    return ctx.exp(z)  # using native exp

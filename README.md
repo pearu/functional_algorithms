@@ -41,6 +41,9 @@ following math functions:
 - `asinh(z: complex | float)`, using the relation `asinh(z) = -I * asin(z * I)`,
 - `atan(z: complex | float)`, using the relation `atan(z) = -I * atanh(z * I)`,
 - `atanh(z: complex | float)`, using a custom algorithm,
+- `exp(z: complex)`, using `exp(z) = exp(z.real) * (cos(z.imag) + I *
+  sin(z.imag))` with accurate handling of cases when `z.real` is
+  large, or `z.imag` is zero.
 - `hypot(x: float, y: float)` and `absolute(z: complex)`,
 - `log(z: complex)` using a custom algorithm that employs Dekker's product and Fast2Sum algorithm,
 - `log10(z: complex)` using `log10(z) = log(z) / log(10)`,
@@ -58,7 +61,8 @@ states. For instance, the following algorithms are inaccurate on
 specific regions of complex plane when `denormals-are-zeros` bit is
 set:
 
-- `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `log`, `log2`, `log10`, `log1p`, `sqrt`, `square`,
+- `acos`, `acosh`, `asin`, `asinh`, `atan`, `atanh`, `exp`, `log`,
+  `log2`, `log10`, `log1p`, `sqrt`, `square`,
 
 The following algorithms are inaccurate on specific regions of complex
 plane when `flush-to-zero` bit is set:
