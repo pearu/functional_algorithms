@@ -63,7 +63,11 @@ def float2mpf(ctx, x):
 
 
 def mpf2float(dtype, x, flush_subnormals=False):
-    """Convert mpf object to numpy floating-point number."""
+    """Convert mpf object to numpy floating-point number.
+
+    When x is larger than largest value of the floating point system,
+    use round towards zero, otherwise round to nearest.
+    """
     ctx = x.context
     if ctx.isfinite(x):
         sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
@@ -82,17 +86,27 @@ def mpf2float(dtype, x, flush_subnormals=False):
         # aleaxit/gmpy#507, hence we convert mpz to int:
         man = int(man)
         largest = vectorize_with_mpmath.float_max[fp_format]
-        if fp_format == "longdouble":
-            # numpy longdouble does support comparing against large integers
-            largest = int(largest)
-        # make sure that ldexp(man, exp) does not produce infinities:
+        # Two reasons to convert largest to int: (i) numpy longdouble
+        # does support comparing against large integers, and (ii)
+        # comparison int(man) > dtype(largest) fails with
+        # OverflowError.
+        largest = int(largest)
+        # try avoiding infinity from ldexp(man, exp) by rounding down
         while man > largest:
             man >>= 1
             exp += 1
-
-        man = dtype(-man if sign else man)
-        r = numpy.ldexp(man, exp)
-        assert numpy.isfinite(r), (x, r, x._mpf_, man)
+        r = numpy.ldexp(dtype(man), exp)
+        if numpy.isinf(r):
+            assert exp > 0
+            for e in range(1, vectorize_with_mpmath.float_maxexp[fp_format] - exp):
+                m = (man >> e) << e  # round down at the cost of loosing precision
+                assert m, (m, man, e, exp)
+                r_ = numpy.ldexp(dtype(m), exp)
+                if numpy.isfinite(r_):
+                    r = r_
+                    break
+        r = -r if sign else r
+        assert numpy.isfinite(r), (x, r, x._mpf_, bc, man, exp, largest, vectorize_with_mpmath.float_maxexp[fp_format])
         return r
     elif ctx.isnan(x):
         return dtype(numpy.nan)
@@ -228,6 +242,7 @@ def split_veltkamp(x, s=None, C=None):
     precision of floating point system.
     """
     # https://inria.hal.science/hal-04480440v1
+    # https://hal.science/hal-04624238/document
     if C is None:
         p = get_precision(x)
         if s is None:
@@ -744,7 +759,8 @@ class mpmath_array_api:
         return x * x
 
     def expm1(self, x):
-        return x.context.expm1(x)
+        ctx = x.context
+        return ctx.expm1(x)
 
     def _log_at_inf(self, re, im):
         # Workaround mpmath 1.3 bug in log(+-inf+-infj) evaluation (see mpmath/mpmath#774).
@@ -1590,6 +1606,14 @@ def isfloat(value):
     return isinstance(value, (float, numpy.floating))
 
 
+def diff_log2ulp(x, y, flush_subnormals=UNSPECIFIED, equal_nan=False) -> int:
+    """Return log2-ULP distance between two floating point numbers:
+
+    diff_log2ulp(x, y) = diff_ulp(x, y).bit_length()
+    """
+    return diff_ulp(x, y, flush_subnormals=flush_subnormals, equal_nan=equal_nan).bit_length()
+
+
 def diff_ulp(x, y, flush_subnormals=UNSPECIFIED, equal_nan=False) -> int:
     """Return ULP distance between two floating point numbers.
 
@@ -1882,6 +1906,9 @@ def function_validation_parameters(func_name, dtype, device=None):
     elif func_name in {"log", "log10", "log2"}:
         max_valid_ulp_count = 3
     elif func_name == "exp":
+        max_valid_ulp_count = 3
+        extra_prec_multiplier = 20
+    elif func_name == "expm1":
         max_valid_ulp_count = 3
         extra_prec_multiplier = 20
     elif func_name in {"atanh", "atan"}:

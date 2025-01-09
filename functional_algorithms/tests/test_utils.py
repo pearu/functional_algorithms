@@ -35,6 +35,36 @@ def test_diff_ulp(real_dtype):
     assert utils.diff_ulp(-fi.tiny, fi.tiny, flush_subnormals=True) == 2
 
 
+def test_diff_log2ulp(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+    bw = {numpy.float16: 16, numpy.float32: 32, numpy.float64: 64}[real_dtype]
+    fi = numpy.finfo(real_dtype)
+
+    assert utils.diff_log2ulp(fi.tiny, fi.tiny, flush_subnormals=True) == 0
+    assert utils.diff_log2ulp(real_dtype(0), real_dtype(0), flush_subnormals=True) == 0
+
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(0.003), flush_subnormals=True) == -fi.negep + 2
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(0.03), flush_subnormals=True) == -fi.negep + 1
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(0.3), flush_subnormals=True) == 0
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(30), flush_subnormals=True) == -fi.negep + 2
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(300), flush_subnormals=True) == -fi.negep + 3
+    assert utils.diff_log2ulp(real_dtype(0.3), real_dtype(30000), flush_subnormals=True) == -fi.negep + 4
+
+    assert utils.diff_log2ulp(real_dtype(0), fi.tiny, flush_subnormals=True) == 1
+    assert utils.diff_log2ulp(-fi.tiny, fi.tiny, flush_subnormals=True) == 2
+
+    assert utils.diff_log2ulp(real_dtype(0), fi.smallest_subnormal, flush_subnormals=False) == 1
+    assert utils.diff_log2ulp(real_dtype(0), fi.tiny, flush_subnormals=False) == -fi.negep
+    assert utils.diff_log2ulp(-fi.tiny, fi.tiny, flush_subnormals=False) == -fi.negep + 1
+
+    assert utils.diff_log2ulp(real_dtype(0), fi.max, flush_subnormals=True) == bw - 1
+    assert utils.diff_log2ulp(fi.min, fi.max, flush_subnormals=True) == bw
+    assert utils.diff_log2ulp(real_dtype(0), real_dtype(numpy.inf), flush_subnormals=True) == bw + 1
+    assert utils.diff_log2ulp(real_dtype(-numpy.inf), real_dtype(numpy.inf), flush_subnormals=True) == bw + 1
+    assert utils.diff_log2ulp(real_dtype(numpy.inf), real_dtype(numpy.inf), flush_subnormals=True) == 0
+
+
 def _check_real_samples(
     r,
     include_infinity=None,
@@ -444,6 +474,9 @@ def test_multiply_dekker(real_dtype):
             with numpy.errstate(over="ignore", invalid="ignore"):
                 r1, r2 = utils.multiply_dekker(x, y)
 
+            if not (numpy.isfinite(r1) and numpy.isfinite(r2)):
+                continue
+
             x_mp = utils.float2mpf(ctx, x)
             y_mp = utils.float2mpf(ctx, y)
 
@@ -451,7 +484,7 @@ def test_multiply_dekker(real_dtype):
             r2_mp = utils.float2mpf(ctx, r2)
 
             if abs(r2) >= fi.smallest_normal:
-                assert x_mp * y_mp == r1_mp + r2_mp
+                assert x_mp * y_mp == r1_mp + r2_mp, (x_mp * y_mp, r1_mp + r2_mp, r1, r2)
             else:
                 # Dekker product is inaccurate when r2 is subnormal
                 pass
