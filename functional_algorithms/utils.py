@@ -86,9 +86,11 @@ def mpf2float(dtype, x, flush_subnormals=False):
         # aleaxit/gmpy#507, hence we convert mpz to int:
         man = int(man)
         largest = vectorize_with_mpmath.float_max[fp_format]
-        if fp_format == "longdouble":
-            # numpy longdouble does support comparing against large integers
-            largest = int(largest)
+        # Two reasons to convert largest to int: (i) numpy longdouble
+        # does support comparing against large integers, and (ii)
+        # comparison int(man) > dtype(largest) fails with
+        # OverflowError.
+        largest = int(largest)
         # try avoiding infinity from ldexp(man, exp) by rounding down
         while man > largest:
             man >>= 1
