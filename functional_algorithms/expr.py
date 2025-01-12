@@ -337,6 +337,10 @@ class Expr:
         # updates) have global effect within the given context.
         obj._serialized = obj._serialize()
 
+        # serialize_id is an unique int id only within the given
+        # context that will be initialized in _register_expression
+        obj._serialize_id = None
+
         # props is a dictionary that contains reference_name and
         # force_ref.  In general, its content could be anything. For
         # instance, the results of `_is_foo` method calls are cached
@@ -357,9 +361,21 @@ class Expr:
         # If ref is None, no assignment of ref value will be
         # attempted.
         obj.props = dict()
+
         return context._register_expression(obj)
 
     def _serialize(self):
+        if self.kind == "symbol":
+            return (self.kind, *self.operands)
+        if self.kind == "constant":
+            value, like = self.operands
+            return (
+                self.kind,
+                value._serialize if isinstance(value, Expr) else (value, type(value).__name__),
+                like._serialize_id,
+            )
+        return (self.kind, *(operand._serialize_id for operand in self.operands))
+
         # warning: the serialized value is unique only within the
         # given context
         if self.kind == "symbol":
