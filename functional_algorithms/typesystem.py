@@ -12,6 +12,14 @@ class Type:
         self.kind = kind
         self.param = param
 
+    def __hash__(self):
+        return hash((self.kind, self.param))
+
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            return self.context is other.context and self.kind == other.kind and self.param == other.param
+        return False
+
     @property
     def bits(self):
         if self.kind in {"float", "complex", "integer", "boolean"}:
