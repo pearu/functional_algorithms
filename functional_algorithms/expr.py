@@ -335,11 +335,12 @@ class Expr:
         # uniquely identified by its serialized string value. However,
         # expression props are mutable. Therefore. mutations (e.g. ref
         # updates) have global effect within the given context.
-        obj._serialized = obj._serialize()
+        obj._compute_serialized()
 
-        # serialize_id is an unique int id only within the given
-        # context that will be initialized in _register_expression
-        obj._serialize_id = None
+        # __serialize_id is an unique int id only within the given
+        # context. __serialize_id will be initialized in
+        # _register_expression
+        obj._set_serialized_id(None)
 
         # props is a dictionary that contains reference_name and
         # force_ref.  In general, its content could be anything. For
@@ -364,26 +365,22 @@ class Expr:
 
         return context._register_expression(obj)
 
-    def _serialize(self):
+    def _compute_serialized(self):
         if self.kind == "symbol":
-            return (self.kind, *self.operands)
-        if self.kind == "constant":
+            r = (self.kind, *self.operands)
+        elif self.kind == "constant":
             value, like = self.operands
-            return (
+            r = (
                 self.kind,
-                value._serialize if isinstance(value, Expr) else (value, type(value).__name__),
-                like._serialize_id,
+                value.key if isinstance(value, Expr) else (value, type(value).__name__),
+                like.key,
             )
-        return (self.kind, *(operand._serialize_id for operand in self.operands))
+        else:
+            r = (self.kind, *(operand.key for operand in self.operands))
+        self.__serialized = r
 
-        # warning: the serialized value is unique only within the
-        # given context
-        if self.kind == "symbol":
-            return f"{self.operands[0]}:{self.operands[1]}"
-        if self.kind == "constant":
-            value, like = self.operands
-            return f"{value}_{type(value).__name__}:type({like._serialized})"
-        return f'{self.kind}({",".join(operand._serialized for operand in self.operands)})'
+    def _set_serialized_id(self, i):
+        self.__serialize_id = i
 
     def implement_missing(self, target):
         warn_once("Calling `Expr.implement_missing(target)` is deprecated. Use `Expr.rewrite(target)` instead.", stacklevel=2)
@@ -499,12 +496,25 @@ class Expr:
     def key(self):
         """Return a key unique to this expression instance and that can be
         used as a dictionary key.
+
+        Warning: the key is unique only within the given context.
         """
         # Sometimes, returning id(self) would be also a valid key, but
         # in algorithms (e.g. op_collect with commutative=True) that
         # use keys sorting, this would introduce non-deterministic
         # results.
-        return self._serialized
+        return self.__serialized
+
+    @property
+    def intkey(self):
+        """Return a integer valued key that is unique to this expression
+        instance and that can be used as a dictionary key. Different
+        from the .key property, the .intkey property should not be
+        used in algorithms that relay on sorting of expressions.
+
+        Warning: the intkey is unique only within the given context.
+        """
+        return self.__serialize_id
 
     @property
     def ref(self):
@@ -1070,7 +1080,7 @@ class Expr:
 def assert_equal(result, expected):
     assert isinstance(result, type(expected)), (type(result), type(expected))
     if isinstance(expected, Expr):
-        assert result is expected, (result._serialized, expected._serialized)
+        assert result is expected, (result.key, expected.key)
     elif isinstance(expected, tuple):
         assert len(result) == len(expected), (len(result), len(expected))
         for result_item, expected_item in zip(result, expected):

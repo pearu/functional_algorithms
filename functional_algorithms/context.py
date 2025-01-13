@@ -73,14 +73,14 @@ class Context:
         # implement __hash__/__eq__ on purpose: __eq__ is used to
         # construct equality expressions. Also, __bool__ raises an
         # exception.
-        prev = self._expressions.get(expr._serialized)
+        prev = self._expressions.get(expr.key)
         if prev is None:
             # each expression is assigned an unique id that is used as
             # a replacement of operands during serialization
-            expr._serialize_id = self._expression_counter
+            expr._set_serialized_id(self._expression_counter)
             self._expression_counter += 1
 
-            prev = self._expressions[expr._serialized] = expr
+            prev = self._expressions[expr.key] = expr
             # origin is either an empty string (top stack) or a
             # function name modified with an identifier unique to the
             # instance of calling the function. This allows

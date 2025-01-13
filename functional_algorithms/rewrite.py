@@ -13,7 +13,7 @@ class Printer:
         self.name_counter = 0
 
     def getname(self, expr):
-        uid = expr._serialized
+        uid = expr.intkey
 
         if uid in self.inames:
             return self.inames[uid]
@@ -299,7 +299,7 @@ def op_expand(
     dct = {}
     for item in over_lst:
         e = op_rewrite(item, commutative=commutative, idempotent=idempotent, kind=kind)
-        s = e._serialized
+        s = e.key
         lst.append(s)
         dct[s] = e
     if over_commutative:
@@ -338,7 +338,7 @@ def op_flatten(expr, commutative=False, idempotent=False, kind=None, _kind=None)
         lst = []
         dct = {}
         for e in op_flatten(expr, _kind=kind, **kwargs):
-            s = e._serialized
+            s = e.key
             lst.append(s)
             dct[s] = e
         if commutative:
@@ -382,24 +382,6 @@ def op_unflatten(operands, kind):
 
 class Rewriter:
 
-    patterns = {
-        "lt(constant(0, _M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
-        " constant(1000000000000.0, _M0_)))": (
-            "ctx.constant(True, ctx.symbol(None, 'boolean'))",
-            "constant(True, _M1_)",
-        ),
-        "eq(maximum(constant(1, _M0_), abs(_M0_)), minimum(constant(1, _M0_), abs(_M0_)))": (
-            "ctx.eq(ctx.constant(1, _M0_), abs(_M0_))",
-            "eq(constant(1, _M0_), abs(_M0_))",
-        ),
-        "select(logical_and(ge(abs(_M0_), multiply(divide(sqrt(constant(largest, _M0_)), constant(8, _M0_)),"
-        " constant(1e-06, _M0_))), logical_not(eq(abs(_M0_), constant(posinf, _M0_)))),"
-        " divide(constant(0, _M0_), abs(_M0_)), constant(0, _M0_))": (
-            "ctx.constant(0, _M0_)",
-            "constant(0, _M0_)",
-        ),
-    }
-
     def __init__(self):
         self._printer = Printer()
 
@@ -407,16 +389,6 @@ class Rewriter:
         result = getattr(self, expr.kind, self._notimpl)(expr)
         if result is not None:
             return result
-
-        # Apply static pattern rewrites:
-        s = self._printer.tostring(expr)
-        if s in self.patterns:
-            replacement, expected = self.patterns[s]
-            r = eval(replacement, dict(ctx=expr.context, **self._printer.names))
-            rs = self._printer.tostring(r)
-            if rs == expected:
-                return r
-            raise ValueError(f"expected rewrite of `{s}` is `{expected}`, got `{rs}`")
 
     def _todo(self, expr):
         print(f'TODO: rewrite {expr.kind}({", ".join(op.kind for op in expr.operands)})')
@@ -806,7 +778,8 @@ class Rewriter:
             if isinstance(value, bool):
                 return x if value else y
 
-            # self._todo(expr)
+        if x is y:
+            return x
 
     def sqrt(self, expr):
         (x,) = expr.operands
@@ -876,15 +849,15 @@ class RewriteContext:
         self.cache = {}
 
     def __contains__(self, expr):
-        return expr.key in self.cache
+        return expr.intkey in self.cache
 
     def __call__(self, original, new=None):
         if new is not None:
-            if original.key in self.cache:
-                cached = self.cache[original.key]
+            if original.intkey in self.cache:
+                cached = self.cache[original.intkey]
                 assert new is cached
             else:
-                self.cache[original.key] = new
+                self.cache[original.intkey] = new
                 force_ref = original.props.get("force_ref")
                 if force_ref is not None:
                     new.props.update(force_ref=force_ref)
@@ -893,7 +866,7 @@ class RewriteContext:
                     new.props.update(reference_name=ref_name)
             return new
         else:
-            return self.cache[original.key]
+            return self.cache[original.intkey]
 
 
 class Substitute:
@@ -917,7 +890,7 @@ class Substitute:
                 if expr.kind in {"symbol", "constant"} and isinstance(expr.operands[0], str):
                     is_a_match = match == expr.operands[0]
             elif isinstance(match, _expr.Expr):
-                is_a_match = match.key == expr.key
+                is_a_match = match.key == expr.key  # TODO: is it equivalent to `match is expr`?
             elif callable(match):
                 is_a_match = match(expr)
             else:
