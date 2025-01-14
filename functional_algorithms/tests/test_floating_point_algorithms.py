@@ -19,6 +19,14 @@ def binary_op(request):
     return request.param
 
 
+class NumpyContext:
+    """A light-weight context for evaluating select with numpy inputs."""
+
+    def select(self, cond, x, y):
+        assert isinstance(cond, (bool, numpy.bool_))
+        return x if cond else y
+
+
 def test_split_veltkamp(dtype):
     p = utils.get_precision(dtype)
     C = utils.get_veltkamp_splitter_constant(dtype)
@@ -44,7 +52,7 @@ def test_split_veltkamp(dtype):
         numpy.pi,
     ]:
         x = dtype(f)
-        xh, xl = fpa.split_veltkamp(x, C)
+        xh, xl = fpa.split_veltkamp(None, x, C)
         assert x == xh + xl
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
         bl = utils.tobinary(xl).split("p")[0].lstrip("-")
@@ -57,7 +65,7 @@ def test_split_veltkamp(dtype):
     max_x = {11: 1007.0, 24: 8.3e34, 53: 1.33e300}[p]
     size = 1000
     for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-        xh, xl = fpa.split_veltkamp(x, C)
+        xh, xl = fpa.split_veltkamp(None, x, C)
         assert x == xh + xl
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
         bl = utils.tobinary(xl).split("p")[0].lstrip("-")
@@ -99,7 +107,7 @@ def test_mul_dekker(dtype):
             x_mp = utils.float2mpf(ctx, x)
             for y in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
                 xy = x * y
-                xyh, xyl = fpa.mul_dekker(x, y, C)
+                xyh, xyl = fpa.mul_dekker(None, x, y, C)
                 assert numpy.isfinite(xyl)
                 assert xyh == xy
                 y_mp = utils.float2mpf(ctx, y)
@@ -149,7 +157,7 @@ def test_add_2sum(dtype):
             x_mp = utils.float2mpf(ctx, x)
             for y in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
                 xy = x + y
-                xyh, xyl = fpa.add_2sum(x, y)
+                xyh, xyl = fpa.add_2sum(None, x, y)
                 assert xyh == xy
 
                 y_mp = utils.float2mpf(ctx, y)
@@ -167,7 +175,7 @@ def test_add_2sum(dtype):
                 if abs(x) < abs(y):
                     continue
 
-                xyh, xyl = fpa.add_2sum(x, y, fast=True)
+                xyh, xyl = fpa.add_2sum(None, x, y, fast=True)
                 assert xyh == xy
 
                 x_mp = utils.float2mpf(ctx, x)
@@ -225,7 +233,8 @@ def test_accuracy(dtype, binary_op):
                 result = [
                     utils.float2mpf(ctx, hi) + utils.float2mpf(ctx, lo)
                     for hi, lo in map(
-                        lambda args: fpa.add_2sum(args[0], args[1], fast=binary_op == "add_fast2sum"), zip(samples1, samples2)
+                        lambda args: fpa.add_2sum(None, args[0], args[1], fast=binary_op == "add_fast2sum"),
+                        zip(samples1, samples2),
                     )
                 ]
             with numpy.errstate(over="ignore", invalid="ignore"):
@@ -236,7 +245,7 @@ def test_accuracy(dtype, binary_op):
             with numpy.errstate(over="ignore", invalid="ignore"):
                 result = [
                     utils.float2mpf(ctx, hi) + utils.float2mpf(ctx, lo)
-                    for hi, lo in map(lambda args: fpa.mul_dekker(args[0], args[1], C), zip(samples1, samples2))
+                    for hi, lo in map(lambda args: fpa.mul_dekker(None, args[0], args[1], C), zip(samples1, samples2))
                 ]
             with numpy.errstate(over="ignore", invalid="ignore"):
                 native = [utils.float2mpf(ctx, x * y) for x, y in zip(samples1, samples2)]
@@ -322,23 +331,24 @@ def test_is_power_of_two(dtype):
     for e in range(min_e, max_e):
         x = dtype(2**e)
         assert utils.tobinary(x).startswith("1p") or x == 0
-        assert fpa.is_power_of_two(x, Q, P)
-        assert not fpa.is_power_of_two(x, Q, P, invert=True)
+        assert fpa.is_power_of_two(None, x, Q, P)
+        assert not fpa.is_power_of_two(None, x, Q, P, invert=True)
 
         x1 = numpy.nextafter(x, dtype(numpy.inf))
         while utils.tobinary(abs(x1)).startswith("1p"):
             x1 = numpy.nextafter(x1, dtype(numpy.inf))
-        assert not fpa.is_power_of_two(x1, Q, P)
-        assert fpa.is_power_of_two(x1, Q, P, invert=True)
+        assert not fpa.is_power_of_two(None, x1, Q, P)
+        assert fpa.is_power_of_two(None, x1, Q, P, invert=True)
 
         x1 = numpy.nextafter(x, dtype(-numpy.inf))
         while utils.tobinary(abs(x1)).startswith("1p") or x1 == 0:
             x1 = numpy.nextafter(x1, dtype(-numpy.inf))
-        assert not fpa.is_power_of_two(x1, Q, P)
-        assert fpa.is_power_of_two(x1, Q, P, invert=True)
+        assert not fpa.is_power_of_two(None, x1, Q, P)
+        assert fpa.is_power_of_two(None, x1, Q, P, invert=True)
 
 
 def test_add_3sum(dtype):
+    np_ctx = NumpyContext()
     import mpmath
 
     max_valid_ulp_count = 1
@@ -376,7 +386,7 @@ def test_add_3sum(dtype):
                 for z in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
                     xyz = xy + z
                     with numpy.errstate(over="ignore", invalid="ignore"):
-                        xyzh, e, t = fpa.add_3sum(x, y, z, Q, P, three_over_two)
+                        xyzh, e, t = fpa.add_3sum(np_ctx, x, y, z, Q, P, three_over_two)
                     s = xyzh + (e + t)
                     z_mp = utils.float2mpf(ctx, z)
                     expected = xy_mp + z_mp
@@ -392,6 +402,7 @@ def test_add_3sum(dtype):
 
 
 def test_add_4sum(dtype):
+    np_ctx = NumpyContext()
     import mpmath
 
     max_valid_ulp_count = 1
@@ -433,7 +444,7 @@ def test_add_4sum(dtype):
                     for w in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
                         xyzw = xyz + w
                         with numpy.errstate(over="ignore", invalid="ignore"):
-                            s = fpa.add_4sum(x, y, z, w, Q, P, three_over_two)
+                            s = fpa.add_4sum(np_ctx, x, y, z, w, Q, P, three_over_two)
 
                         w_mp = utils.float2mpf(ctx, w)
                         e = utils.mpf2float(dtype, xyz_mp + w_mp)
@@ -449,6 +460,7 @@ def test_add_4sum(dtype):
 
 
 def test_dot2(dtype):
+    np_ctx = NumpyContext()
     import mpmath
 
     max_valid_ulp_count = 3
@@ -490,7 +502,7 @@ def test_dot2(dtype):
                         zw = z * w
                         d2 = xy + zw
                         with numpy.errstate(over="ignore", invalid="ignore"):
-                            s = fpa.dot2(x, y, z, w, C, Q, P, three_over_two)
+                            s = fpa.dot2(np_ctx, x, y, z, w, C, Q, P, three_over_two)
                         w_mp = utils.float2mpf(ctx, w)
                         zw_mp = z_mp * w_mp
                         e = utils.mpf2float(dtype, xy_mp + zw_mp)
@@ -505,6 +517,7 @@ def test_dot2(dtype):
 
 
 def test_mul_add(dtype):
+    np_ctx = NumpyContext()
     import mpmath
 
     max_valid_ulp_count = 2
@@ -546,7 +559,7 @@ def test_mul_add(dtype):
                     with numpy.errstate(over="ignore", invalid="ignore"):
                         xyz = xy + z
                     with numpy.errstate(over="ignore", invalid="ignore"):
-                        s = fpa.mul_add(x, y, z, C, Q, P, three_over_two)
+                        s = fpa.mul_add(np_ctx, x, y, z, C, Q, P, three_over_two)
                     z_mp = utils.float2mpf(ctx, z)
                     expected = xy_mp + z_mp
                     e = utils.mpf2float(dtype, expected)

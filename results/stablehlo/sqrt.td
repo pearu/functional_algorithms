@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -26,7 +26,7 @@ def : Pat<(sqrt_0 ComplexElementType:$z),
             (StableHLO_ConstantLike<"1.5537739740300374"> $x)),
           (StableHLO_ConstantLike<"1.4142135623730951">:$sq_2 $x)),
         (StableHLO_SelectOp
-          (StableHLO_OrOp:$logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf
+          (StableHLO_OrOp:$logical_or_203
             (StableHLO_CompareOp
              (StableHLO_SqrtOp:$u_general
                (StableHLO_AddOp
@@ -140,7 +140,7 @@ def : Pat<(sqrt_0 ComplexElementType:$z),
           $sq_ay,
           (StableHLO_ConstantLike<"2.19736822693562"> $x)),
         (StableHLO_SelectOp
-          $logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf,
+          $logical_or_203,
           (StableHLO_SelectOp
             $gt_ax_ay,
             (StableHLO_DivOp

@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -72,8 +72,7 @@ std::complex<float> acos_2(std::complex<float> z) {
                 (!((y) == (std::numeric_limits<float>::infinity()))))
                    ? ((x) / (y))
                    : (zero));
-  bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < (4.3368087e-19)) && ((x) < (one));
+  bool logical_and_316 = ((y) < (4.3368087e-19)) && ((x) < (one));
   float ap1 = (a) + (one);
   float half_yy = (half) * (yy);
   float divide_half_yy_rpxp1 = (half_yy) / (rpxp1);
@@ -83,16 +82,13 @@ std::complex<float> acos_2(std::complex<float> z) {
            : ((((a) <= (1.5)) ? ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
                               : ((a) - (one)))));
   float am1 =
-      ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
-                                            : (x_ge_1_or_not));
+      ((logical_and_316) ? (-(((xp1) * (xm1)) / (ap1))) : (x_ge_1_or_not));
   float sq = std::sqrt((am1) * (ap1));
   float imag =
       (((_mx_1_) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(_mx_1_))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
-           : (((logical_and_lt_y_safe_min_lt_x_one)
-                   ? ((y) / (sq))
-                   : (std::log1p((am1) + (sq))))));
+           : (((logical_and_316) ? ((y) / (sq)) : (std::log1p((am1) + (sq))))));
   return std::complex<float>(
       std::atan2(
           (((std::max(x, y)) >= (safe_max))
@@ -154,8 +150,7 @@ std::complex<double> acos_3(std::complex<double> z) {
                  (!((y) == (std::numeric_limits<double>::infinity()))))
                     ? ((x) / (y))
                     : (zero));
-  bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < (5.966672584960166e-154)) && ((x) < (one));
+  bool logical_and_316 = ((y) < (5.966672584960166e-154)) && ((x) < (one));
   double ap1 = (a) + (one);
   double half_yy = (half) * (yy);
   double divide_half_yy_rpxp1 = (half_yy) / (rpxp1);
@@ -165,16 +160,13 @@ std::complex<double> acos_3(std::complex<double> z) {
            : ((((a) <= (1.5)) ? ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
                               : ((a) - (one)))));
   double am1 =
-      ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
-                                            : (x_ge_1_or_not));
+      ((logical_and_316) ? (-(((xp1) * (xm1)) / (ap1))) : (x_ge_1_or_not));
   double sq = std::sqrt((am1) * (ap1));
   double imag =
       (((_mx_1_) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(_mx_1_))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
-           : (((logical_and_lt_y_safe_min_lt_x_one)
-                   ? ((y) / (sq))
-                   : (std::log1p((am1) + (sq))))));
+           : (((logical_and_316) ? ((y) / (sq)) : (std::log1p((am1) + (sq))))));
   return std::complex<double>(
       std::atan2(
           (((std::max(x, y)) >= (safe_max))

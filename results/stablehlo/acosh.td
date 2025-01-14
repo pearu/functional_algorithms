@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -19,14 +19,14 @@ def : Pat<(acosh_0 NonComplexElementType:$z),
       (StableHLO_LogOp $z)),
     (StableHLO_Log1pOp
       (StableHLO_MulOp
-        (StableHLO_SqrtOp:$sqrt_subtract_z_constant_f1
+        (StableHLO_SqrtOp:$sqrt_26
           (StableHLO_SubtractOp
             $z,
             (StableHLO_ConstantLike<"1.0">:$constant_f1 $z))),
         (StableHLO_AddOp
           (StableHLO_SqrtOp
             (StableHLO_AddOp $z, $constant_f1)),
-          $sqrt_subtract_z_constant_f1))))>;
+          $sqrt_26))))>;
 
 def : Pat<(acosh_1 ComplexElementType:$z),
   (StableHLO_ComplexOp

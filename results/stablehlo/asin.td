@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.0), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -30,5 +30,5 @@ def : Pat<(asin_1 ComplexElementType:$z),
         StableHLO_ComparisonDirectionValue<"LT">,
         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
       (StableHLO_NegOp
-        (StableHLO_ImagOp:$imag_asin_acos_kernel_z $asin_acos_kernel_z)),
-      $imag_asin_acos_kernel_z))>;
+        (StableHLO_ImagOp:$imag_5 $asin_acos_kernel_z)),
+      $imag_5))>;

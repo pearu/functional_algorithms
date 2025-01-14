@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -14,23 +14,21 @@
 float acosh_0(float z) {
   float constant_f2 = 2.0;
   float constant_f1 = 1.0;
-  float sqrt_subtract_z_constant_f1 = std::sqrt((z) - (constant_f1));
+  float sqrt_27 = std::sqrt((z) - (constant_f1));
   return (((z) >= ((3.4028235e+38) / (constant_f2)))
               ? ((std::log(constant_f2)) + (std::log(z)))
-              : (std::log1p((sqrt_subtract_z_constant_f1) *
-                            ((std::sqrt((z) + (constant_f1))) +
-                             (sqrt_subtract_z_constant_f1)))));
+              : (std::log1p((sqrt_27) *
+                            ((std::sqrt((z) + (constant_f1))) + (sqrt_27)))));
 }
 
 double acosh_1(double z) {
   double constant_f2 = 2.0;
   double constant_f1 = 1.0;
-  double sqrt_subtract_z_constant_f1 = std::sqrt((z) - (constant_f1));
+  double sqrt_27 = std::sqrt((z) - (constant_f1));
   return (((z) >= ((1.7976931348623157e+308) / (constant_f2)))
               ? ((std::log(constant_f2)) + (std::log(z)))
-              : (std::log1p((sqrt_subtract_z_constant_f1) *
-                            ((std::sqrt((z) + (constant_f1))) +
-                             (sqrt_subtract_z_constant_f1)))));
+              : (std::log1p((sqrt_27) *
+                            ((std::sqrt((z) + (constant_f1))) + (sqrt_27)))));
 }
 
 std::complex<float> acosh_2(std::complex<float> z) {
@@ -52,8 +50,7 @@ std::complex<float> acosh_2(std::complex<float> z) {
                    ? ((x) / (y))
                    : (zero));
   float one = 1.0;
-  bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < (4.3368087e-19)) && ((x) < (one));
+  bool logical_and_316 = ((y) < (4.3368087e-19)) && ((x) < (one));
   float xp1 = (x) + (one);
   float xm1 = (x) - (one);
   float abs_xp1 = std::abs(xp1);
@@ -93,8 +90,7 @@ std::complex<float> acosh_2(std::complex<float> z) {
            : ((((a) <= (1.5)) ? ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
                               : ((a) - (one)))));
   float am1 =
-      ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
-                                            : (x_ge_1_or_not));
+      ((logical_and_316) ? (-(((xp1) * (xm1)) / (ap1))) : (x_ge_1_or_not));
   float sq = std::sqrt((am1) * (ap1));
   float half_apx = (half) * ((a) + (x));
   float _imag_0_ = std::atan2(
@@ -109,9 +105,7 @@ std::complex<float> acosh_2(std::complex<float> z) {
       (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(mx))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
-           : (((logical_and_lt_y_safe_min_lt_x_one)
-                   ? ((y) / (sq))
-                   : (std::log1p((am1) + (sq)))))),
+           : (((logical_and_316) ? ((y) / (sq)) : (std::log1p((am1) + (sq)))))),
       (((signed_y) < (0.0)) ? (-(_imag_0_)) : (_imag_0_)));
 }
 
@@ -134,8 +128,7 @@ std::complex<double> acosh_3(std::complex<double> z) {
                     ? ((x) / (y))
                     : (zero));
   double one = 1.0;
-  bool logical_and_lt_y_safe_min_lt_x_one =
-      ((y) < (5.966672584960166e-154)) && ((x) < (one));
+  bool logical_and_316 = ((y) < (5.966672584960166e-154)) && ((x) < (one));
   double xp1 = (x) + (one);
   double xm1 = (x) - (one);
   double abs_xp1 = std::abs(xp1);
@@ -175,8 +168,7 @@ std::complex<double> acosh_3(std::complex<double> z) {
            : ((((a) <= (1.5)) ? ((divide_half_yy_rpxp1) + ((half_yy) / (smxm1)))
                               : ((a) - (one)))));
   double am1 =
-      ((logical_and_lt_y_safe_min_lt_x_one) ? (-(((xp1) * (xm1)) / (ap1)))
-                                            : (x_ge_1_or_not));
+      ((logical_and_316) ? (-(((xp1) * (xm1)) / (ap1))) : (x_ge_1_or_not));
   double sq = std::sqrt((am1) * (ap1));
   double half_apx = (half) * ((a) + (x));
   double _imag_0_ = std::atan2(
@@ -191,8 +183,6 @@ std::complex<double> acosh_3(std::complex<double> z) {
       (((mx) >= (((y_gt_safe_max_opt) ? (safe_max_opt) : (safe_max))))
            ? (((std::log(two)) + (std::log(mx))) +
               ((half) * (std::log1p((xoy) * (xoy)))))
-           : (((logical_and_lt_y_safe_min_lt_x_one)
-                   ? ((y) / (sq))
-                   : (std::log1p((am1) + (sq)))))),
+           : (((logical_and_316) ? ((y) / (sq)) : (std::log1p((am1) + (sq)))))),
       (((signed_y) < (0.0)) ? (-(_imag_0_)) : (_imag_0_)));
 }

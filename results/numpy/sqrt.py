@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.14.1.dev0+ge22be68.d20241231), see
+# This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -28,9 +28,9 @@ def sqrt_0(z: numpy.complex128) -> numpy.complex128:
         sq_2: numpy.float64 = numpy.float64(1.4142135623730951)
         two: numpy.float64 = numpy.float64(2.0)
         u_general: numpy.float64 = numpy.sqrt(((numpy.hypot(ax, ay)) / (two)) + ((ax) / (two)))
-        logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf: numpy.bool_ = (
-            numpy.equal(u_general, constant_f0)
-        ) or (numpy.equal(u_general, numpy.float64(numpy.inf)))
+        logical_or_91: numpy.bool_ = (numpy.equal(u_general, constant_f0)) or (
+            numpy.equal(u_general, numpy.float64(numpy.inf))
+        )
         gt_ax_ay: numpy.bool_ = (ax) > (ay)
         one: numpy.float64 = numpy.float64(1.0)
         lt_ax_ay: numpy.bool_ = (ax) < (ay)
@@ -44,7 +44,7 @@ def sqrt_0(z: numpy.complex128) -> numpy.complex128:
             if (eq_ax_ay)
             else (
                 (((sq_ax) * ((sq_1h) / (sq_2))) if (gt_ax_ay) else ((sq_ay) * ((sq_rh) / (sq_2))))
-                if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+                if (logical_or_91)
                 else (u_general)
             )
         )
@@ -60,7 +60,7 @@ def sqrt_0(z: numpy.complex128) -> numpy.complex128:
                     if (gt_ax_ay)
                     else ((sq_ay) / ((sq_rh) * (sq_2)))
                 )
-                if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+                if (logical_or_91)
                 else ((ay) / ((u_general) * (two)))
             )
         )
@@ -89,9 +89,9 @@ def sqrt_1(z: numpy.complex64) -> numpy.complex64:
         sq_2: numpy.float32 = numpy.float32(1.4142135)
         two: numpy.float32 = numpy.float32(2.0)
         u_general: numpy.float32 = numpy.sqrt(((numpy.hypot(ax, ay)) / (two)) + ((ax) / (two)))
-        logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf: numpy.bool_ = (
-            numpy.equal(u_general, constant_f0)
-        ) or (numpy.equal(u_general, numpy.float32(numpy.inf)))
+        logical_or_91: numpy.bool_ = (numpy.equal(u_general, constant_f0)) or (
+            numpy.equal(u_general, numpy.float32(numpy.inf))
+        )
         gt_ax_ay: numpy.bool_ = (ax) > (ay)
         one: numpy.float32 = numpy.float32(1.0)
         lt_ax_ay: numpy.bool_ = (ax) < (ay)
@@ -105,7 +105,7 @@ def sqrt_1(z: numpy.complex64) -> numpy.complex64:
             if (eq_ax_ay)
             else (
                 (((sq_ax) * ((sq_1h) / (sq_2))) if (gt_ax_ay) else ((sq_ay) * ((sq_rh) / (sq_2))))
-                if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+                if (logical_or_91)
                 else (u_general)
             )
         )
@@ -121,7 +121,7 @@ def sqrt_1(z: numpy.complex64) -> numpy.complex64:
                     if (gt_ax_ay)
                     else ((sq_ay) / ((sq_rh) * (sq_2)))
                 )
-                if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+                if (logical_or_91)
                 else ((ay) / ((u_general) * (two)))
             )
         )

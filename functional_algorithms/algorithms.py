@@ -13,6 +13,7 @@ accurate on the whole complex plane or real line.
 
 
 import functools
+from . import floating_point_algorithms as fpa
 
 
 class definition:

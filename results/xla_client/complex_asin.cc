@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.0), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -66,7 +66,7 @@ XlaOp complex_asin_0(XlaOp z) {
           Not(Eq(y, ScalarLike(signed_y,
                                std::numeric_limits<FloatType>::infinity())))),
       Div(x, y), constant_constant_0);
-  XlaOp logical_and_lt_y_safe_min_lt_x_one = And(
+  XlaOp logical_and_78 = And(
       Lt(y,
          ScalarLike(signed_x,
                     (std::sqrt(std::numeric_limits<FloatType>::min())) * (4))),
@@ -78,16 +78,15 @@ XlaOp complex_asin_0(XlaOp z) {
       Ge(x, one), Add(divide_half_yy_rpxp1, Mul(half, spxm1)),
       Select(Le(a, ScalarLike(signed_x, 1.5)),
              Add(divide_half_yy_rpxp1, Div(half_yy, smxm1)), Sub(a, one)));
-  XlaOp am1 = Select(logical_and_lt_y_safe_min_lt_x_one,
-                     Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
+  XlaOp am1 =
+      Select(logical_and_78, Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XlaOp sq = Sqrt(Mul(am1, ap1));
   XlaOp imag = Select(Ge(__asin_acos_kernel_1_mx_0_,
                          Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
                       Add(Add(ScalarLike(signed_x, std::log(two_)),
                               Log(__asin_acos_kernel_1_mx_0_)),
                           Mul(half, Log1p(Mul(xoy, xoy)))),
-                      Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
-                             Log1p(Add(am1, sq))));
+                      Select(logical_and_78, Div(y, sq), Log1p(Add(am1, sq))));
   return Complex(real,
                  Select(Lt(signed_y, constant_constant_0), Neg(imag), imag));
 }

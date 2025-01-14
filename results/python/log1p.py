@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.11.1), see
+# This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 

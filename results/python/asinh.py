@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+# This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -21,7 +21,7 @@ def asinh_0(z: complex) -> complex:
     zero: float = 0.0
     xoy: float = ((x) / (y)) if ((y_gt_safe_max_opt) and (not ((y) == (math.inf)))) else (zero)
     one: float = 1.0
-    logical_and_lt_y_safe_min_lt_x_one: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4.0))) and ((x) < (one))
+    logical_and_316: bool = ((y) < ((math.sqrt(sys.float_info.min)) * (4.0))) and ((x) < (one))
     xp1: float = (x) + (one)
     xm1: float = (x) - (one)
     abs_xp1: float = abs(xp1)
@@ -64,12 +64,12 @@ def asinh_0(z: complex) -> complex:
         if ((x) >= (one))
         else (((divide_half_yy_rpxp1) + ((half_yy) / (smxm1))) if ((a) <= (1.5)) else ((a) - (one)))
     )
-    am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_lt_y_safe_min_lt_x_one) else (x_ge_1_or_not)
+    am1: float = (-(((xp1) * (xm1)) / (ap1))) if (logical_and_316) else (x_ge_1_or_not)
     sq: float = math.sqrt((am1) * (ap1))
     _imag_0_: float = (
         (((math.log(two)) + (math.log(mx))) + ((half) * (math.log1p((xoy) * (xoy)))))
         if ((mx) >= ((safe_max_opt) if (y_gt_safe_max_opt) else (safe_max)))
-        else (((y) / (sq)) if (logical_and_lt_y_safe_min_lt_x_one) else (math.log1p((am1) + (sq))))
+        else (((y) / (sq)) if (logical_and_316) else (math.log1p((am1) + (sq))))
     )
     half_apx: float = (half) * ((a) + (x))
     return complex(

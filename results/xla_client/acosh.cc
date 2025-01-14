@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.0), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -13,13 +13,12 @@ template <typename FloatType>
 XlaOp acosh_0(XlaOp z) {
   FloatType constant_2 = 2;
   XlaOp constant_constant_1 = ScalarLike(z, 1);
-  XlaOp sqrt_subtract_z_constant_constant_1 = Sqrt(Sub(z, constant_constant_1));
-  return Select(Ge(z, ScalarLike(z, (std::numeric_limits<FloatType>::max()) /
-                                        (constant_2))),
-                Add(ScalarLike(z, std::log(constant_2)), Log(z)),
-                Log1p(Mul(sqrt_subtract_z_constant_constant_1,
-                          Add(Sqrt(Add(z, constant_constant_1)),
-                              sqrt_subtract_z_constant_constant_1))));
+  XlaOp sqrt_6 = Sqrt(Sub(z, constant_constant_1));
+  return Select(
+      Ge(z,
+         ScalarLike(z, (std::numeric_limits<FloatType>::max()) / (constant_2))),
+      Add(ScalarLike(z, std::log(constant_2)), Log(z)),
+      Log1p(Mul(sqrt_6, Add(Sqrt(Add(z, constant_constant_1)), sqrt_6))));
 }
 
 template <typename FloatType>
@@ -47,7 +46,7 @@ XlaOp acosh_1(XlaOp z) {
                                std::numeric_limits<FloatType>::infinity())))),
       Div(x, y), zero);
   XlaOp one = ScalarLike(signed_x, 1);
-  XlaOp logical_and_lt_y_safe_min_lt_x_one = And(
+  XlaOp logical_and_79 = And(
       Lt(y,
          ScalarLike(signed_x,
                     (std::sqrt(std::numeric_limits<FloatType>::min())) * (4))),
@@ -86,8 +85,8 @@ XlaOp acosh_1(XlaOp z) {
       Ge(x, one), Add(divide_half_yy_rpxp1, Mul(half, spxm1)),
       Select(Le(a, ScalarLike(signed_x, 1.5)),
              Add(divide_half_yy_rpxp1, Div(half_yy, smxm1)), Sub(a, one)));
-  XlaOp am1 = Select(logical_and_lt_y_safe_min_lt_x_one,
-                     Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
+  XlaOp am1 =
+      Select(logical_and_79, Neg(Div(Mul(xp1, xm1), ap1)), x_ge_1_or_not);
   XlaOp sq = Sqrt(Mul(am1, ap1));
   XlaOp half_apx = Mul(half, Add(a, x));
   XlaOp _imag_0_ = Atan2(
@@ -100,8 +99,7 @@ XlaOp acosh_1(XlaOp z) {
       Select(Ge(mx, Select(y_gt_safe_max_opt, safe_max_opt, safe_max)),
              Add(Add(ScalarLike(signed_x, std::log(two_)), Log(mx)),
                  Mul(half, Log1p(Mul(xoy, xoy)))),
-             Select(logical_and_lt_y_safe_min_lt_x_one, Div(y, sq),
-                    Log1p(Add(am1, sq)))),
+             Select(logical_and_79, Div(y, sq), Log1p(Add(am1, sq)))),
       Select(Lt(signed_y, ScalarLike(signed_y, zero_)), Neg(_imag_0_),
              _imag_0_));
 }
