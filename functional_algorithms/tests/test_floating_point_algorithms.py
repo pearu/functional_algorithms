@@ -3,6 +3,7 @@ import os
 import pytest
 import itertools
 from collections import defaultdict
+import warnings
 
 import functional_algorithms as fa
 from functional_algorithms import utils
@@ -25,6 +26,16 @@ class NumpyContext:
     def select(self, cond, x, y):
         assert isinstance(cond, (bool, numpy.bool_))
         return x if cond else y
+
+    def constant(self, value, like):
+        if isinstance(like, numpy.floating):
+            dtype = type(like)
+            if isinstance(value, str):
+                if value == "largest":
+                    return numpy.finfo(dtype).max
+                assert 0, (value, dtype)  # not implemented
+            return dtype(value)
+        assert 0, (value, like)  # unreachable
 
 
 def test_split_veltkamp(dtype):
@@ -571,3 +582,33 @@ def test_mul_add(dtype):
                     assert e == s or u <= max_valid_ulp_count
 
     print(f"\nULP counts using mul_add: {dict(ulp_counts)}\nULP counts using x*y+z: {dict(ulp_counts_native)}")
+
+
+def test_next(dtype):
+    ctx = NumpyContext()
+    size = 1000
+    fi = numpy.finfo(dtype)
+    min_value = fi.smallest_normal
+    max_value = fi.max
+
+    for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+        with warnings.catch_warnings(action="ignore"):
+            result = fpa.next(ctx, x, up=True)
+            expected = numpy.nextafter(x, dtype(numpy.inf))
+        assert result == expected
+
+        with warnings.catch_warnings(action="ignore"):
+            result = fpa.next(ctx, -x, up=False)
+            expected = numpy.nextafter(-x, dtype(-numpy.inf))
+        assert result == expected
+
+        if x > min_value:
+            with warnings.catch_warnings(action="ignore"):
+                result = fpa.next(ctx, x, up=False)
+                expected = numpy.nextafter(x, dtype(-numpy.inf))
+            assert result == expected
+
+            with warnings.catch_warnings(action="ignore"):
+                result = fpa.next(ctx, -x, up=True)
+                expected = numpy.nextafter(-x, dtype(numpy.inf))
+            assert result == expected

@@ -39,6 +39,40 @@ def get_is_power_of_two_constants(ctx, largest: float):
     return Q, P
 
 
+def next(ctx, x: float, up=True):
+    """Return
+
+      nextafter(x, (1 if up else -1) * inf)
+
+    using floating-point operations.
+
+    Assumes:
+    - x is normal, finite, and positive.
+    - division/multiplication rounds to nearest.
+    """
+    largest = ctx.constant("largest", x)
+    if hasattr(largest, "reference"):
+        largest = largest.reference("largest")
+
+    fp64 = ctx.constant(1 - 1 / (1 << 53), largest)
+    fp32 = ctx.constant(1 - 1 / (1 << 24), largest)
+    fp16 = ctx.constant(1 - 1 / (1 << 11), largest)
+    c = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))  # .reference("Cnextup", force=True)
+    if hasattr(c, "reference"):
+        c = c.reference("Cnextup", force=True)
+
+    result = ctx.select(x > 0, x / c, x * c) if up else ctx.select(x < 0, x / c, x * c)
+    return result
+
+
+def nextup(ctx, x: float):
+    return next(ctx, x, up=True)
+
+
+def nextdown(ctx, x: float):
+    return next(ctx, x, up=False)
+
+
 def split_veltkamp(ctx, x, C):
     """Veltkamp splitter:
 
