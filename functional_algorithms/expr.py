@@ -197,10 +197,19 @@ def make_ref(expr):
                 ref = f"{expr.kind}_{make_ref(expr.operands[0])}"
             else:
                 ref = f"{expr.kind}_{toidentifier(expr.operands[0])}"
-        else:
+        elif expr.kind == "absolute":
             # using abs for BC
-            lst = ["abs" if expr.kind == "absolute" else expr.kind] + list(map(make_ref, expr.operands))
-            ref = "_".join(lst)
+            ref = f"abs_{make_ref(expr.operands[0])}"
+        else:
+            all_operands_have_ref_name = not [
+                0 for o in expr.operands if not isinstance(expr.operands[0].props.get("reference_name"), str)
+            ]
+            if all_operands_have_ref_name:
+                # for readability
+                lst = [expr.kind] + list(map(make_ref, expr.operands))
+                ref = "_".join(lst)
+            else:
+                ref = f"{expr.kind}_{expr.intkey}"
     elif ref is None:
         # referencing the expression has been disabled
         assert 0  # unreachable
@@ -217,7 +226,7 @@ def make_ref(expr):
     return expr.context._register_reference(expr, ref)
 
 
-def _is_cache(mth):
+def _cache_in_props(mth):
 
     def wrap(self):
         name = mth.__name__
@@ -232,6 +241,8 @@ def _is_cache(mth):
 class Printer:
 
     def tostring(self, expr, tab=""):
+        # TODO: use SSA-like output for large expression trees with
+        # many overlapping branches
         if not isinstance(expr, Expr):
             return str(expr)
 
@@ -376,7 +387,10 @@ class Expr:
                 like.key,
             )
         else:
-            r = (self.kind, *(operand.key for operand in self.operands))
+            # Don't use `operand.key` as its size is unbounded and
+            # will lead to large overhead in computing the hash value
+            # for the key:
+            r = (self.kind, *(operand.intkey for operand in self.operands))
         self.__serialized = r
 
     def _set_serialized_id(self, i):
@@ -569,7 +583,8 @@ class Expr:
         return Printer().tostring(self)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.kind}, {self.operands}, {self.props})"
+        operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
+        return f"{type(self).__name__}({self.kind}, {operands}, {self.props})"
 
     def __abs__(self):
         return self.context.absolute(self)
@@ -729,14 +744,14 @@ class Expr:
         return result
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_nonzero(self):
         r = self._is_zero
         if r is not None:
             return not r
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_zero(self):
         if self.kind == "constant":
             value, like = self.operands
@@ -759,7 +774,7 @@ class Expr:
             return False
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_one(self):
         if self.kind == "constant":
             value, like = self.operands
@@ -782,7 +797,7 @@ class Expr:
             return False
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_finite(self):
         if self.kind == "constant":
             value, like = self.operands
@@ -824,7 +839,7 @@ class Expr:
             return False
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_nonnegative(self):
         assert not self.is_complex
         if self.kind == "constant":
@@ -873,7 +888,7 @@ class Expr:
             return True
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_nonpositive(self):
         assert not self.is_complex
         if self.kind == "constant":
@@ -917,20 +932,21 @@ class Expr:
             return False
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_positive(self):
         r = self._is_nonpositive
         if r is not None:
             return not r
 
     @property
-    @_is_cache
+    @_cache_in_props
     def _is_negative(self):
         r = self._is_nonnegative
         if r is not None:
             return not r
 
     @property
+    @_cache_in_props
     def _is_boolean(self):
         if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "logical_not"}:
             return True
@@ -941,6 +957,7 @@ class Expr:
         return False
 
     @property
+    @_cache_in_props
     def is_complex(self):
         if self.kind in {"symbol", "constant", "select"}:
             return self.operands[1].is_complex
@@ -1007,12 +1024,13 @@ class Expr:
         else:
             raise NotImplementedError(f"Expr.is_complex for {self.kind}")
 
+    @_cache_in_props
     def get_type(self):
         if self.kind == "symbol":
             return self.operands[1]
-        if self.kind == "constant":
+        elif self.kind == "constant":
             return self.operands[1].get_type()
-        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "is_finite"}:
+        elif self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "is_finite"}:
             return Type.fromobject(self.context, "boolean")
         elif self.kind in {
             "positive",

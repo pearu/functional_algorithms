@@ -6,7 +6,40 @@
 """
 
 
-def split_veltkamp(x, C):
+def get_veltkamp_splitter_constant(ctx, largest: float):
+    """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
+    the floating point number system.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+    fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
+    fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
+    fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
+    return ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference(
+        "veltkamp_splitter_constant", force=True
+    )
+
+
+def get_is_power_of_two_constants(ctx, largest: float):
+    """Return Q, P constants for is_power_of_two.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+    fp64 = ctx.constant(1 << (53 - 1), largest)
+    fp32 = ctx.constant(1 << (24 - 1), largest)
+    fp16 = ctx.constant(1 << (11 - 1), largest)
+    Q = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Qispowof2", force=True)
+
+    fp64 = ctx.constant(1 << (53 - 1) + 1, largest)
+    fp32 = ctx.constant(1 << (24 - 1) + 1, largest)
+    fp16 = ctx.constant(1 << (11 - 1) + 1, largest)
+    P = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Pispowof2", force=True)
+    return Q, P
+
+
+def split_veltkamp(ctx, x, C):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -35,7 +68,7 @@ def split_veltkamp(x, C):
     return xh, xl
 
 
-def mul_dekker(x, y, C):
+def mul_dekker(ctx, x, y, C):
     """Dekker product:
 
       x * y = xyh + xyl
@@ -63,8 +96,8 @@ def mul_dekker(x, y, C):
       makes only sense when the accuracy of the pair (xyh, xyl) is
       taken into account.
     """
-    xh, xl = split_veltkamp(x, C)
-    yh, yl = split_veltkamp(y, C)
+    xh, xl = split_veltkamp(ctx, x, C)
+    yh, yl = split_veltkamp(ctx, y, C)
     xyh = x * y
     t1 = (-xyh) + xh * yh
     t2 = t1 + xh * yl
@@ -73,7 +106,7 @@ def mul_dekker(x, y, C):
     return xyh, xyl
 
 
-def add_2sum(x, y, fast=False):
+def add_2sum(ctx, x, y, fast=False):
     """Add x and y using 2sum or fast2sum algorithm:
 
     x + y = s + t
@@ -101,7 +134,7 @@ def add_2sum(x, y, fast=False):
     return s, t
 
 
-def is_power_of_two(x, Q, P, invert=False):
+def is_power_of_two(ctx, x, Q, P, invert=False):
     """Check if x is a power of two.
 
     Q = 2 ** (p - 1)
@@ -123,49 +156,7 @@ def is_power_of_two(x, Q, P, invert=False):
     return D == x
 
 
-def _is_ternary(inp):
-    return type(inp) is tuple and len(inp) == 3
-
-
-def _select_eval(inp):
-    if _is_ternary(inp):
-        if isinstance(inp[0], bool):
-            if inp[0]:
-                return _select_eval(inp[1])
-            return _select_eval(inp[2])
-        t = type(inp[0])
-        if t.__module__ == "numpy" and t.__name__.startswith("bool"):
-            if inp[0]:
-                return _select_eval(inp[1])
-            return _select_eval(inp[2])
-    return inp
-
-
-def _select_apply(op, *inputs):
-    """Apply operator to the values in a nested 3-tuple of ternary
-    conditional operator arguments.
-    """
-    if len(inputs) == 1:
-        (inp,) = inputs
-        if _is_ternary(inp):
-            return (inp[0], _select_apply(op, inp[1]), _select_apply(op, inp[2]))
-        return op(inp)
-    elif len(inputs) == 2:
-        inp1, inp2 = inputs
-        if _is_ternary(inp1):
-            assert not _is_ternary(inp2)
-            r1, r2 = _select_apply(op, inp1[1], inp2), _select_apply(op, inp1[2], inp2)
-            return (inp1[0], r1[0], r2[0]), (inp1[0], r1[1], r2[1])
-        elif _is_ternary(inp2):
-            r1, r2 = _select_apply(op, inp1, inp2[1]), _select_apply(op, inp1, inp2[2])
-            return (inp2[0], r1, r2[0]), (inp2[0], r1, r2[1])
-        else:
-            return op(inp1, inp2)
-    else:
-        raise NotImplementedError(len(inputs))
-
-
-def add_3sum(x, y, z, Q, P, three_over_two):
+def add_3sum(ctx, x, y, z, Q, P, three_over_two):
     """Add x, y, and z using 3sum algorithm:
 
     x + y + z = s + e + t
@@ -196,10 +187,10 @@ def add_3sum(x, y, z, Q, P, three_over_two):
     Note:
       The accuracy of `s + (e + t)` is higher than that of `x + y + z`.
     """
-    xh, xl = add_2sum(x, y)
-    sh, sl = add_2sum(xh, z)
-    vh, vl = add_2sum(xl, sl)
-    zh, zl = add_2sum(sh, vh, fast=True)
+    xh, xl = add_2sum(ctx, x, y)
+    sh, sl = add_2sum(ctx, xh, z)
+    vh, vl = add_2sum(ctx, xl, sl)
+    zh, zl = add_2sum(ctx, sh, vh, fast=True)
     w = vl + zl
     s1 = zh + w
     d = w - zl
@@ -207,34 +198,42 @@ def add_3sum(x, y, z, Q, P, three_over_two):
     wp = three_over_two * w
     s2 = zh + wp
     g = t * w
-    select = _select_eval((is_power_of_two(w, Q, P, invert=True), s1, (s2 == zh, zh, (t == 0, s1, (g < 0, zh, s2)))))
-    a = _select_apply(lambda s: s - zh, select)
-    e = _select_apply(lambda a: w - a, a)
-    e, t = _select_apply(lambda e, t: add_2sum(e, t, fast=True), e, t)
-    return select, e, t
+    s = ctx.select(
+        is_power_of_two(ctx, w, Q, P, invert=True),
+        s1,
+        ctx.select(s2 == zh, zh, ctx.select(t == 0, s1, ctx.select(g < 0, zh, s2))),
+    )
+    a = s - zh
+    e = w - a
+    e, t = add_2sum(ctx, e, t, fast=True)
+    return s, e, t
 
 
-def add_dw(xh, xl, yh, yl, Q, P, three_over_two):
+def add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two):
     """Add two double-word numbers:
 
     xh + xl + yh + yl = s
     """
-    sh, sl = add_2sum(xh, yh)
-    th, tl = add_2sum(xl, yl)
-    gh, gl = add_2sum(sl, th)
-    vh, vl = add_2sum(sh, gh, fast=True)
-    wh, wl = add_2sum(vl, tl, fast=True)
-    zh, zl = add_2sum(vh, wh, fast=True)
-    r, e, t = add_3sum(zl, wl, gl, Q, P, three_over_two)
+    sh, sl = add_2sum(ctx, xh, yh)
+    th, tl = add_2sum(ctx, xl, yl)
+    gh, gl = add_2sum(ctx, sl, th)
+    vh, vl = add_2sum(ctx, sh, gh, fast=True)
+    wh, wl = add_2sum(ctx, vl, tl, fast=True)
+    zh, zl = add_2sum(ctx, vh, wh, fast=True)
+    r, e, t = add_3sum(ctx, zl, wl, gl, Q, P, three_over_two)
     t = e + t
     rp = three_over_two * r
     s1 = zh + r
     s2 = zh + rp
     g = t * r
-    return _select_eval((is_power_of_two(t, Q, P, invert=True), zh, (s2 == zh, zh, (t == 0, s1, (g <= 0, zh, s2)))))
+    return ctx.select(
+        is_power_of_two(ctx, t, Q, P, invert=True),
+        zh,
+        ctx.select(s2 == zh, zh, ctx.select(t == 0, s1, ctx.select(g <= 0, zh, s2))),
+    )
 
 
-def add_4sum(x, y, z, w, Q, P, three_over_two):
+def add_4sum(ctx, x, y, z, w, Q, P, three_over_two):
     """Add four numbers:
 
     x + y + z + w = s
@@ -247,12 +246,12 @@ def add_4sum(x, y, z, w, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x + y + z + w`.
     """
-    xh, xl = add_2sum(x, y)
-    yh, yl = add_2sum(z, w)
-    return add_dw(xh, xl, yh, yl, Q, P, three_over_two)
+    xh, xl = add_2sum(ctx, x, y)
+    yh, yl = add_2sum(ctx, z, w)
+    return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)
 
 
-def dot2(x, y, z, w, C, Q, P, three_over_two):
+def dot2(ctx, x, y, z, w, C, Q, P, three_over_two):
     """Dot product:
 
     x * y + z * w = s
@@ -267,12 +266,12 @@ def dot2(x, y, z, w, C, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x * y + z * w`.
     """
-    xh, xl = mul_dekker(x, y, C)
-    yh, yl = mul_dekker(z, w, C)
-    return add_dw(xh, xl, yh, yl, Q, P, three_over_two)
+    xh, xl = mul_dekker(ctx, x, y, C)
+    yh, yl = mul_dekker(ctx, z, w, C)
+    return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)
 
 
-def mul_add(x, y, z, C, Q, P, three_over_two):
+def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
     """Multiply and add:
 
     x * y + z = s
@@ -288,15 +287,19 @@ def mul_add(x, y, z, C, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x * y + z`.
     """
-    xh, xl = mul_dekker(x, y, C)
+    xh, xl = mul_dekker(ctx, x, y, C)
 
     # Inlined code of add_dw(xh, xl, c, 0):
-    sh, sl = add_2sum(xh, z)
-    gh, gl = add_2sum(sl, xl)
-    zh, zl = add_2sum(sh, gh, fast=True)
-    r, t = add_2sum(zl, gl)
+    sh, sl = add_2sum(ctx, xh, z)
+    gh, gl = add_2sum(ctx, sl, xl)
+    zh, zl = add_2sum(ctx, sh, gh, fast=True)
+    r, t = add_2sum(ctx, zl, gl)
     rp = three_over_two * r
     g = t * r
     s1 = zh + r
     s2 = zh + rp
-    return _select_eval((is_power_of_two(t, Q, P, invert=True), zh, (s2 == zh, zh, (t == 0, s1, (g <= 0, zh, s2)))))
+    return ctx.select(
+        is_power_of_two(ctx, t, Q, P, invert=True),
+        zh,
+        ctx.select(s2 == zh, zh, ctx.select(t == 0, s1, ctx.select(g <= 0, zh, s2))),
+    )

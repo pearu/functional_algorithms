@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.13.3.dev1+g8d134ad.d20241230), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -164,7 +164,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
                 $zero),
               $xoy)))),
       (StableHLO_SelectOp
-        (StableHLO_AndOp:$logical_and_lt_y_safe_min_lt_x_one
+        (StableHLO_AndOp:$logical_and_287
           (StableHLO_CompareOp
            $y,
            (StableHLO_MulOp
@@ -183,7 +183,7 @@ def : Pat<(asin_acos_kernel_0 ComplexElementType:$z),
           (StableHLO_SqrtOp:$sq
             (StableHLO_MulOp
               (StableHLO_SelectOp:$am1
-                $logical_and_lt_y_safe_min_lt_x_one,
+                $logical_and_287,
                 (StableHLO_NegOp
                   (StableHLO_DivOp
                     (StableHLO_MulOp $xp1, $xm1),

@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -34,7 +34,7 @@ std::complex<double> complex_sqrt_0(std::complex<double> z) {
                                 : ((mx) * (sqa)))))) /
        (two)) +
       ((ax) / (two)));
-  bool logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf =
+  bool logical_or_203 =
       ((u_general) == (constant_f0)) ||
       ((u_general) == (std::numeric_limits<double>::infinity()));
   bool gt_ax_ay = (ax) > (ay);
@@ -56,16 +56,15 @@ std::complex<double> complex_sqrt_0(std::complex<double> z) {
   double sq_ay = std::sqrt(ay);
   double sq_rh = std::sqrt((_r_0_) + (h));
   double u =
-      ((eq_ax_ay)
-           ? (((sq_ax) * (1.5537739740300374)) / (sq_2))
-           : (((logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
-                   ? (((gt_ax_ay) ? ((sq_ax) * ((sq_1h) / (sq_2)))
-                                  : ((sq_ay) * ((sq_rh) / (sq_2)))))
-                   : (u_general))));
+      ((eq_ax_ay) ? (((sq_ax) * (1.5537739740300374)) / (sq_2))
+                  : (((logical_or_203)
+                          ? (((gt_ax_ay) ? ((sq_ax) * ((sq_1h) / (sq_2)))
+                                         : ((sq_ay) * ((sq_rh) / (sq_2)))))
+                          : (u_general))));
   double ay_div_u =
       ((eq_ax_ay)
            ? ((sq_ay) / (2.19736822693562))
-           : (((logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+           : (((logical_or_203)
                    ? (((gt_ax_ay)
                            ? (((sq_ay) *
                                (((eq_ax_ay)

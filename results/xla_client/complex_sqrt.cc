@@ -1,4 +1,4 @@
-// This file is generated using functional_algorithms tool (0.11.1), see
+// This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 //   https://github.com/pearu/functional_algorithms
 // for more information.
 
@@ -33,11 +33,9 @@ XlaOp complex_sqrt_0(XlaOp z) {
                                  Add(mx, Div(Mul(mx, r), two)), Mul(mx, sqa))),
                    two),
                Div(ax, two)));
-  XlaOp
-      logical_or_eq_u_general_constant_constant_0_eq_u_general_constant_constant_posinf =
-          Or(Eq(u_general, constant_constant_0),
-             Eq(u_general,
-                ScalarLike(x, std::numeric_limits<FloatType>::infinity())));
+  XlaOp logical_or_166 = Or(
+      Eq(u_general, constant_constant_0),
+      Eq(u_general, ScalarLike(x, std::numeric_limits<FloatType>::infinity())));
   XlaOp gt_ax_ay = Gt(ax, ay);
   XlaOp lt_ax_ay = Lt(ax, ay);
   XlaOp _r_0_ =
@@ -54,24 +52,21 @@ XlaOp complex_sqrt_0(XlaOp z) {
   XlaOp sq_1h = Sqrt(Add(one, h));
   XlaOp sq_ay = Sqrt(ay);
   XlaOp sq_rh = Sqrt(Add(_r_0_, h));
-  XlaOp u = Select(
-      eq_ax_ay, Div(Mul(sq_ax, ScalarLike(x, sq_12_)), sq_2),
-      Select(
-          logical_or_eq_u_general_constant_constant_0_eq_u_general_constant_constant_posinf,
-          Select(gt_ax_ay, Mul(sq_ax, Div(sq_1h, sq_2)),
-                 Mul(sq_ay, Div(sq_rh, sq_2))),
-          u_general));
+  XlaOp u = Select(eq_ax_ay, Div(Mul(sq_ax, ScalarLike(x, sq_12_)), sq_2),
+                   Select(logical_or_166,
+                          Select(gt_ax_ay, Mul(sq_ax, Div(sq_1h, sq_2)),
+                                 Mul(sq_ay, Div(sq_rh, sq_2))),
+                          u_general));
   XlaOp ay_div_u = Select(
       eq_ax_ay, Div(sq_ay, ScalarLike(x, (sq_12_) * (sq_2_))),
-      Select(
-          logical_or_eq_u_general_constant_constant_0_eq_u_general_constant_constant_posinf,
-          Select(gt_ax_ay,
-                 Div(Mul(sq_ay, Select(eq_ax_ay, one,
-                                       Select(lt_ax_ay, Div(sq_ax, sq_ay),
-                                              Div(sq_ay, sq_ax)))),
-                     Mul(sq_1h, sq_2)),
-                 Div(sq_ay, Mul(sq_rh, sq_2))),
-          Div(ay, Mul(u_general, two))));
+      Select(logical_or_166,
+             Select(gt_ax_ay,
+                    Div(Mul(sq_ay, Select(eq_ax_ay, one,
+                                          Select(lt_ax_ay, Div(sq_ax, sq_ay),
+                                                 Div(sq_ay, sq_ax)))),
+                        Mul(sq_1h, sq_2)),
+                    Div(sq_ay, Mul(sq_rh, sq_2))),
+             Div(ay, Mul(u_general, two))));
   XlaOp lt_y_constant_constant_0 = Lt(y, constant_constant_0);
   return Complex(
       Select(Ge(x, constant_constant_0), u, ay_div_u),

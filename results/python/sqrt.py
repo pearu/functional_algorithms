@@ -1,4 +1,4 @@
-# This file is generated using functional_algorithms tool (0.11.1), see
+# This file is generated using functional_algorithms tool (0.15.1.dev3+ge93b47e.d20250113), see
 #   https://github.com/pearu/functional_algorithms
 # for more information.
 
@@ -34,9 +34,7 @@ def sqrt_0(z: complex) -> complex:
         )
         + ((ax) / (two))
     )
-    logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf: bool = ((u_general) == (constant_f0)) or (
-        (u_general) == (math.inf)
-    )
+    logical_or_203: bool = ((u_general) == (constant_f0)) or ((u_general) == (math.inf))
     gt_ax_ay: bool = (ax) > (ay)
     lt_ax_ay: bool = (ax) < (ay)
     _r_0_: float = (one) if (eq_ax_ay) else (((ax) / (ay)) if (lt_ax_ay) else ((ay) / (ax)))
@@ -63,7 +61,7 @@ def sqrt_0(z: complex) -> complex:
         if (eq_ax_ay)
         else (
             (((sq_ax) * ((sq_1h) / (sq_2))) if (gt_ax_ay) else ((sq_ay) * ((sq_rh) / (sq_2))))
-            if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+            if (logical_or_203)
             else (u_general)
         )
     )
@@ -79,7 +77,7 @@ def sqrt_0(z: complex) -> complex:
                 if (gt_ax_ay)
                 else ((sq_ay) / ((sq_rh) * (sq_2)))
             )
-            if (logical_or_eq_u_general_constant_f0_eq_u_general_constant_posinf)
+            if (logical_or_203)
             else ((ay) / ((u_general) * (two)))
         )
     )
