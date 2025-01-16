@@ -6,6 +6,13 @@
 """
 
 
+def get_largest(ctx, x: float):
+    largest = ctx.constant("largest", x)
+    if hasattr(largest, "reference"):
+        largest = largest.reference("largest")
+    return largest
+
+
 def get_veltkamp_splitter_constant(ctx, largest: float):
     """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
     the floating point number system.
@@ -57,7 +64,7 @@ def next(ctx, x: float, up=True):
     fp64 = ctx.constant(1 - 1 / (1 << 53), largest)
     fp32 = ctx.constant(1 - 1 / (1 << 24), largest)
     fp16 = ctx.constant(1 - 1 / (1 << 11), largest)
-    c = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))  # .reference("Cnextup", force=True)
+    c = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
     if hasattr(c, "reference"):
         c = c.reference("Cnextup", force=True)
 
@@ -337,3 +344,34 @@ def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
         zh,
         ctx.select(s2 == zh, zh, ctx.select(t == 0, s1, ctx.select(g <= 0, zh, s2))),
     )
+
+
+def argument_reduction_exponent(ctx, x):
+    """Return r, k, c such that
+
+      x = k * log(2) + (r + c)
+
+    where `k` is integral, `abs(r) <= 0.51 * log(2) ~ 0.34658`, and `c`
+    is correction term to `r`.
+
+    Domain of applicability:
+      abs(x) < log(largest)
+    """
+    zero = ctx.constant(0, x)
+    one = ctx.constant(1, x)
+    half = ctx.constant(0.5, x)
+    ln2 = ctx.constant(6.93147180559945309417e-01, x)  # log(2)
+    ln2o2 = ctx.constant(3.46573590279972654709e-01, x)  # log(2) / 2
+    ln2o2x3 = ctx.constant(1.03972077083991796413e00, x)  # log(2) * 3 / 2
+    ln2inv = ctx.constant(1.44269504088896338700e00, x)  # 1 / log(2)
+    ax = abs(x)
+    sign = ctx.select(x < zero, -one, one)
+    shalf = ctx.select(x < zero, -half, half)
+    ln2hi, ln2lo = split_veltkamp(ctx, ln2, get_largest(ctx, x))
+    k0 = x / ln2 + shalf
+    k = ctx.floor(k0)
+    hi = x - k * ln2hi
+    lo = k * ln2lo
+    r = hi - lo
+    c = (hi - r) - lo
+    return k, r, c

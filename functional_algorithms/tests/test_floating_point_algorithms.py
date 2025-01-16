@@ -37,6 +37,11 @@ class NumpyContext:
             return dtype(value)
         assert 0, (value, like)  # unreachable
 
+    def floor(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.floor(value)
+        assert 0, (value, type(value))  # unreachable
+
 
 def test_split_veltkamp(dtype):
     p = utils.get_precision(dtype)
@@ -612,3 +617,21 @@ def test_next(dtype):
                 result = fpa.next(ctx, -x, up=True)
                 expected = numpy.nextafter(-x, dtype(numpy.inf))
             assert result == expected
+
+
+def test_argument_reduction_exponent(dtype):
+
+    ctx = NumpyContext()
+    size = 10000
+    fi = numpy.finfo(dtype)
+    min_value = fi.smallest_normal
+    max_value = numpy.log(fi.max)
+
+    for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+        with warnings.catch_warnings(action="ignore"):
+            k, r, c = fpa.argument_reduction_exponent(ctx, x)
+
+        assert int(k) == k
+        assert abs(r) <= numpy.log(dtype(2)) * dtype(0.51)
+        result = k * numpy.log(dtype(2)) + (r + c)
+        assert result == x
