@@ -62,7 +62,7 @@ def float2mpf(ctx, x):
         assert 0  # unreachable
 
 
-def mpf2float(dtype, x, flush_subnormals=False):
+def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """Convert mpf object to numpy floating-point number.
 
     When x is larger than largest value of the floating point system,
@@ -70,7 +70,12 @@ def mpf2float(dtype, x, flush_subnormals=False):
     """
     ctx = x.context
     if ctx.isfinite(x):
-        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
+        prec_rounding = ctx._prec_rounding
+        if prec is not None:
+            prec_rounding[0] = prec
+        if rounding is not None:
+            prec_rounding[1] = rounding
+        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
         assert bc >= 0, (sign, man, exp, bc, x._mpf_)
         fp_format = dtype.__name__
         zexp = (
@@ -2049,3 +2054,67 @@ class Clusters:
                     continue
                 result.add(point)
         return result
+
+
+def mpf2multiword(dtype, x, p=None):
+    """Return a list of fixed-width floating point numbers such that
+
+      x == sum([float2mpf(mpmath.mp, v) for v in result]) + O(smallest subnormal of dtype)
+
+    where x is a mpmath mpf instance.
+
+    In general, the result list is a monotone sequence of
+    floating-point numbers with precision p. If p is unspecified then
+    p is taken as the precision of the dtype floating-point system.
+
+    The result list is an exact representation of x when
+
+      x.bc < p * len(result)
+
+    holds. Otherwise, the result list represents a truncated x because
+    the given dtype floating-point system has limited exponent
+    size. For example, x is truncated when x.bc is greater than
+
+         33 for float16 (maximal len(result) is 3),
+        168 for float32 (maximal len(result) is 7),
+       1113 for float64 (maximal len(result) is 21),
+      16384 for longdouble (maximal len(result) is 256),
+
+    respectively.
+    """
+    sign, man, exp, bc = x._mpf_
+    mpf = x.context.mpf
+
+    """
+    p: 5
+    mask = (1 << p) - 1:  0b11111
+    man:                  0b101010101010101010101010101010101010101010
+                            ^^^^^vvvvv^^^^^vvvvv^^^^^vvvvv^^^^^vvvvv--
+    bl: 42
+    n = bl // p
+    r = bl - p * n: 2
+    rmask = (1 << r) - 1:                                         0b11
+    """
+    tp = get_precision(dtype)
+    if p is None:
+        p = tp
+    if p > tp:
+        raise ValueError(f"specified precision ({p}) exceeds the precision of {dtype.__name__} ({tp})")
+    mask = (1 << p) - 1
+    bl = man.bit_length()
+    n = bl // p
+    r = bl - n * p
+    result = []
+    for m in range(1, n + 1):
+        man1 = (man & (mask << (bl - p * m))) >> (bl - p * m)
+        exp1 = exp + (bl - p * m)
+        x1 = mpf2float(dtype, mpf((sign, man1, exp1, tp)))
+        if x1:
+            result.append(x1)
+        else:
+            break  # result will represent a truncation of x
+    if r:
+        x1 = mpf2float(dtype, mpf((sign, man & ((1 << r) - 1), exp, tp)))
+        if x1:
+            result.append(x1)
+    return result

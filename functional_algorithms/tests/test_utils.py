@@ -517,3 +517,25 @@ def test_square_dekker(real_dtype):
         else:
             # Dekker product is inaccurate when r2 is subnormal
             pass
+
+
+def test_mpf2multiword(real_dtype):
+    dtype = real_dtype
+    fi = numpy.finfo(dtype)
+    import mpmath
+
+    prec = utils.vectorize_with_mpmath.float_prec[dtype.__name__]
+    max_m = {numpy.float16: 3, numpy.float32: 7, numpy.float64: 21, numpy.longdouble: 256}[dtype]
+    max_m = min(max_m, 25)  # longdouble will be partially tested
+    for m in range(1, max_m + 1):
+        working_prec = prec * m
+        with mpmath.mp.workprec(working_prec):
+            ctx = mpmath.mp
+            for x in [ctx.pi + 0, ctx.log(2)]:
+                lst = utils.mpf2multiword(dtype, x)
+                for w in lst:
+                    assert w > 0
+                result = sum([utils.float2mpf(ctx, w) for w in lst], utils.float2mpf(ctx, dtype(0)))
+                assert result == x or abs(utils.mpf2float(dtype, result - x)) == 0
+                if lst[-1] == 0:
+                    break
