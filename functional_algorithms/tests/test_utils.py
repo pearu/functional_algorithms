@@ -539,3 +539,131 @@ def test_mpf2multiword(real_dtype):
                 assert result == x or abs(utils.mpf2float(dtype, result - x)) == 0
                 if lst[-1] == 0:
                     break
+
+
+def test_mpf2multiword_log2(real_dtype):
+    """Split log(2) into hi and lo so that
+
+      k * log(2) = k * hi + k * lo
+
+    is exact for all integral values 1 <= k <= kmax where
+
+      kmax = 2 * (bitwidth / 8) ** 3
+
+    kmax is defined as the maximal k value such that
+
+      exp(k * log(2)) is finite
+
+    within the given floating-point system.
+
+    The p argument of mpf2multiword defines the precision of
+    multiwords that maximal value is the precision of the
+    floating-point system. However, depending on the expected
+    cumulative precision of the multiword, there exists a subset of p
+    values for which the expected cumulative precision will be achived
+    for any k <= kmax. The following table is provided to help
+    choosing an optimal p values for various dtypes:
+
+              | expected    |                              | the number
+              | cumulative  |                              | of
+    dtype     | precision   | p values                     | words
+    ----------+-------------+------------------------------+------------
+    float64   | 1075        | 29, 30, 34:37, 39, 40, 42:45 | 37...24
+              | 1060        | 24, 28, 32, 33, 36:38, 40:45 | 44...24
+              | 795         | 31, 32, 35, 37:43, 45        | 26...18
+              | 530         | 28:36:2, 37-43, 45           | 19...12
+              | 265         | 27, 30, 31, 34:36, 38:43, 45 | 10...6
+              | 212         | 27, 31:32, 36:40, 43:45      | 8...5
+              | 159         | 27:28, 32:37, 40:45          | 6...4
+              | 106         | 26:28, 34:45                 | 4...3
+              | 80          | 26:32, 39:45                 | 3...2
+              | 53          | 27:45                        | 2
+    ----------+-------------+------------------------------+------------
+    float32   | 148         | 14:15, 17:19                 | 11...8
+              | 144         | 16, 18, 19                   | 9...8
+              | 120         | 15, 18                       | 8...7
+              | 72          | 12, 15, 16, 18, 19           | 6...4
+              | 48          | 12:14, 16:19                 | 4...3
+              | 36          | 12:14, 18, 19                | 3...2
+              | 24          | 11:19                        | 2
+    ----------+-------------+------------------------------+------------
+    float16   | 27          | 7:9                          | 3
+              | 22          | 7:9                          | 3
+              | 16          | 8, 9                         | 2
+              | 11          | 5:8                          | 2
+
+    For example::
+
+      with mpmath.workprec(53 * 2):
+          print(utils.mpf2multiword(numpy.float64, mpmath.log(2), p=32, max_length=2))
+
+    outputs
+
+      [0.6931471803691238, 1.9082149292705877e-10]
+
+    that contains the values of Ln2Hi and Ln2Lo in libgo/go/math/expm1.go
+
+    """
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import mpmath
+
+    dtype = real_dtype
+
+    bitwidth = {numpy.float16: 16, numpy.float32: 32, numpy.float64: 64}[dtype]
+    kmax = 2 * (bitwidth // 8) ** 3 // 4 + 1
+
+    dtype_p = utils.vectorize_with_mpmath.float_prec[dtype.__name__]
+    max_p = {numpy.float16: 9, numpy.float32: 19, numpy.float64: 45}[dtype]
+    min_p = {numpy.float16: 5, numpy.float32: 11, numpy.float64: 26}[dtype]
+    working_prec = int(dtype_p * 2)
+
+    print(f"\n{kmax=} {min_p=} {max_p=} {working_prec=}")
+    with mpmath.workprec(working_prec):
+        ctx = mpmath.mp
+        ln2 = ctx.log(2)
+        ln2_np = utils.mpf2float(dtype, ln2)
+        stats = dict(non_redundant=0, redundant=0)
+        for p in range(min_p, max_p + 1):
+            lst = utils.mpf2multiword(dtype, ln2, p=p)
+
+            # Accept only multiwords that provide exact representations of
+            #   k * ln2
+            # for all 1 <= k <= kmax.
+            ok = True
+            for k in range(1, kmax + 1):
+                exact = k * ln2
+                k_np = dtype(k)
+                exact_native_split = sum(
+                    [utils.float2mpf(ctx, k_np * v) for v in reversed(lst)], utils.float2mpf(ctx, dtype(0))
+                )
+                if exact_native_split != exact:
+                    ok = False
+                    break
+            if not ok:
+                continue
+
+            # Find minimal exact multiwords of ln2
+            for n in range(1, len(lst)):
+                lst2 = utils.mpf2multiword(dtype, ln2, p=p, max_length=n + 1)
+                assert len(lst2) <= n + 1
+
+                ok = True
+                for k in range(1, kmax + 1):
+                    exact = k * ln2
+                    k_np = dtype(k)
+                    exact_native_split2 = sum(
+                        [utils.float2mpf(ctx, k_np * v) for v in reversed(lst2)], utils.float2mpf(ctx, dtype(0))
+                    )
+                    if exact_native_split2 != exact:
+                        ok = False
+                        break
+                if ok:
+                    if len(lst) == len(lst2):
+                        print(f"{p=} {lst=}", flush=True)
+                        stats["non_redundant"] += 1
+                    else:
+                        print(f"{p=} {lst2=}", flush=True)
+                        stats["redundant"] += 1
+                    break
+        assert stats["non_redundant"] > 0

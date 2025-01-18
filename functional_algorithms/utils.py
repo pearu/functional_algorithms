@@ -2056,7 +2056,7 @@ class Clusters:
         return result
 
 
-def mpf2multiword(dtype, x, p=None):
+def mpf2multiword(dtype, x, p=None, max_length=None):
     """Return a list of fixed-width floating point numbers such that
 
       x == sum([float2mpf(mpmath.mp, v) for v in result]) + O(smallest subnormal of dtype)
@@ -2069,18 +2069,25 @@ def mpf2multiword(dtype, x, p=None):
 
     The result list is an exact representation of x when
 
-      x.bc < p * len(result)
+      x.bc <= p * len(result)
 
     holds. Otherwise, the result list represents a truncated x because
     the given dtype floating-point system has limited exponent
     size. For example, x is truncated when x.bc is greater than
 
-         33 for float16 (maximal len(result) is 3),
-        168 for float32 (maximal len(result) is 7),
-       1113 for float64 (maximal len(result) is 21),
-      16384 for longdouble (maximal len(result) is 256),
+         33 for float16 (maximal non-truncated len(result) is 3),
+        168 for float32 (maximal non-truncated len(result) is 7),
+       1113 for float64 (maximal non-truncated len(result) is 21),
+      16384 for longdouble (maximal non-truncated len(result) is 256),
 
     respectively.
+
+    When max_length is specified, then tailing words may be
+    accumulated so that
+
+      len(result) <= max_length
+
+    holds.
     """
     sign, man, exp, bc = x._mpf_
     mpf = x.context.mpf
@@ -2117,4 +2124,10 @@ def mpf2multiword(dtype, x, p=None):
         x1 = mpf2float(dtype, mpf((sign, man & ((1 << r) - 1), exp, tp)))
         if x1:
             result.append(x1)
+
+    if max_length is not None and len(result) > max_length:
+        ctx = x.context
+        result = result[: max_length - 1] + [
+            mpf2float(dtype, sum([float2mpf(ctx, v) for v in reversed(result[max_length - 1 :])], float2mpf(ctx, 0)))
+        ]
     return result
