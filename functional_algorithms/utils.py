@@ -2091,43 +2091,40 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
     """
     sign, man, exp, bc = x._mpf_
     mpf = x.context.mpf
-
-    """
-    p: 5
-    mask = (1 << p) - 1:  0b11111
-    man:                  0b101010101010101010101010101010101010101010
-                            ^^^^^vvvvv^^^^^vvvvv^^^^^vvvvv^^^^^vvvvv--
-    bl: 42
-    n = bl // p
-    r = bl - p * n: 2
-    rmask = (1 << r) - 1:                                         0b11
-    """
     tp = get_precision(dtype)
     if p is None:
         p = tp
     if p > tp:
         raise ValueError(f"specified precision ({p}) exceeds the precision of {dtype.__name__} ({tp})")
-    mask = (1 << p) - 1
     bl = man.bit_length()
-    n = bl // p
-    r = bl - n * p
+    mask = (1 << min(bl, p)) - 1
     result = []
-    for m in range(1, n + 1):
-        man1 = (man & (mask << (bl - p * m))) >> (bl - p * m)
-        exp1 = exp + (bl - p * m)
-        x1 = mpf2float(dtype, mpf((sign, man1, exp1, tp)))
-        if x1:
-            result.append(x1)
+    offset = max(bl - p, 0)
+    while True:
+        man1 = (man & (mask << offset)) >> offset
+        bl1 = man1.bit_length()
+        d = mask.bit_length() - bl1
+        assert d >= 0
+        if d > 0 and offset >= d:
+            # skip heading bytes that are zero for optimal compression
+            # of bit data. In some cases, this reduces result length.
+            offset -= d
+            man1 = (man & (mask << offset)) >> offset
+            bl1 = man1.bit_length()
+        exp1 = exp + offset
+        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)))
+        if x1 == dtype(0):
+            # result represents truncated x
+            break
+        result.append(x1)
+        if offset == 0:
+            break
+        elif (max_length is not None and len(result) == max_length - 1) or (offset < p):
+            # prepare for the last item
+            mask = (1 << offset) - 1
+            offset = 0
         else:
-            break  # result will represent a truncation of x
-    if r:
-        x1 = mpf2float(dtype, mpf((sign, man & ((1 << r) - 1), exp, tp)))
-        if x1:
-            result.append(x1)
+            # shift to next item
+            offset -= bl1
 
-    if max_length is not None and len(result) > max_length:
-        ctx = x.context
-        result = result[: max_length - 1] + [
-            mpf2float(dtype, sum([float2mpf(ctx, v) for v in reversed(result[max_length - 1 :])], float2mpf(ctx, 0)))
-        ]
     return result
