@@ -620,18 +620,28 @@ def test_next(dtype):
 
 
 def test_argument_reduction_exponent(dtype):
+    import mpmath
 
     ctx = NumpyContext()
-    size = 10000
+    size = 10_000_000 // 1000
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
     max_value = numpy.log(fi.max)
 
-    for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
-        with warnings.catch_warnings(action="ignore"):
-            k, r, c = fpa.argument_reduction_exponent(ctx, x)
+    extra_prec_multiplier = 2
+    working_prec = utils.vectorize_with_mpmath.float_prec[dtype.__name__] * extra_prec_multiplier
 
-        assert int(k) == k
-        assert abs(r) <= numpy.log(dtype(2)) * dtype(0.51)
-        result = k * numpy.log(dtype(2)) + (r + c)
-        assert result == x
+    with mpmath.workprec(working_prec):
+        mpctx = mpmath.mp
+        for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+            for s in [dtype(1), dtype(-1)]:
+                x = s * x
+                with warnings.catch_warnings(action="ignore"):
+                    k, r, c = fpa.argument_reduction_exponent(ctx, x)
+
+                    assert int(k) == k
+                    result = k * dtype(numpy.log(2)) + (r + c)
+                    b = numpy.log(dtype(2)) * dtype(0.51)
+                    assert abs(r + c) <= b, (k, r, c, x, result)
+
+                    assert utils.diff_ulp(x, result) <= 1, (x, k, r, c)

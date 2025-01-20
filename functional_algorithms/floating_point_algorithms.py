@@ -23,9 +23,10 @@ def get_veltkamp_splitter_constant(ctx, largest: float):
     fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
     fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
     fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
-    return ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference(
-        "veltkamp_splitter_constant", force=True
-    )
+    r = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if hasattr(r, "reference"):
+        r = r.reference("veltkamp_splitter_constant", force=True)
+    return r
 
 
 def get_is_power_of_two_constants(ctx, largest: float):
@@ -346,32 +347,83 @@ def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
     )
 
 
+def get_log2_doubleword_and_inverse(ctx, largest):
+    # The following coefficients are computed using
+    # tools/log2_doubleword.py script:
+
+    fp64 = ctx.constant(0.6931471805582987, largest)  # p=36, abserr=1.0077949135905144e-28
+    fp32 = ctx.constant(0.69314575, largest)  # p=16, abserr=5.497923e-14
+    fp16 = ctx.constant(0.6875, largest)  # p=4, abserr=1.43e-06
+    ln2hi = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    fp64 = ctx.constant(1.6465949582897082e-12, largest)  # p=36
+    fp32 = ctx.constant(1.4286068e-06, largest)  # p=16
+    fp16 = ctx.constant(0.005646, largest)  # p=4
+    ln2lo = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    ln2inv = ctx.constant(1.4426950408889634074, largest)
+    ln2half = ctx.constant(0.34657359027997265471, largest)
+    if hasattr(ln2hi, "reference"):
+        ln2hi = ln2hi.reference("ln2hi", force=True)
+        ln2lo = ln2lo.reference("ln2lo", force=True)
+        ln2inv = ln2hi.reference("ln2inv", force=True)
+        ln2half = ln2half.reference("ln2half", force=True)
+
+    return ln2hi, ln2lo, ln2inv, ln2half
+
+
 def argument_reduction_exponent(ctx, x):
     """Return r, k, c such that
 
       x = k * log(2) + (r + c)
 
-    where `k` is integral, `abs(r) <= 0.51 * log(2) ~ 0.34658`, and `c`
-    is correction term to `r`.
+    where `k` is integral, `abs(r + c) / log(2) <= 0.51`, and `(r, c)`
+    is a double-word representation of the remainder.
+
+    Within the domain of applicability, the upper limit to `k` is
+    `log(largest) / log(2)`, that is,
+
+      k <= 2 * bytesize ** 3
+
+    where bytesize is the byte size of floating point numbers.
+
+    Algorithm
+    ---------
+
+    Let (ln2hi, ln2lo) be a double-word representation of log(2), that is,
+
+      ln2hi + ln2lo == log(2)
+
+    where ln2hi, ln2lo are positive fixed-width floating point numbers
+    with precision p_dtype, log(2) and the addition are performed with
+    precision p such that
+
+      p > p_dtype.
+
+    In terms of fixed-width floating pointers, we have
+
+      (x, 0) == (k * ln2hi, k * ln2lo) + (r, c)
+
+    that is
+
+      x == k * ln2hi + r
+      0 == k * ln2lo + c
+
+    where we require `abs(r + c) <= log(2) * 0.5`. Hence
+
+      k = floor(x / (ln2hi + ln2lo) + 0.5)
+      r = x - k * ln2hi
+      c = -k * ln2lo
 
     Domain of applicability:
       abs(x) < log(largest)
+
     """
     zero = ctx.constant(0, x)
-    one = ctx.constant(1, x)
     half = ctx.constant(0.5, x)
-    ln2 = ctx.constant(6.93147180559945309417e-01, x)  # log(2)
-    ln2o2 = ctx.constant(3.46573590279972654709e-01, x)  # log(2) / 2
-    ln2o2x3 = ctx.constant(1.03972077083991796413e00, x)  # log(2) * 3 / 2
-    ln2inv = ctx.constant(1.44269504088896338700e00, x)  # 1 / log(2)
-    ax = abs(x)
-    sign = ctx.select(x < zero, -one, one)
-    shalf = ctx.select(x < zero, -half, half)
-    ln2hi, ln2lo = split_veltkamp(ctx, ln2, get_largest(ctx, x))
-    k0 = x / ln2 + shalf
-    k = ctx.floor(k0)
-    hi = x - k * ln2hi
-    lo = k * ln2lo
-    r = hi - lo
-    c = (hi - r) - lo
+    ln2hi, ln2lo, ln2inv, ln2half = get_log2_doubleword_and_inverse(ctx, get_largest(ctx, x))
+    # k = ctx.select(abs(x) <= ln2half, zero, ctx.floor(x * ln2inv + half))
+    k = ctx.floor(x * ln2inv + half)
+    r = x - k * ln2hi
+    c = -k * ln2lo
     return k, r, c
