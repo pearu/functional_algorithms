@@ -352,11 +352,21 @@ def get_log2_doubleword_and_inverse(ctx, largest):
     # tools/log2_doubleword.py script:
 
     fp64 = ctx.constant(0.6931471805582987, largest)  # p=36, abserr=1.0077949135905144e-28
+    fp64 = ctx.constant(0.6931471803691238, largest)  # p=32, abserr=1.1612227229362532e-26, same expm1 accuracy as p=32
+    # fp64 = ctx.constant(0.6931471787393093, largest)  # p=28, abserr=4.00865610552017e-26, same expm1 accuracy as p=32
+    # fp64 = ctx.constant(0.6931471675634384, largest)  # p=26, abserr=2.4688171419345863e-25, same as p=32
+    # fp64 = ctx.constant(0.6931471805598903, largest)  # p=44, abserr=1.94704509238075e-31, same as p=32
+
     fp32 = ctx.constant(0.69314575, largest)  # p=16, abserr=5.497923e-14
     fp16 = ctx.constant(0.6875, largest)  # p=4, abserr=1.43e-06
     ln2hi = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
 
     fp64 = ctx.constant(1.6465949582897082e-12, largest)  # p=36
+    fp64 = ctx.constant(1.9082149292705877e-10, largest)  # p=32
+    # fp64 = ctx.constant(1.8206359985041462e-09, largest)  # p=28
+    # fp64 = ctx.constant(1.2996506893889889e-08, largest)  # p=26
+    # fp64 = ctx.constant(5.497923018708371e-14, largest)  # p=44
+
     fp32 = ctx.constant(1.4286068e-06, largest)  # p=16
     fp16 = ctx.constant(0.005646, largest)  # p=4
     ln2lo = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
@@ -366,7 +376,7 @@ def get_log2_doubleword_and_inverse(ctx, largest):
     if hasattr(ln2hi, "reference"):
         ln2hi = ln2hi.reference("ln2hi", force=True)
         ln2lo = ln2lo.reference("ln2lo", force=True)
-        ln2inv = ln2hi.reference("ln2inv", force=True)
+        ln2inv = ln2inv.reference("ln2inv", force=True)
         ln2half = ln2half.reference("ln2half", force=True)
 
     return ln2hi, ln2lo, ln2inv, ln2half
@@ -419,10 +429,25 @@ def argument_reduction_exponent(ctx, x):
       abs(x) < log(largest)
 
     """
-    zero = ctx.constant(0, x)
     half = ctx.constant(0.5, x)
     ln2hi, ln2lo, ln2inv, ln2half = get_log2_doubleword_and_inverse(ctx, get_largest(ctx, x))
-    # k = ctx.select(abs(x) <= ln2half, zero, ctx.floor(x * ln2inv + half))
+
+    # assume x > 0, then
+    #             x < ln2 * (k + 0.5)
+    # x / ln2 - 0.5 < k
+    # that is
+    #   k = ceil(x / ln2 - 0.5) = ceil(x / ln2 + 0.5) - 1  = floor(x / ln2 + 0.5)
+    #     [iff `x / ln2 + 0.5` is not integer!, otherwise] = floor(x / ln2 + 0.5) + 1
+    # however, we can drop the addition by 1 because the absolute values of
+    #  x - k * ln2
+    #  x - (k + 1) * ln2
+    # are both less than log(2) / 2
+    #
+    # for negative x, we'll have
+    #    -x < ln2 * (-k + 0.5)
+    #     k < x / ln2 + 0.5
+    # k = floor(x / ln2 + 0.5)
+
     k = ctx.floor(x * ln2inv + half)
     r = x - k * ln2hi
     c = -k * ln2lo

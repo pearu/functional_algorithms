@@ -631,6 +631,9 @@ def test_argument_reduction_exponent(dtype):
     extra_prec_multiplier = 2
     working_prec = utils.vectorize_with_mpmath.float_prec[dtype.__name__] * extra_prec_multiplier
 
+    ln2half = dtype(numpy.log(2) / 2)
+    ln2 = dtype(numpy.log(2))
+
     with mpmath.workprec(working_prec):
         mpctx = mpmath.mp
         for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
@@ -640,8 +643,8 @@ def test_argument_reduction_exponent(dtype):
                     k, r, c = fpa.argument_reduction_exponent(ctx, x)
 
                     assert int(k) == k
-                    result = k * dtype(numpy.log(2)) + (r + c)
-                    b = numpy.log(dtype(2)) * dtype(0.51)
-                    assert abs(r + c) <= b, (k, r, c, x, result)
-
-                    assert utils.diff_ulp(x, result) <= 1, (x, k, r, c)
+                    assert utils.diff_ulp(x, k * ln2 + (r + c)) <= 1
+                    # multiplication with 1.1 is required for float16
+                    # dtype case due to rounding effects in float16
+                    # arithmetics:
+                    assert abs(r + c) <= ln2half * dtype(1.1)
