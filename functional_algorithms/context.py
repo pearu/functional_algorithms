@@ -449,6 +449,9 @@ class Context:
     def expm1(self, x):
         return Expr(self, "expm1", (x,))
 
+    def exp2(self, x):
+        return Expr(self, "exp2", (x,))
+
     def log(self, x):
         return Expr(self, "log", (x,))
 

@@ -15,7 +15,7 @@ minimum, maximum,
 asin, acos, atan, asinh, acosh, atanh, asin_acos_kernel, atan2,
 sin, cos, tan, sinh, cosh, tanh,
 log, log1p, log2, log10,
-exp, expm1, sqrt, square, pow,
+exp, expm1, sqrt, square, pow, exp2,
 complex, conjugate, real, imag, absolute, hypot,
 lt, gt, le, ge, eq, ne,
 logical_and, logical_or, logical_xor, logical_not,
@@ -69,6 +69,7 @@ def normalize_like(expr):
             "tan",
             "tanh",
             "exp",
+            "exp2",
             "expm1",
             "log",
             "log1p",
@@ -1017,12 +1018,13 @@ class Expr:
             "log10",
             "exp",
             "expm1",
+            "exp2",
         }:
             return self.operands[0].is_complex
         elif self.kind == "apply":
             return self.operands[-1].is_complex
         else:
-            raise NotImplementedError(f"Expr.is_complex for {self.kind}")
+            raise NotImplementedError(f"{type(self).__name__}.is_complex not implemented for {self.kind}")
 
     @_cache_in_props
     def get_type(self):
@@ -1054,6 +1056,7 @@ class Expr:
             "log2",
             "log10",
             "exp",
+            "exp2",
             "expm1",
             "ceil",
             "floor",
@@ -1092,7 +1095,7 @@ class Expr:
         elif self.kind == "downcast":
             t = self.operands[0].get_type()
             return Type(self.context, t.kind, t.bits // 2 if t.bits is not None else None)
-        raise NotImplementedError((self.kind, str(self)))
+        raise NotImplementedError(f"{type(self).__name__}.get_type not implemented for {self.kind}")
 
 
 def assert_equal(result, expected):
