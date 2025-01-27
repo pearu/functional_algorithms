@@ -13,6 +13,40 @@ def get_largest(ctx, x: float):
     return largest
 
 
+def get_largest_log(ctx, x: float):
+    """Get largest value such that exp(largest) is finite."""
+    import numpy
+
+    def get_value(dtype):
+        return float(numpy.nextafter(numpy.log(numpy.finfo(dtype).max), dtype(0)))
+
+    largest = ctx.constant("largest", x)
+    fp64 = ctx.constant(get_value(numpy.float64), largest)
+    fp32 = ctx.constant(get_value(numpy.float32), largest)
+    fp16 = ctx.constant(get_value(numpy.float16), largest)
+    r = ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
+    if hasattr(r, "reference"):
+        r = r.reference("largest_log")
+    return r
+
+
+def get_smallest_log(ctx, x: float):
+    """Get smallest value such that exp(smallest) is non-zero."""
+    import numpy
+
+    def get_value(dtype):
+        return float(numpy.nextafter(numpy.log(numpy.finfo(dtype).smallest_normal), dtype(0)))
+
+    largest = ctx.constant("largest", x)
+    fp64 = ctx.constant(get_value(numpy.float64), largest)
+    fp32 = ctx.constant(get_value(numpy.float32), largest)
+    fp16 = ctx.constant(get_value(numpy.float16), largest)
+    r = ctx(ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)))
+    if hasattr(r, "reference"):
+        r = r.reference("smallest_log")
+    return r
+
+
 def get_veltkamp_splitter_constant(ctx, largest: float):
     """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
     the floating point number system.
@@ -110,7 +144,16 @@ def split_veltkamp(ctx, x, C):
     return xh, xl
 
 
-def mul_dekker(ctx, x, y, C):
+def mul_dw(ctx, x, y, xh, xl, yh, yl):
+    xyh = x * y
+    t1 = (-xyh) + xh * yh
+    t2 = t1 + xh * yl
+    t3 = t2 + xl * yh
+    xyl = t3 + xl * yl
+    return xyh, xyl
+
+
+def mul_dekker(ctx, x, y, C=None):
     """Dekker product:
 
       x * y = xyh + xyl
@@ -138,14 +181,12 @@ def mul_dekker(ctx, x, y, C):
       makes only sense when the accuracy of the pair (xyh, xyl) is
       taken into account.
     """
+    if C is None:
+        largest = get_largest(ctx, x)
+        C = get_veltkamp_splitter_constant(ctx, largest)
     xh, xl = split_veltkamp(ctx, x, C)
     yh, yl = split_veltkamp(ctx, y, C)
-    xyh = x * y
-    t1 = (-xyh) + xh * yh
-    t2 = t1 + xh * yl
-    t3 = t2 + xl * yh
-    xyl = t3 + xl * yl
-    return xyh, xyl
+    return mul_dw(ctx, x, y, xh, xl, yh, yl)
 
 
 def add_2sum(ctx, x, y, fast=False):
@@ -351,35 +392,51 @@ def get_log2_doubleword_and_inverse(ctx, largest):
     # The following coefficients are computed using
     # tools/log2_doubleword.py script:
 
-    fp64 = ctx.constant(0.6931471805582987, largest)  # p=36, abserr=1.0077949135905144e-28
-    fp64 = ctx.constant(0.6931471803691238, largest)  # p=32, abserr=1.1612227229362532e-26, same expm1 accuracy as p=32
-    # fp64 = ctx.constant(0.6931471787393093, largest)  # p=28, abserr=4.00865610552017e-26, same expm1 accuracy as p=32
-    # fp64 = ctx.constant(0.6931471675634384, largest)  # p=26, abserr=2.4688171419345863e-25, same as p=32
-    # fp64 = ctx.constant(0.6931471805598903, largest)  # p=44, abserr=1.94704509238075e-31, same as p=32
+    if 0:
+        # p=44, abserr=1.94704509238075e-31, same as p=32
+        fp64 = ctx.constant(0.6931471805598903, largest)
+        fp64_ = ctx.constant(5.497923018708371e-14, largest)
+    elif 0:
+        # p=36, abserr=1.0077949135905144e-28
+        # float64: ULP differences and counts: 0: 2092780, 1: 8020
+        fp64 = ctx.constant(0.6931471805582987, largest)
+        fp64_ = ctx.constant(1.6465949582897082e-12, largest)
+    elif 1:
+        # p=32, abserr=1.1612227229362532e-26, same expm1 accuracy as p=32
+        fp64 = ctx.constant(0.6931471803691238, largest)
+        fp64_ = ctx.constant(1.9082149292705877e-10, largest)
+    elif 0:
+        # p=28, abserr=4.00865610552017e-26, same expm1 accuracy as p=32
+        # float64: ULP differences and counts: 0: 2092780, 1: 8020
+        fp64 = ctx.constant(0.6931471787393093, largest)
+        fp64_ = ctx.constant(1.8206359985041462e-09, largest)
+    elif 0:
+        # p=26, abserr=2.4688171419345863e-25, same as p=32
+        fp64 = ctx.constant(0.6931471675634384, largest)
+        fp64_ = ctx.constant(1.2996506893889889e-08, largest)
+    else:
+        assert 0  # unreachable
 
     fp32 = ctx.constant(0.69314575, largest)  # p=16, abserr=5.497923e-14
+    fp32_ = ctx.constant(1.4286068e-06, largest)  # p=16
+
     fp16 = ctx.constant(0.6875, largest)  # p=4, abserr=1.43e-06
+    fp16_ = ctx.constant(0.005646, largest)  # p=4
+
     ln2hi = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    ln2lo = ctx.select(largest > 1e308, fp64_, ctx.select(largest > 1e38, fp32_, fp16_))
 
-    fp64 = ctx.constant(1.6465949582897082e-12, largest)  # p=36
-    fp64 = ctx.constant(1.9082149292705877e-10, largest)  # p=32
-    # fp64 = ctx.constant(1.8206359985041462e-09, largest)  # p=28
-    # fp64 = ctx.constant(1.2996506893889889e-08, largest)  # p=26
-    # fp64 = ctx.constant(5.497923018708371e-14, largest)  # p=44
-
-    fp32 = ctx.constant(1.4286068e-06, largest)  # p=16
-    fp16 = ctx.constant(0.005646, largest)  # p=4
-    ln2lo = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
-
+    ln2 = ctx.constant(0.693147180559945309417, largest)
     ln2inv = ctx.constant(1.4426950408889634074, largest)
     ln2half = ctx.constant(0.34657359027997265471, largest)
     if hasattr(ln2hi, "reference"):
+        ln2 = ln2.reference("ln2", force=True)
         ln2hi = ln2hi.reference("ln2hi", force=True)
         ln2lo = ln2lo.reference("ln2lo", force=True)
         ln2inv = ln2inv.reference("ln2inv", force=True)
         ln2half = ln2half.reference("ln2half", force=True)
 
-    return ln2hi, ln2lo, ln2inv, ln2half
+    return ln2, ln2hi, ln2lo, ln2inv, ln2half
 
 
 def argument_reduction_exponent(ctx, x):
@@ -430,7 +487,7 @@ def argument_reduction_exponent(ctx, x):
 
     """
     half = ctx.constant(0.5, x)
-    ln2hi, ln2lo, ln2inv, ln2half = get_log2_doubleword_and_inverse(ctx, get_largest(ctx, x))
+    ln2, ln2hi, ln2lo, ln2inv, ln2half = get_log2_doubleword_and_inverse(ctx, get_largest(ctx, x))
 
     # assume x > 0, then
     #             x < ln2 * (k + 0.5)
@@ -452,3 +509,148 @@ def argument_reduction_exponent(ctx, x):
     r = x - k * ln2hi
     c = -k * ln2lo
     return k, r, c
+
+
+def horner(ctx, x, coeffs, reverse=True):
+    """Evaluate a polynomial
+
+     P(x) = coeffs[N] + coeffs[N - 1] * x + ... + coeffs[0] * x ** N
+
+    when reverse is True, otherwise evaluate a polynomial
+
+      P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+
+    where `N = len(coeffs) - 1`, using Horner's scheme.
+    """
+    N = len(coeffs) - 1
+    if reverse:
+        s = ctx.constant(coeffs[0], x)
+        indices = range(N)
+    else:
+        s = ctx.constant(coeffs[N], x)
+        indices = reversed(range(N))
+    for i in indices:
+        s = s * x + coeffs[i]
+    return s
+
+
+def compensated_horner(ctx, x, coeffs, reverse=True):
+    """Evaluate a polynomial
+
+     P(x) = coeffs[N] + coeffs[N - 1] * x + ... + coeffs[0] * x ** N
+
+    when reverse is True, otherwise evaluate a polynomial
+
+      P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+
+    where `N = len(coeffs) - 1`, using compensated Horner's scheme.
+
+    Reference:
+      https://hal.science/hal-01578486/document
+    """
+    N = len(coeffs) - 1
+    if reverse:
+        s = ctx.constant(coeffs[0], x)
+        indices = range(N)
+    else:
+        s = ctx.constant(coeffs[N], x)
+        indices = reversed(range(N))
+    r = ctx.constant(0, x)
+    for i in indices:
+        p, pp = mul_dekker(ctx, s, x)
+        s, sg = add_2sum(ctx, p, coeffs[i])
+        r = r * x + (pp + sg)
+    return s, r
+
+
+def fast_exponent_by_squaring(ctx, x, n):
+    """Evaluate x ** n by squaring."""
+    if n == 0:
+        return ctx.constant(1, x)
+    if n == 1:
+        return x
+    if n == 2:
+        return x * x
+    assert n > 0
+    r = fast_exponent_by_squaring(ctx, x, n // 2)
+    if n % 2 == 0:
+        return r * r
+    return r * r * x
+
+
+def canonical_scheme(k, N):
+    return k
+
+
+def horner_scheme(k, N):
+    return 1
+
+
+def estrin_dac_scheme(k, N):
+    import math
+
+    return int(math.log(k))
+
+
+def balanced_dac_scheme(k, N):
+    return k // 2
+
+
+def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
+    """Evaluate a polynomial
+
+     P(x) = coeffs[N] + coeffs[N - 1] * x + ... + coeffs[0] * x ** N
+
+    when reverse is True, otherwise evaluate a polynomial
+
+      P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+
+    where `N = len(coeffs) - 1`, using "Fast polynomial evaluation and
+    composition" algorithm by G. Moroz.
+
+    scheme is an int-to-int unary function. Examples:
+
+      scheme = lambda k, N: k            # canonical polynomial
+      scheme = lambda k, N: 1            # Horner's scheme
+      scheme = lambda k, N: int(log(k))  # Estrin' DAC scheme
+      scheme = lambda k, N: k // 2       # balanced DAC scheme [default]
+
+    Reference:
+      https://hal.science/hal-00846961v3
+    """
+
+    if reverse:
+        return fast_polynomial(ctx, x, reversed(coeffs), reverse=False, scheme=scheme)
+
+    if scheme is None:
+        scheme = balanced_dac_scheme
+
+    N = len(coeffs) - 1
+    if _N is None:
+        _N = N
+
+    if N == 0:
+        return ctx.constant(coeffs[0], x)
+
+    if N == 1:
+        return ctx.constant(coeffs[0], x) + ctx.constant(coeffs[1], x) * x
+
+    d = scheme(N, _N)
+
+    if d == 0:
+        # evaluate reduced polynomial as it is
+        s = ctx.constant(coeffs[0], x)
+        for i in range(1, N):
+            s += coeffs[i] * fast_exponent_by_squaring(ctx, x, i)
+        return s
+
+    # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+    #      = A(x) * x ** d + B(x)
+    # where
+    #   A(x) = coeffs[d] + coeffs[d + 1] * x + ... + coeffs[N] * x ** (N - d)
+    #   B(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[d - 1] * x ** (d - 1)
+
+    a = fast_polynomial(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
+    b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
+    xd = fast_exponent_by_squaring(ctx, x, d)
+    return a * xd + b
