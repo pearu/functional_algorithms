@@ -62,7 +62,7 @@ def float2mpf(ctx, x):
         assert 0  # unreachable
 
 
-def mpf2float(dtype, x, flush_subnormals=False):
+def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """Convert mpf object to numpy floating-point number.
 
     When x is larger than largest value of the floating point system,
@@ -70,7 +70,12 @@ def mpf2float(dtype, x, flush_subnormals=False):
     """
     ctx = x.context
     if ctx.isfinite(x):
-        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *ctx._prec_rounding)
+        prec_rounding = ctx._prec_rounding
+        if prec is not None:
+            prec_rounding[0] = prec
+        if rounding is not None:
+            prec_rounding[1] = rounding
+        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
         assert bc >= 0, (sign, man, exp, bc, x._mpf_)
         fp_format = dtype.__name__
         zexp = (
@@ -2049,3 +2054,77 @@ class Clusters:
                     continue
                 result.add(point)
         return result
+
+
+def mpf2multiword(dtype, x, p=None, max_length=None):
+    """Return a list of fixed-width floating point numbers such that
+
+      x == sum([float2mpf(mpmath.mp, v) for v in result]) + O(smallest subnormal of dtype)
+
+    where x is a mpmath mpf instance.
+
+    In general, the result list is a monotone sequence of
+    floating-point numbers with precision p. If p is unspecified then
+    p is taken as the precision of the dtype floating-point system.
+
+    The result list is an exact representation of x when
+
+      x.bc <= p * len(result)
+
+    holds. Otherwise, the result list represents a truncated x because
+    the given dtype floating-point system has limited exponent
+    size. For example, x is truncated when x.bc is greater than
+
+         33 for float16 (maximal non-truncated len(result) is 3),
+        168 for float32 (maximal non-truncated len(result) is 7),
+       1113 for float64 (maximal non-truncated len(result) is 21),
+      16384 for longdouble (maximal non-truncated len(result) is 256),
+
+    respectively.
+
+    When max_length is specified, then tailing words may be
+    accumulated so that
+
+      len(result) <= max_length
+
+    holds.
+    """
+    sign, man, exp, bc = x._mpf_
+    mpf = x.context.mpf
+    tp = get_precision(dtype)
+    if p is None:
+        p = tp
+    if p > tp:
+        raise ValueError(f"specified precision ({p}) exceeds the precision of {dtype.__name__} ({tp})")
+    bl = man.bit_length()
+    mask = (1 << min(bl, p)) - 1
+    result = []
+    offset = max(bl - p, 0)
+    while True:
+        man1 = (man & (mask << offset)) >> offset
+        bl1 = man1.bit_length()
+        d = mask.bit_length() - bl1
+        assert d >= 0
+        if d > 0 and offset >= d:
+            # skip heading bytes that are zero for optimal compression
+            # of bit data. In some cases, this reduces result length.
+            offset -= d
+            man1 = (man & (mask << offset)) >> offset
+            bl1 = man1.bit_length()
+        exp1 = exp + offset
+        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)))
+        if x1 == dtype(0):
+            # result represents truncated x
+            break
+        result.append(x1)
+        if offset == 0:
+            break
+        elif (max_length is not None and len(result) == max_length - 1) or (offset < p):
+            # prepare for the last item
+            mask = (1 << offset) - 1
+            offset = 0
+        else:
+            # shift to next item
+            offset -= bl1
+
+    return result

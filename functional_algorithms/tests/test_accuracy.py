@@ -131,10 +131,7 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
             blocksize = 5
 
         samples = fa.utils.real_samples(
-            rows * blocks * blocksize,
-            dtype=dtype,
-            include_subnormal=include_subnormal,
-            include_zero=False,
+            rows * blocks * blocksize, dtype=dtype, include_subnormal=include_subnormal, include_zero=False
         )
         assert samples.size == rows * blocks * blocksize, (samples.size, rows * blocks * blocksize)
         samples = samples.reshape(rows, blocks * blocksize)
@@ -199,6 +196,10 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
     if numpy.all(ulp == 0):
         return
     print(f"maximal ULP difference: {ulp.max()}")
+    lst = []
+    for i, u in enumerate(sorted(numpy.unique(ulp.flatten()))):
+        lst.append(f"{u}: {(ulp == u).sum()}")
+    print(f"{dtype.__name__}: ULP differences and counts:", ", ".join(lst))
     if numpy.all(ulp <= max_valid_ulp_count):
         return
 

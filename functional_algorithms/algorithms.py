@@ -1671,3 +1671,301 @@ def complex_exp(ctx, z: complex):
 @definition("exp", domain="real")
 def real_exp(ctx, z: float):
     return ctx.exp(z)  # using native exp
+
+
+@definition("expm1")
+def expm1(ctx, z: complex | float):
+    assert 0  # unreachable
+
+
+def real_expm1_small_cephes(ctx, x: float):
+    """Exponential on real inputs minus 1:
+
+      expm1(x) = exp(x) - 1
+
+    for abs(x) <= 0.5.
+
+    Algorithm copied from cephes-math/unity.c
+    """
+
+    """
+    Accuracy test within interval [0, log(2)/2]
+
+    maximal ULP difference: 4
+    ULP difference == 0: 1894694
+    ULP difference == 1: 190426
+    ULP difference == 2: 15270
+    ULP difference == 3: 409
+    ULP difference == 4: 1
+    """
+    Pcoeffs = [1.2617719307481059087798e-4, 3.0299440770744196129956e-2, 9.9999999999999999991025e-1]
+    Qcoeffs = [
+        3.0019850513866445504159e-6,
+        2.5244834034968410419224e-3,
+        2.2726554820815502876593e-1,
+        2.0000000000000000000897e0,
+    ]
+
+    xx = x * x
+    p = fpa.fast_polynomial(ctx, xx, Pcoeffs, reverse=True)
+    q = fpa.fast_polynomial(ctx, xx, Qcoeffs, reverse=True)
+    r = x * (p / (q - x * p))
+    return r + r
+
+
+def real_expm1_small_boost(ctx, x: float):
+    """Exponential on real inputs minus 1:
+
+      expm1(x) = exp(x) - 1
+
+    for abs(x) <= log(2).
+
+    Algorithm copied from boost/math/special_functions/expm1.hpp
+    """
+
+    if 1:
+        # tested for float32, float64 in the range abs(x) <= 0.5
+        Ncoeffs = [
+            -0.28127670288085937e-1,
+            0.51278186299064534e0,
+            -0.6310029069350198e-1,
+            0.11638457975729296e-1,
+            -0.52143390687521003e-3,
+            0.21491399776965688e-4,
+        ]
+        Dcoeffs = [
+            1,
+            -0.45442309511354755e0,
+            0.90850389570911714e-1,
+            -0.10088963629815502e-1,
+            0.63003407478692265e-3,
+            -0.17976570003654402e-4,
+        ]
+        Y = 0.10281276702880859e1
+    else:
+        # very slightly better accuracy for float64 in the range
+        # abs(x) <= log(2) / 2 but has extra computational overhead
+        Ncoeffs = [
+            -0.281276702880859375e-1,
+            0.512980290285154286358e0,
+            -0.667758794592881019644e-1,
+            0.131432469658444745835e-1,
+            -0.72303795326880286965e-3,
+            0.447441185192951335042e-4,
+            -0.714539134024984593011e-6,
+        ]
+        Dcoeffs = [
+            1.0,
+            -0.461477618025562520389e0,
+            0.961237488025708540713e-1,
+            -0.116483957658204450739e-1,
+            0.873308008461557544458e-3,
+            -0.387922804997682392562e-4,
+            0.807473180049193557294e-6,
+        ]
+        Y = 0.10281276702880859375e1
+
+    scheme = fpa.balanced_dac_scheme
+    n = fpa.fast_polynomial(ctx, x, Ncoeffs, reverse=False, scheme=scheme)
+    d = fpa.fast_polynomial(ctx, x, Dcoeffs, reverse=False, scheme=scheme)
+
+    # n, dn = fpa.compensated_horner(ctx, x, Ncoeffs, reverse=False)
+    # d, dd = fpa.compensated_horner(ctx, x, Dcoeffs, reverse=False)
+
+    # ULP differences and counts for float32, x range: [0, log(2)/2], using `if 0:` above
+    # return (x * Y * d + x * n) / d   # 0: 1867245, 1: 229760, 2: 3762, 3: 33
+    # return x * (Y * d + n) / d       # 0: 1909016, 1: 177076, 2: 14679, 3: 29
+    # return x * Y + x * n / d         # 0: 1917081, 1: 183715, 2: 4
+    # return x * Y + x * (n / d)       # 0: 1917072, 1: 183724, 2: 4
+    # return x * Y + n * (x / d)       # 0: 1917019, 1: 183777, 2: 4
+    # return ctx.expm1(x)              # 0: 2050582, 1: 47476,  2: 2742; float64: 0: 2095288, 1: 5433, 2: 79
+    # return x * (Y + (n + dn) / (d + dd)) # 0: 1957766, 1: 143034
+    # return x * Y + x * n / d  # float32: 0: 1916914, 1: 183883, 2: 3
+    return x * (Y + n / d)  # float32: 0: 1957731, 1: 143069
+
+
+def real_expm1_small_go(ctx, x: float):
+    """Exponential on real inputs minus 1:
+
+      expm1(x) = exp(x) - 1
+
+    for abs(x) <= 0.5.
+
+    Algorithm copied from libgo/go/math/expm1.go
+    """
+
+    """
+    Accuracy test within interval [0, log(2)/2]
+
+    maximal ULP difference: 1558
+    ULP difference == 0: 2034408
+    ULP difference == 1: 12542
+    ULP difference == 2: 3163
+    ULP difference == 3: 1991
+    ULP difference == 4: 1626
+    ULP difference == 5: 1857
+    ULP difference == 6: 2116
+    ULP difference == 7: 1675
+    ULP difference == 8: 1537
+    ULP difference == 9: 1337
+    ULP difference == 10: 1125
+    ULP difference >= 11: 37423
+    """
+
+    Qcoeffs = [
+        1.0,
+        -3.33333333333331316428e-02,
+        1.58730158725481460165e-03,
+        -7.93650757867487942473e-05,
+        4.00821782732936239552e-06,
+        -2.01099218183624371326e-07,
+    ]
+    hfx = 0.5 * x
+    hxs = x * hfx
+    r1 = fpa.fast_polynomial(ctx, x, Qcoeffs, reverse=False)
+    t = 3 - r1 * hfx
+    e = hxs * ((r1 - t) / (6.0 - x * t))
+    return x - (x * e - hxs)
+
+
+def real_expm1_small_native(ctx, x: float):
+    """Exponential on real inputs minus 1:
+
+      expm1(x) = exp(x) - 1
+
+    for abs(x) <= 0.5.
+
+    Using native expm1.
+    """
+
+    """
+    Accuracy test within interval [0, log(2)/2]
+
+    maximal ULP difference: 2
+    ULP difference == 0: 2050582
+    ULP difference == 1: 47476
+    ULP difference == 2: 2742
+    """
+    return ctx.expm1(x)
+
+
+@definition("expm1", domain="real")
+def real_expm1(ctx, x: float):
+    """Exponential on real inputs minus 1:
+
+      expm1(x) = exp(x) - 1
+
+    Algorithm
+    ---------
+
+    First, let's define argument reduction as follows
+
+      x -> (k, r, c) such that x == k * log(2) + (r + c)
+
+    where (r + c) < 0.5 * log(2). In the following, we'll assume that
+    expm1_small(x) exists that computes expm1(x) for values abs(x) <
+    log(2) with high-accuracy. For `k == 0` or when `abs(x) < log(2)`,
+    we'll have
+
+      expm1(x) = expm1_small(x)
+
+    However, for very small `x` (`2 + x * x == 2`), we'll
+    use Taylor series:
+
+      expm1(x) = x + x * x / 2
+
+    For `k == 1`, we'll have
+
+      expm1(x) = expm1(log(2) + (r + c)) = 2 * expm1_small(r + c) + 1
+
+    For all other cases, we'll have
+
+      expm1(x) = exp2(k) * expm1_small(r + c) + (1 - exp2(-k))
+
+    where `exp2(k) = 2 ** k`.
+
+    """
+    # On real line:
+    # float32: ULP differences and counts: 0: 2069970, 1: 29018, 2: 1812
+    # float64: ULP differences and counts: 0: 2097313, 1: 3473, 2: 14
+    # return ctx.expm1(x)
+    #
+    # This function:
+    # float32: ULP differences and counts: 0: 2070852, 1: 29945, 2: 3
+    # float64: ULP differences and counts: 0: 2092779, 1: 8021
+
+    real_expm1_small = real_expm1_small_boost
+    two = ctx.constant(2, x)
+    half = ctx.constant(0.5, x)
+    one = ctx.constant(1, x)
+
+    k, r, c = fpa.argument_reduction_exponent(ctx, x)
+    em1rc = real_expm1_small(ctx, r + c)
+
+    # On region k == 0 and x > 0:
+    # Using Horner:
+    #   float64: ULP differences and counts: 0: 1988715, 1: 112081, 2: 4
+    #   float32: ULP differences and counts: 0: 1917081, 1: 183715, 2: 4
+    # Using compensated Horner:
+    #   float64: ULP differences and counts: 0: 1988757, 1: 112039, 2: 4
+    #   float32: ULP differences and counts: 0: 1917068, 1: 183728, 2: 4
+    #   float32: ULP differences and counts: 0: 1917073, 1: 183723, 2: 4
+    # Using fast_polynomial/horner_scheme:
+    #   float32: ULP differences and counts: 0: 1957702, 1: 143098
+    # Using fast_polynomial/balanced_dac_scheme:
+    #   float32: ULP differences and counts: 0: 1957731, 1: 143069
+    # Using fast_polynomial/canonical_scheme:
+    #   float32: ULP differences and counts: 0: 1957643, 1: 143156, 2: 1
+    res_small = real_expm1_small(ctx, x)  # if k == 0 then c == 0 and r == x
+
+    xx = x * x
+    res_tiny = x + xx * half
+
+    # float64: 0: 1309770, 1: 791025, 2: 5 [res_small only]
+    #          0: 1720204, 1: 380591, 2: 5 [w/res_tiny]
+    #          0: 1725108, 1: 375688, 2: 4 [one + 0.25 * xx == one]
+    # float32: 0: 1753244, 1: 347556 [res_small only]
+    #          0: 1943596, 1: 157204 [w/res_tiny]
+    #          0: 1935999, 1: 164801 [2 * xx]
+    #          0: 1946228, 1: 154572 [0.5 * xx]
+    #          0: 1946228, 1: 154572 [0.25 * xx]
+
+    res0 = ctx.select(two + xx == two, res_tiny, res_small)
+
+    # For comparison, on the same region:
+    # float64: ULP differences and counts: 0: 2095288, 1: 5433, 2: 79
+    # float32: ULP differences and counts: 0: 2050582, 1: 47476, 2: 2742
+    # res0 = ctx.expm1(x)
+
+    # Below, we'll use an empirical restriction for
+    # real_expm1_small_boost to maximize accuracy in a region where
+    # abs(k) == 1:
+    # float32:
+    # 0: 1670559, 1: 430214, 2: 27  # 0.42
+    # 0: 1676261, 1: 424512, 2: 27  # 0.45
+    # 0: 1678105, 1: 422668, 2: 27  # 0.48
+    # 0: 1676510, 1: 424263, 2: 27  # 0.5
+    # 0: 1659892, 1: 440879, 2: 29  # 0.58
+    # float64:
+    # 0: 1420630, 1: 680105, 2: 65  # 0.42
+    # 0: 1439549, 1: 661186, 2: 65  # 0.45
+    # 0: 1456386, 1: 644349, 2: 65  # 0.48
+    # 0: 1465054, 1: 635681, 2: 65  # 0.5
+    # 0: 1411768, 1: 629696, 2: 28981, 3: 19747, 4: 9700, 5: 908
+    res1 = ctx.select(x < 0.48, res0, one + (em1rc + em1rc))
+
+    e2k = ctx.exp2(k)
+    resk = e2k * (em1rc + (1 - 1 / e2k))
+
+    smallest_log = fpa.get_smallest_log(ctx, x)
+    largest_log = fpa.get_largest_log(ctx, x)
+
+    return ctx.select(
+        x < smallest_log,
+        -one,
+        ctx.select(
+            x > ctx.floor(largest_log) * 0.995,  # heuristic constant
+            ctx.exp(x),
+            ctx.select(k == 0, res0, ctx.select(k == 1, res1, resk)),
+        ),
+    )

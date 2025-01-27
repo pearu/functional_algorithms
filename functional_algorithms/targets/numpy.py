@@ -145,6 +145,7 @@ kind_to_target = dict(
     tan="numpy.tan({0})",
     tanh="numpy.tanh({0})",
     exp="numpy.exp({0})",
+    exp2="numpy.exp2({0})",
     expm1="numpy.expm1({0})",
     log="numpy.log({0})",
     log1p="numpy.log1p({0})",

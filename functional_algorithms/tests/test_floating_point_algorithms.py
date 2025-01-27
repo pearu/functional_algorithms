@@ -37,6 +37,11 @@ class NumpyContext:
             return dtype(value)
         assert 0, (value, like)  # unreachable
 
+    def floor(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.floor(value)
+        assert 0, (value, type(value))  # unreachable
+
 
 def test_split_veltkamp(dtype):
     p = utils.get_precision(dtype)
@@ -612,3 +617,34 @@ def test_next(dtype):
                 result = fpa.next(ctx, -x, up=True)
                 expected = numpy.nextafter(-x, dtype(numpy.inf))
             assert result == expected
+
+
+def test_argument_reduction_exponent(dtype):
+    import mpmath
+
+    ctx = NumpyContext()
+    size = 10_000_000 // 1000
+    fi = numpy.finfo(dtype)
+    min_value = fi.smallest_normal
+    max_value = numpy.log(fi.max)
+
+    extra_prec_multiplier = 2
+    working_prec = utils.vectorize_with_mpmath.float_prec[dtype.__name__] * extra_prec_multiplier
+
+    ln2half = dtype(numpy.log(2) / 2)
+    ln2 = dtype(numpy.log(2))
+
+    with mpmath.workprec(working_prec):
+        mpctx = mpmath.mp
+        for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+            for s in [dtype(1), dtype(-1)]:
+                x = s * x
+                with warnings.catch_warnings(action="ignore"):
+                    k, r, c = fpa.argument_reduction_exponent(ctx, x)
+
+                    assert int(k) == k
+                    assert utils.diff_ulp(x, k * ln2 + (r + c)) <= 1
+                    # multiplication with 1.1 is required for float16
+                    # dtype case due to rounding effects in float16
+                    # arithmetics:
+                    assert abs(r + c) <= ln2half * dtype(1.1)
