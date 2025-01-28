@@ -648,3 +648,25 @@ def test_argument_reduction_exponent(dtype):
                     # dtype case due to rounding effects in float16
                     # arithmetics:
                     assert abs(r + c) <= ln2half * dtype(1.1)
+
+
+def test_split_tripleword(dtype):
+    np_ctx = NumpyContext()
+    p = utils.get_precision(dtype)
+    min_x = {numpy.float16: -986.0, numpy.float32: -7.51e33, numpy.float64: -4.33e299}[dtype]
+    max_x = {numpy.float16: 1007.0, numpy.float32: 8.3e34, numpy.float64: 1.33e300}[dtype]
+    size = 1000
+    for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
+        xh, xl, xr = fpa.split_tripleword(np_ctx, x)
+        assert x == xh + xl + xr
+
+        bh = utils.tobinary(xh).split("p")[0].lstrip("-")
+        bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+        br = utils.tobinary(xr).split("p")[0].lstrip("-")
+        bh = bh[1 + bh.startswith("1.") :].lstrip("0")
+        bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+        br = br[1 + br.startswith("1.") :].lstrip("0")
+        ph = len(bh)
+        pl = len(bl)
+        pr = len(br)
+        assert ph + pl + pr <= p

@@ -63,6 +63,34 @@ def get_veltkamp_splitter_constant(ctx, largest: float):
     return r
 
 
+def get_tripleword_splitter_constants(ctx, largest: float):
+    """Return Veltkamp splitter constants C1 and C2 for splitting a
+    floating point number at p-th and (2 * p)-th bit such that
+    2 * p is less that the precision of given floating point type p_dtype:
+
+    dtype   | p_dtype | p     | p_dtype and p relation
+    --------+---------+-------+------------------------
+    float64 | 53      | 24    | 53 = 24 + 24 + 5
+    float32 | 24      | 11    | 24 = 10 + 10 + 4
+    float16 | 11      |  4    | 11 =  4 +  4 + 3
+
+    The argument `largest` is used to detect the floating point type:
+    float16, float32, or float64.
+    """
+    fp64 = ctx.constant(2**24 + 1, largest)
+    fp32 = ctx.constant(2**10 + 1, largest)
+    fp16 = ctx.constant(2**4 + 1, largest)
+    C1 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    fp64 = ctx.constant(2**48 + 1, largest)
+    fp32 = ctx.constant(2**20 + 1, largest)
+    fp16 = ctx.constant(2**8 + 1, largest)
+    C2 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if hasattr(C1, "reference"):
+        C1 = C1.reference("tripleword_splitter_constant1", force=True)
+        C2 = C2.reference("tripleword_splitter_constant1", force=True)
+    return C1, C2
+
+
 def get_is_power_of_two_constants(ctx, largest: float):
     """Return Q, P constants for is_power_of_two.
 
@@ -462,8 +490,8 @@ def argument_reduction_exponent(ctx, x):
       ln2hi + ln2lo == log(2)
 
     where ln2hi, ln2lo are positive fixed-width floating point numbers
-    with precision p_dtype, log(2) and the addition are performed with
-    precision p such that
+    with precision p_dtype, evaluation of log(2) and the addition are
+    performed with precision p such that
 
       p > p_dtype.
 
@@ -654,3 +682,14 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
     return a * xd + b
+
+
+def split_tripleword(ctx, x):
+    """Split floating-point value to triple-word so that
+
+    x == x_hi + x_lo + x_rest
+    """
+    C1, C2 = get_tripleword_splitter_constants(ctx, get_largest(ctx, x))
+    x_hi, x_mid = split_veltkamp(ctx, x, C1)
+    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2)
+    return x_hi, x_lo, x_rest
