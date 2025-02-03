@@ -736,3 +736,47 @@ def split_tripleword(ctx, x):
     x_hi, x_mid = split_veltkamp(ctx, x, C1)
     x_lo, x_rest = split_veltkamp(ctx, x_mid, C2)
     return x_hi, x_lo, x_rest
+
+
+def mul_mw(ctx, x, y):
+    """Return a multiword product of two multiwords.
+
+    A multiword is a list of fixed-precision floating-point values
+    with a smaller precision (`p`) that of the corresponding dtype
+    (`p_dtype`). Multiword is a descreasing sequence.
+
+    Multiword x represents a multiprecision floating-point value `X`
+    such that `X = sum(MP(x))` where `MP` converts fixed-precision
+    floating-point value into a multiprecision floating-point value.
+
+    If `p * 2 + 1 < p_dtype` then the resulting multiword is exact.
+    """
+    lst = [None] * (len(x) + len(y) - 1)
+    for i in reversed(range(len(x))):
+        for j in reversed(range(len(y))):
+            k = i + j
+            if lst[k] is None:
+                lst[k] = x[i] * y[j]
+            else:
+                s, t = add_2sum(ctx, lst[k], x[i] * y[j], fast=True)
+                lst[k] = s
+                # the correction term is required for float64, for
+                # shorter types it appears to be zero.  TODO: check if
+                # this is always true.
+                lst[k + 1] += t
+    return lst
+
+
+def mw2dw(ctx, x):
+    """Return multiword as a double-word.
+
+    Reference:
+      https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
+    """
+    y = x[-1]
+    for i in reversed(range(len(x) - 1)):
+        y = y + x[i]
+    t = x[0] - y  # note that Ng-ArgReduction.pdf contains a typo
+    for i in range(1, len(x)):
+        t = t + x[i]
+    return y, t
