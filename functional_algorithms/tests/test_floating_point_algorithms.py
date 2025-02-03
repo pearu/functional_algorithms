@@ -20,32 +20,14 @@ def binary_op(request):
     return request.param
 
 
-class NumpyContext:
-    """A light-weight context for evaluating select with numpy inputs."""
-
-    def select(self, cond, x, y):
-        assert isinstance(cond, (bool, numpy.bool_))
-        return x if cond else y
-
-    def constant(self, value, like):
-        if isinstance(like, numpy.floating):
-            dtype = type(like)
-            if isinstance(value, str):
-                if value == "largest":
-                    return numpy.finfo(dtype).max
-                assert 0, (value, dtype)  # not implemented
-            return dtype(value)
-        assert 0, (value, like)  # unreachable
-
-    def floor(self, value):
-        if isinstance(value, numpy.floating):
-            return numpy.floor(value)
-        assert 0, (value, type(value))  # unreachable
+NumpyContext = utils.NumpyContext
 
 
 def test_split_veltkamp(dtype):
+    ctx = NumpyContext()
     p = utils.get_precision(dtype)
     C = utils.get_veltkamp_splitter_constant(dtype)
+    largest = fpa.get_largest(ctx, dtype(0))
 
     assert isinstance(C, dtype)
     assert C == dtype(2 ** ((p + 1) // 2) + 1)
@@ -68,7 +50,7 @@ def test_split_veltkamp(dtype):
         numpy.pi,
     ]:
         x = dtype(f)
-        xh, xl = fpa.split_veltkamp(None, x, C)
+        xh, xl = fpa.split_veltkamp(ctx, x, C)
         assert x == xh + xl
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
         bl = utils.tobinary(xl).split("p")[0].lstrip("-")
@@ -77,11 +59,12 @@ def test_split_veltkamp(dtype):
         assert len(bh) < (p + 1) // 2
         assert len(bl) < (p + 1) // 2
 
-    min_x = {11: -986.0, 24: -7.51e33, 53: -4.33e299}[p]
-    max_x = {11: 1007.0, 24: 8.3e34, 53: 1.33e300}[p]
+    max_x = largest * dtype(1 - 1 / C)
+    min_x = -max_x
+
     size = 1000
     for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-        xh, xl = fpa.split_veltkamp(None, x, C)
+        xh, xl = fpa.split_veltkamp(ctx, x, C, scale=True)
         assert x == xh + xl
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
         bl = utils.tobinary(xl).split("p")[0].lstrip("-")

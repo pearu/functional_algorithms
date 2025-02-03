@@ -47,20 +47,47 @@ def get_smallest_log(ctx, x: float):
     return r
 
 
-def get_veltkamp_splitter_constant(ctx, largest: float):
+def get_veltkamp_splitter_constant(ctx, largest: float):  # deprecate
     """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
     the floating point number system.
 
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
     """
+    return get_veltkamp_splitter_constants(ctx, largest)[0]
+
+
+def get_veltkamp_splitter_constants(ctx, largest: float):
+    """Return Veltkamp splitter constants:
+
+      V = 2 ** s + 1
+      N = 2 ** s
+      invN = 2 ** -s
+
+    where s = ceil(p / 2) and s is the precision of the floating point
+    number system.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+
     fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
     fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
     fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
-    r = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
-    if hasattr(r, "reference"):
-        r = r.reference("veltkamp_splitter_constant", force=True)
-    return r
+    C = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    fp64 = ctx.constant(2 ** (54 // 2), largest)
+    fp32 = ctx.constant(2 ** (24 // 2), largest)
+    fp16 = ctx.constant(2 ** (12 // 2), largest)
+    N = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    fp64 = ctx.constant(0.5 ** (54 // 2), largest)
+    fp32 = ctx.constant(0.5 ** (24 // 2), largest)
+    fp16 = ctx.constant(0.5 ** (12 // 2), largest)
+    invN = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if hasattr(C, "reference"):
+        C = C.reference("veltkamp_C", force=True)
+        N = N.reference("veltkamp_N", force=True)
+        invN = invN.reference("veltkamp_invN", force=True)
+    return C, N, invN
 
 
 def get_tripleword_splitter_constants(ctx, largest: float):
@@ -86,8 +113,8 @@ def get_tripleword_splitter_constants(ctx, largest: float):
     fp16 = ctx.constant(2**8 + 1, largest)
     C2 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
     if hasattr(C1, "reference"):
-        C1 = C1.reference("tripleword_splitter_constant1", force=True)
-        C2 = C2.reference("tripleword_splitter_constant1", force=True)
+        C1 = C1.reference("tripleword_splitter_C1", force=True)
+        C2 = C2.reference("tripleword_splitter_C2", force=True)
     return C1, C2
 
 
@@ -143,7 +170,7 @@ def nextdown(ctx, x: float):
     return next(ctx, x, up=False)
 
 
-def split_veltkamp(ctx, x, C):
+def split_veltkamp(ctx, x, C=None, scale=False):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -157,19 +184,35 @@ def split_veltkamp(ctx, x, C):
     significant parts fit into p / 2 bits.
 
     It is assumed that the aritmetical operations use rounding to
-    nearest and C * x does not overflow.
+    nearest and C * x does not overflow. If scale is True, large
+    abs(x) values are normalized with `(C - 1)` to increase the domain
+    of appicability.
 
-    Domain of applicability (approximate):
+    Domain of applicability:
 
-      -986     <= x <= 1007       for float16
-      -7.5e33  <= x <= 8.3e34     for float32
-      -4.3e299 <= x <= 1.3e300    for float64
+      abs(x) <= largest * (1 - 1 / C)  if scale is True
+      abs(x) <= largest / C            otherwise
+
     """
-    g = C * x
-    d = x - g
-    xh = g + d
-    xl = x - xh
-    return xh, xl
+    one = ctx.constant(1, x)
+    if C is None:
+        C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
+    else:
+        N = C - one
+        invN = one / N
+
+    if scale:
+        N = ctx.select(abs(x) < one, one, N)
+        invN = ctx.select(abs(x) < one, one, invN)
+
+    x_n = x * invN if scale else x
+
+    g = C * x_n
+    d = g - x_n
+    xh = g - d
+    xl = x_n - xh
+
+    return (xh * N, xl * N) if scale else (xh, xl)
 
 
 def mul_dw(ctx, x, y, xh, xl, yh, yl):
