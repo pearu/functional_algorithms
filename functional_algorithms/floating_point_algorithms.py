@@ -194,10 +194,10 @@ def split_veltkamp(ctx, x, C=None, scale=False):
       abs(x) <= largest / C            otherwise
 
     """
-    one = ctx.constant(1, x)
     if C is None:
         C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
-    else:
+    elif scale:
+        one = ctx.constant(1, x)
         N = C - one
         invN = one / N
 
@@ -727,14 +727,14 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     return a * xd + b
 
 
-def split_tripleword(ctx, x):
+def split_tripleword(ctx, x, scale=False):
     """Split floating-point value to triple-word so that
 
     x == x_hi + x_lo + x_rest
     """
     C1, C2 = get_tripleword_splitter_constants(ctx, get_largest(ctx, x))
-    x_hi, x_mid = split_veltkamp(ctx, x, C1)
-    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2)
+    x_hi, x_mid = split_veltkamp(ctx, x, C1, scale=scale)
+    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=scale)
     return x_hi, x_lo, x_rest
 
 

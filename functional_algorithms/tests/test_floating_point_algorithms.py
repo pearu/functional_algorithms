@@ -634,13 +634,19 @@ def test_argument_reduction_exponent(dtype):
 
 
 def test_split_tripleword(dtype):
-    np_ctx = NumpyContext()
+    ctx = NumpyContext()
     p = utils.get_precision(dtype)
     min_x = {numpy.float16: -986.0, numpy.float32: -7.51e33, numpy.float64: -4.33e299}[dtype]
     max_x = {numpy.float16: 1007.0, numpy.float32: 8.3e34, numpy.float64: 1.33e300}[dtype]
+
+    largest = fpa.get_largest(ctx, dtype(0))
+    C1 = fpa.get_tripleword_splitter_constants(ctx, largest)[0]
+    max_x = largest * dtype(1 - 1 / C1)
+    min_x = -max_x
+
     size = 1000
     for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-        xh, xl, xr = fpa.split_tripleword(np_ctx, x)
+        xh, xl, xr = fpa.split_tripleword(ctx, x, scale=True)
         assert x == xh + xl + xr
 
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
