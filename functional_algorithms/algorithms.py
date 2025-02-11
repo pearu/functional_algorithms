@@ -825,7 +825,7 @@ def fma(ctx, x, y, z):
 
 
 def get_veltkamp_splitter_constant(ctx, largest: float):
-    """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
+    """Return 2 ** s + 1 where s = ceil(p / 2) and p is the precision of
     the floating point number system.
 
     Using `largest` to detect the floating point type: float16,

@@ -47,20 +47,77 @@ def get_smallest_log(ctx, x: float):
     return r
 
 
-def get_veltkamp_splitter_constant(ctx, largest: float):
+def get_veltkamp_splitter_constant(ctx, largest: float):  # deprecate
     """Return 2 ** s + 1 where s = ceil(p / 2) and s is the precision of
     the floating point number system.
 
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
     """
+    return get_veltkamp_splitter_constants(ctx, largest)[0]
+
+
+def get_veltkamp_splitter_constants(ctx, largest: float):
+    """Return Veltkamp splitter constants:
+
+      V = 2 ** s + 1
+      N = 2 ** s
+      invN = 2 ** -s
+
+    where s = ceil(p / 2) and s is the precision of the floating point
+    number system.
+
+    Using `largest` to detect the floating point type: float16,
+    float32, or float64.
+    """
+
     fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
     fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
     fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
-    r = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
-    if hasattr(r, "reference"):
-        r = r.reference("veltkamp_splitter_constant", force=True)
-    return r
+    C = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    fp64 = ctx.constant(2 ** (54 // 2), largest)
+    fp32 = ctx.constant(2 ** (24 // 2), largest)
+    fp16 = ctx.constant(2 ** (12 // 2), largest)
+    N = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    fp64 = ctx.constant(0.5 ** (54 // 2), largest)
+    fp32 = ctx.constant(0.5 ** (24 // 2), largest)
+    fp16 = ctx.constant(0.5 ** (12 // 2), largest)
+    invN = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if hasattr(C, "reference"):
+        C = C.reference("veltkamp_C", force=True)
+        N = N.reference("veltkamp_N", force=True)
+        invN = invN.reference("veltkamp_invN", force=True)
+    return C, N, invN
+
+
+def get_tripleword_splitter_constants(ctx, largest: float):
+    """Return Veltkamp splitter constants C1 and C2 for splitting a
+    floating point number at p-th and (2 * p)-th bit such that
+    2 * p is less that the precision of given floating point type p_dtype:
+
+    dtype   | p_dtype | p     | p_dtype and p relation
+    --------+---------+-------+------------------------
+    float64 | 53      | 24    | 53 = 24 + 24 + 5
+    float32 | 24      | 11    | 24 = 10 + 10 + 4
+    float16 | 11      |  4    | 11 =  4 +  4 + 3
+
+    The argument `largest` is used to detect the floating point type:
+    float16, float32, or float64.
+    """
+    fp64 = ctx.constant(2**24 + 1, largest)
+    fp32 = ctx.constant(2**10 + 1, largest)
+    fp16 = ctx.constant(2**4 + 1, largest)
+    C1 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    # using 47 to maximize the accuracy in
+    # test_argument_reduction_trigonometric[float64]
+    fp64 = ctx.constant(2**48 + 1, largest)
+    fp32 = ctx.constant(2**20 + 1, largest)
+    fp16 = ctx.constant(2**8 + 1, largest)
+    C2 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if hasattr(C1, "reference"):
+        C1 = C1.reference("tripleword_splitter_C1", force=True)
+        C2 = C2.reference("tripleword_splitter_C2", force=True)
+    return C1, C2
 
 
 def get_is_power_of_two_constants(ctx, largest: float):
@@ -115,7 +172,7 @@ def nextdown(ctx, x: float):
     return next(ctx, x, up=False)
 
 
-def split_veltkamp(ctx, x, C):
+def split_veltkamp(ctx, x, C=None, scale=False):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -129,19 +186,35 @@ def split_veltkamp(ctx, x, C):
     significant parts fit into p / 2 bits.
 
     It is assumed that the aritmetical operations use rounding to
-    nearest and C * x does not overflow.
+    nearest and C * x does not overflow. If scale is True, large
+    abs(x) values are normalized with `(C - 1)` to increase the domain
+    of appicability.
 
-    Domain of applicability (approximate):
+    Domain of applicability:
 
-      -986     <= x <= 1007       for float16
-      -7.5e33  <= x <= 8.3e34     for float32
-      -4.3e299 <= x <= 1.3e300    for float64
+      abs(x) <= largest * (1 - 1 / C)  if scale is True
+      abs(x) <= largest / C            otherwise
+
     """
-    g = C * x
-    d = x - g
-    xh = g + d
-    xl = x - xh
-    return xh, xl
+    if C is None:
+        C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
+    elif scale:
+        one = ctx.constant(1, x)
+        N = C - one
+        invN = one / N
+
+    if scale:
+        N = ctx.select(abs(x) < one, one, N)
+        invN = ctx.select(abs(x) < one, one, invN)
+
+    x_n = x * invN if scale else x
+
+    g = C * x_n
+    d = g - x_n
+    xh = g - d
+    xl = x_n - xh
+
+    return (xh * N, xl * N) if scale else (xh, xl)
 
 
 def mul_dw(ctx, x, y, xh, xl, yh, yl):
@@ -462,8 +535,8 @@ def argument_reduction_exponent(ctx, x):
       ln2hi + ln2lo == log(2)
 
     where ln2hi, ln2lo are positive fixed-width floating point numbers
-    with precision p_dtype, log(2) and the addition are performed with
-    precision p such that
+    with precision p_dtype, evaluation of log(2) and the addition are
+    performed with precision p such that
 
       p > p_dtype.
 
@@ -654,3 +727,183 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
     return a * xd + b
+
+
+def split_tripleword(ctx, x, scale=False):
+    """Split floating-point value to triple-word so that
+
+    x == x_hi + x_lo + x_rest
+    """
+    C1, C2 = get_tripleword_splitter_constants(ctx, get_largest(ctx, x))
+    x_hi, x_mid = split_veltkamp(ctx, x, C1, scale=scale)
+    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=scale)
+    return x_hi, x_lo, x_rest
+
+
+def mul_mw(ctx, x, y):
+    """Return a multiword product of two multiwords.
+
+    A multiword is a list of fixed-precision floating-point values
+    with a smaller precision (`p`) that of the corresponding dtype
+    (`p_dtype`). Multiword is a descreasing sequence.
+
+    Multiword x represents a multiprecision floating-point value `X`
+    such that `X = sum(MP(x))` where `MP` converts fixed-precision
+    floating-point value into a multiprecision floating-point value.
+
+    If `p * 2 + 1 < p_dtype` then the resulting multiword is exact.
+    """
+    lst = [None] * (len(x) + len(y) - 1)
+    for i in reversed(range(len(x))):
+        for j in reversed(range(len(y))):
+            k = i + j
+            if lst[k] is None:
+                lst[k] = x[i] * y[j]
+            else:
+                s, t = add_2sum(ctx, lst[k], x[i] * y[j], fast=True)
+                lst[k] = s
+                # the correction term is required for float64, for
+                # shorter types it appears to be zero.  TODO: check if
+                # this is always true.
+                lst[k + 1] += t
+    return lst
+
+
+def mul_mw_mod4(ctx, x, y):
+    zero = ctx.constant(0, x[0])
+    one = ctx.constant(1, x[0])
+    four = ctx.constant(4, x[0])
+
+    def rem4(v):
+        return ctx.trunc(v / four) * four
+
+    total = zero
+    rest = zero
+    ss = 0
+    for k in reversed(range(len(x) + len(y) - 1)):
+        s = zero
+        acc = zero
+        for i in reversed(range(len(x))):
+            j = k - i
+            if j < 0 or j >= len(y):
+                continue
+            xy = x[i] * y[j]
+            xy = xy - rem4(xy)
+            ss += float(x[i]) * float(y[j])
+            s, t = add_2sum(ctx, s, xy, fast=True)
+            acc += t
+        rest += acc
+        total, t = add_2sum(ctx, s, total, fast=True)
+        total = total - rem4(total)
+        rest += t
+    k = ctx.round(total)  # % four
+    r = total - k  # % one
+    return k % four, r, rest
+
+
+def mw2dw(ctx, x):
+    """Return multiword as a double-word.
+
+    Reference:
+      https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
+    """
+    y = x[-1]
+    for i in reversed(range(len(x) - 1)):
+        y = y + x[i]
+    t = x[0] - y  # note that Ng-ArgReduction.pdf contains a typo
+    for i in range(1, len(x)):
+        t = t + x[i]
+    return y, t
+
+
+def argument_reduction_trigonometric(ctx, x):
+    """Return k, r, t such that
+
+      x = 2 * pi * N + k * pi / 2 + r + t
+
+    where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 4.
+
+    Reference:
+      https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
+    """
+    import numpy
+
+    if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
+        return argument_reduction_trigonometric_impl(ctx, type(x), x)
+
+    largest = get_largest(ctx, x)
+    fp64_k, fp64_r, fp64_t = argument_reduction_trigonometric_impl(ctx, numpy.float64, x)
+    fp32_k, fp32_r, fp32_t = argument_reduction_trigonometric_impl(ctx, numpy.float32, x)
+    fp16_k, fp16_r, fp16_t = argument_reduction_trigonometric_impl(ctx, numpy.float16, x)
+    k = ctx.select(largest > 1e308, fp64_k, ctx.select(largest > 1e38, fp32_k, fp16_k))
+    r = ctx.select(largest > 1e308, fp64_r, ctx.select(largest > 1e38, fp32_r, fp16_r))
+    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
+    return k, r, t
+
+
+def argument_reduction_trigonometric_impl(ctx, dtype, x):
+
+    import numpy
+    import functional_algorithms as fa
+
+    def make_constant(v):
+        return ctx.constant(v, x)
+
+    two = ctx.constant(2, x)
+    two_over_pi_max_length = {numpy.float16: None, numpy.float32: None, numpy.float64: None}[dtype]
+    two_over_pi_mw = list(map(make_constant, fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)))
+    pi_over_two_prec = {numpy.float16: 4, numpy.float32: 20, numpy.float64: 40}[dtype]
+    pi_over_two, pi_over_two_lo = map(
+        make_constant, fa.utils.get_pi_over_two_multiword(dtype, prec=pi_over_two_prec, max_length=2)
+    )
+    x_tw = split_tripleword(ctx, x, scale=True)
+    k, y, t = mul_mw_mod4(ctx, x_tw, two_over_pi_mw)
+    r_hi, tt = add_2sum(ctx, y * pi_over_two, y * pi_over_two_lo + t * pi_over_two, fast=True)
+    r_lo = t * pi_over_two_lo + tt
+    r = ctx.select(abs(x) < pi_over_two / two, x, r_hi)
+    t = ctx.select(abs(x) < pi_over_two / two, ctx.constant(0, x), r_lo)
+    return k, r, t
+
+
+def sine_dw(ctx, x, y):
+    # Algorithm copied from stdlib-js/math-base-special-kernel-sin
+    S1 = ctx.constant(-1.66666666666666324348e-01, x)
+    S2 = ctx.constant(8.33333333332248946124e-03, x)
+    S3 = ctx.constant(-1.98412698298579493134e-04, x)
+    S4 = ctx.constant(2.75573137070700676789e-06, x)
+    S5 = ctx.constant(-2.50507602534068634195e-08, x)
+    S6 = ctx.constant(1.58969099521155010221e-10, x)
+
+    zero = ctx.constant(0, x)
+    half = ctx.constant(0.5, x)
+    z = x * x
+    w = z * z
+    r = S2 + z * (S3 + z * S4) + (z * w * (S5 + z * S6))
+    v = z * x
+    r0 = x + v * (S1 + z * r)
+    # r1 = x - (((z * (half * y - v * r)) - y) - v * S1)
+    r1 = x - (((z * ((half * y) - (v * r))) - y) - (v * S1))
+    return ctx.select(y == zero, r0, r1)
+
+
+def cosine_dw(ctx, x, y):
+    # Algorithm copied from stdlib-js/math-base-special-kernel-cos
+    # https://svnweb.freebsd.org/base/release/12.2.0/lib/msun/src/k_cos.c?view=markup
+    half = ctx.constant(0.5, x)
+    one = ctx.constant(1, x)
+    z = x * x
+    w = z * z
+
+    S1 = ctx.constant(0.0416666666666666, x)
+    S2 = ctx.constant(-0.001388888888887411, x)
+    S3 = ctx.constant(0.00002480158728947673, x)
+
+    S4 = ctx.constant(-2.7557314351390663e-7, x)
+    S5 = ctx.constant(2.087572321298175e-9, x)
+    S6 = ctx.constant(-1.1359647557788195e-11, x)
+    r = z * (S1 + (z * (S2 + (z * S3))))
+    r += w * w * (S4 + (z * (S5 + (z * S6))))
+
+    hz = half * z
+    w = one - hz
+    return w + (((one - w) - hz) + ((z * r) - (x * y)))
