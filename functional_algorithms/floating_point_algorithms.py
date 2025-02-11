@@ -736,7 +736,7 @@ def split_tripleword(ctx, x, scale=False):
     """
     C1, C2 = get_tripleword_splitter_constants(ctx, get_largest(ctx, x))
     x_hi, x_mid = split_veltkamp(ctx, x, C1, scale=scale)
-    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=False)
+    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=scale)
     return x_hi, x_lo, x_rest
 
 
@@ -817,16 +817,19 @@ def mw2dw(ctx, x):
 
 
 def argument_reduction_trigonometric(ctx, x):
-    """Return k, r such that
+    """Return k, r, t such that
 
-      x = 2 * pi * N + k * pi / 2 +  r
+      x = 2 * pi * N + k * pi / 2 + r + t
 
-    where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 2.
+    where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 4.
 
     Reference:
       https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
     """
     import numpy
+
+    if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
+        return argument_reduction_trigonometric_impl(ctx, type(x), x)
 
     largest = get_largest(ctx, x)
     fp64_k, fp64_r, fp64_t = argument_reduction_trigonometric_impl(ctx, numpy.float64, x)
