@@ -659,3 +659,72 @@ def test_split_tripleword(dtype):
         pl = len(bl)
         pr = len(br)
         assert ph + pl + pr <= p
+
+
+def test_argument_reduction_trigonometric(dtype):
+    import mpmath
+
+    print()
+    ctx = NumpyContext()
+    fi = numpy.finfo(dtype)
+    min_value = fi.smallest_normal
+    max_value = fi.max
+
+    largest = fpa.get_largest(ctx, dtype(0))
+    max_x = largest / dtype(2 ** {numpy.float64: 18, numpy.float32: 5, numpy.float16: 2}[dtype])
+
+    max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
+
+    if dtype == numpy.float64:
+        x = numpy.ldexp(6381956970095103, 797)
+        k, r, t = fpa.argument_reduction_trigonometric(ctx, x)  # 4.687165924254629e-19
+        # ulp difference from dtype(4.687165924254624e-19) is 5. Is
+        # the reference value from
+        # https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
+        # wrong?
+        u = utils.diff_ulp(r + t, dtype(4.687165924254624e-19))
+        assert u <= 5, (r, t, r + t)
+
+    size = 1000
+    samples = utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_x)
+    ulp_counts = defaultdict(int)
+    for x in samples:
+        assert isinstance(x, dtype)
+        k, r, t = fpa.argument_reduction_trigonometric(ctx, x)
+
+        assert k in [0, 1, 2, 3], x
+        assert abs(r) <= dtype(numpy.pi / 4) * 1.1, (r, k, x)
+        assert isinstance(r, dtype)
+
+        mp_ctx = mpmath.mp
+        with mp_ctx.workprec(max_prec * 10):
+            x_mp = utils.float2mpf(mp_ctx, x)
+            y_mp = x_mp * (2 / mp_ctx.pi)
+            Nk = mp_ctx.floor(y_mp)
+
+            expected_r1 = utils.mpf2float(dtype, (y_mp - Nk) * (mp_ctx.pi / 2))
+            expected_k1 = utils.mpf2float(dtype, Nk % 4)
+
+            expected_r2 = utils.mpf2float(dtype, (y_mp - (Nk + 1)) * (mp_ctx.pi / 2))
+            expected_k2 = utils.mpf2float(dtype, (Nk + 1) % 4)
+
+            u_r1 = utils.diff_ulp(r + t, expected_r1)
+            u_r2 = utils.diff_ulp(r + t, expected_r2)
+            u_r = min(u_r1, u_r2)
+            if u_r == u_r1:
+                expected_r = expected_r1
+                expected_k = expected_k1
+            else:
+                expected_r = expected_r2
+                expected_k = expected_k2
+
+            ulp_counts[u_r] += 1
+
+            assert k == expected_k
+            if dtype == numpy.float16:
+                assert r == expected_r or u_r <= 10
+            else:
+                assert r == expected_r or u_r <= 1
+
+    for u in sorted(ulp_counts):
+        print(f"ULP difference {u}: {ulp_counts[u]}")

@@ -2157,11 +2157,41 @@ class NumpyContext:
             if isinstance(value, str):
                 if value == "largest":
                     return numpy.finfo(dtype).max
+                if value == "pi":
+                    return numpy.pi
                 assert 0, (value, dtype)  # not implemented
             return dtype(value)
-        assert 0, (value, like)  # unreachable
+        assert 0, (value, like, type(like))  # unreachable
 
     def floor(self, value):
         if isinstance(value, numpy.floating):
             return numpy.floor(value)
         assert 0, (value, type(value))  # unreachable
+
+    def trunc(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.trunc(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def round(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.round(value)
+        assert 0, (value, type(value))  # unreachable
+
+
+def get_pi_over_two_multiword(dtype, prec=None, max_length=None):
+    if prec is None:
+        prec = {numpy.float16: 4, numpy.float32: 11, numpy.float64: 20}[dtype]
+    max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
+    ctx = mpmath.mp
+    with ctx.workprec(max_prec):
+        return mpf2multiword(dtype, ctx.pi / 2, p=prec, max_length=max_length)
+
+
+def get_two_over_pi_multiword(dtype, prec=None, max_length=None):
+    if prec is None:
+        prec = {numpy.float16: 4, numpy.float32: 10, numpy.float64: 20}[dtype]
+    max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
+    ctx = mpmath.mp
+    with ctx.workprec(max_prec):
+        return mpf2multiword(dtype, 2 / ctx.pi, p=prec, max_length=max_length)

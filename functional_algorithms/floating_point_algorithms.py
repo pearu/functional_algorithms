@@ -108,6 +108,8 @@ def get_tripleword_splitter_constants(ctx, largest: float):
     fp32 = ctx.constant(2**10 + 1, largest)
     fp16 = ctx.constant(2**4 + 1, largest)
     C1 = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    # using 47 to maximize the accuracy in
+    # test_argument_reduction_trigonometric[float64]
     fp64 = ctx.constant(2**48 + 1, largest)
     fp32 = ctx.constant(2**20 + 1, largest)
     fp16 = ctx.constant(2**8 + 1, largest)
@@ -734,7 +736,7 @@ def split_tripleword(ctx, x, scale=False):
     """
     C1, C2 = get_tripleword_splitter_constants(ctx, get_largest(ctx, x))
     x_hi, x_mid = split_veltkamp(ctx, x, C1, scale=scale)
-    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=scale)
+    x_lo, x_rest = split_veltkamp(ctx, x_mid, C2, scale=False)
     return x_hi, x_lo, x_rest
 
 
@@ -767,6 +769,38 @@ def mul_mw(ctx, x, y):
     return lst
 
 
+def mul_mw_mod4(ctx, x, y):
+    zero = ctx.constant(0, x[0])
+    one = ctx.constant(1, x[0])
+    four = ctx.constant(4, x[0])
+
+    def rem4(v):
+        return ctx.trunc(v / four) * four
+
+    total = zero
+    rest = zero
+    ss = 0
+    for k in reversed(range(len(x) + len(y) - 1)):
+        s = zero
+        acc = zero
+        for i in reversed(range(len(x))):
+            j = k - i
+            if j < 0 or j >= len(y):
+                continue
+            xy = x[i] * y[j]
+            xy = xy - rem4(xy)
+            ss += float(x[i]) * float(y[j])
+            s, t = add_2sum(ctx, s, xy, fast=True)
+            acc += t
+        rest += acc
+        total, t = add_2sum(ctx, s, total, fast=True)
+        total = total - rem4(total)
+        rest += t
+    k = ctx.round(total)  # % four
+    r = total - k  # % one
+    return k % four, r, rest
+
+
 def mw2dw(ctx, x):
     """Return multiword as a double-word.
 
@@ -780,3 +814,93 @@ def mw2dw(ctx, x):
     for i in range(1, len(x)):
         t = t + x[i]
     return y, t
+
+
+def argument_reduction_trigonometric(ctx, x):
+    """Return k, r such that
+
+      x = 2 * pi * N + k * pi / 2 +  r
+
+    where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 2.
+
+    Reference:
+      https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
+    """
+    import numpy
+
+    largest = get_largest(ctx, x)
+    fp64_k, fp64_r, fp64_t = argument_reduction_trigonometric_impl(ctx, numpy.float64, x)
+    fp32_k, fp32_r, fp32_t = argument_reduction_trigonometric_impl(ctx, numpy.float32, x)
+    fp16_k, fp16_r, fp16_t = argument_reduction_trigonometric_impl(ctx, numpy.float16, x)
+    k = ctx.select(largest > 1e308, fp64_k, ctx.select(largest > 1e38, fp32_k, fp16_k))
+    r = ctx.select(largest > 1e308, fp64_r, ctx.select(largest > 1e38, fp32_r, fp16_r))
+    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
+    return k, r, t
+
+
+def argument_reduction_trigonometric_impl(ctx, dtype, x):
+
+    import numpy
+    import functional_algorithms as fa
+
+    def make_constant(v):
+        return ctx.constant(v, x)
+
+    two = ctx.constant(2, x)
+    two_over_pi_max_length = {numpy.float16: None, numpy.float32: None, numpy.float64: None}[dtype]
+    two_over_pi_mw = list(map(make_constant, fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)))
+    pi_over_two_prec = {numpy.float16: 4, numpy.float32: 20, numpy.float64: 40}[dtype]
+    pi_over_two, pi_over_two_lo = map(
+        make_constant, fa.utils.get_pi_over_two_multiword(dtype, prec=pi_over_two_prec, max_length=2)
+    )
+    x_tw = split_tripleword(ctx, x, scale=True)
+    k, y, t = mul_mw_mod4(ctx, x_tw, two_over_pi_mw)
+    r_hi, tt = add_2sum(ctx, y * pi_over_two, y * pi_over_two_lo + t * pi_over_two, fast=True)
+    r_lo = t * pi_over_two_lo + tt
+    r = ctx.select(abs(x) < pi_over_two / two, x, r_hi)
+    t = ctx.select(abs(x) < pi_over_two / two, ctx.constant(0, x), r_lo)
+    return k, r, t
+
+
+def sine_dw(ctx, x, y):
+    # Algorithm copied from stdlib-js/math-base-special-kernel-sin
+    S1 = ctx.constant(-1.66666666666666324348e-01, x)
+    S2 = ctx.constant(8.33333333332248946124e-03, x)
+    S3 = ctx.constant(-1.98412698298579493134e-04, x)
+    S4 = ctx.constant(2.75573137070700676789e-06, x)
+    S5 = ctx.constant(-2.50507602534068634195e-08, x)
+    S6 = ctx.constant(1.58969099521155010221e-10, x)
+
+    zero = ctx.constant(0, x)
+    half = ctx.constant(0.5, x)
+    z = x * x
+    w = z * z
+    r = S2 + z * (S3 + z * S4) + (z * w * (S5 + z * S6))
+    v = z * x
+    r0 = x + v * (S1 + z * r)
+    # r1 = x - (((z * (half * y - v * r)) - y) - v * S1)
+    r1 = x - (((z * ((half * y) - (v * r))) - y) - (v * S1))
+    return ctx.select(y == zero, r0, r1)
+
+
+def cosine_dw(ctx, x, y):
+    # Algorithm copied from stdlib-js/math-base-special-kernel-cos
+    # https://svnweb.freebsd.org/base/release/12.2.0/lib/msun/src/k_cos.c?view=markup
+    half = ctx.constant(0.5, x)
+    one = ctx.constant(1, x)
+    z = x * x
+    w = z * z
+
+    S1 = ctx.constant(0.0416666666666666, x)
+    S2 = ctx.constant(-0.001388888888887411, x)
+    S3 = ctx.constant(0.00002480158728947673, x)
+
+    S4 = ctx.constant(-2.7557314351390663e-7, x)
+    S5 = ctx.constant(2.087572321298175e-9, x)
+    S6 = ctx.constant(-1.1359647557788195e-11, x)
+    r = z * (S1 + (z * (S2 + (z * S3))))
+    r += w * w * (S4 + (z * (S5 + (z * S6))))
+
+    hz = half * z
+    w = one - hz
+    return w + (((one - w) - hz) + ((z * r) - (x * y)))
