@@ -185,7 +185,7 @@ def split_veltkamp(ctx, x, C=None, scale=False):
     where p is the precision of the floating point system, xh and xl
     significant parts fit into p / 2 bits.
 
-    It is assumed that the aritmetical operations use rounding to
+    It is assumed that the arithmetical operations use rounding to
     nearest and C * x does not overflow. If scale is True, large
     abs(x) values are normalized with `(C - 1)` to increase the domain
     of appicability.
@@ -215,6 +215,36 @@ def split_veltkamp(ctx, x, C=None, scale=False):
     xl = x_n - xh
 
     return (xh * N, xl * N) if scale else (xh, xl)
+
+
+def split_veltkamp2(ctx, x):
+    """2nd Veltkamp splitter:
+
+      x = xh + xl + xh
+
+    Different from split_veltkamp, 2nd Veltkamp splitter can be used
+    for large inputs.
+
+    Note that for large x, `xh + xh` may overflow but `xh + xl + xh`
+    will never overflow.
+
+    Domain of applicability:
+
+      smallest_normal * (2 * C - 2) <= abs(x) <= largest
+
+    where
+
+      C = 1 + 2 ** ceil(p / 2)
+
+    and p is the precision of the floating point system.
+    """
+    C, _, _ = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
+    S = C - ctx.constant(1, x)
+    S2 = S + S
+    # S is power of 2, so is S2, hence x / S2 is exact when it does
+    # not underflow:
+    xh, xl = split_veltkamp(ctx, x / S2, C=C, scale=False)
+    return xh * S, xl * S2
 
 
 def mul_dw(ctx, x, y, xh, xl, yh, yl):

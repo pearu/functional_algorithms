@@ -74,6 +74,25 @@ def test_split_veltkamp(dtype):
         assert len(bl) < (p + 1) // 2
 
 
+def test_split_veltkamp2(dtype):
+    fi = numpy.finfo(dtype)
+    ctx = NumpyContext()
+    p = utils.get_precision(dtype)
+    C = utils.get_veltkamp_splitter_constant(dtype)
+    largest = fpa.get_largest(ctx, dtype(0))
+
+    max_x = largest
+    min_x = fi.smallest_normal * (C + C - dtype(2))
+    size = 1000
+    for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
+        xh, xl = fpa.split_veltkamp2(ctx, x)
+        assert x == xh + xl + xh
+
+        x = -x
+        xh, xl = fpa.split_veltkamp2(ctx, x)
+        assert x == xh + xl + xh
+
+
 def test_mul_dekker(dtype):
     import mpmath
 
