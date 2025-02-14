@@ -747,3 +747,53 @@ def test_argument_reduction_trigonometric(dtype):
 
     for u in sorted(ulp_counts):
         print(f"ULP difference {u}: {ulp_counts[u]}")
+
+
+def test_sine_pade(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    ctx = NumpyContext()
+    size = 10_000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+
+        for variant in [
+            (11, 2),
+            (11, 3),
+            (11, 4),
+            (11, 5),
+            (13, 2),
+            (13, 3),
+            (13, 4),
+            (13, 5),
+            (13, 6),
+            (17, 2),
+            (17, 3),
+            (17, 4),
+            (17, 5),
+        ]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_sn = utils.mpf2float(dtype, mpctx.sin(utils.float2mpf(mpctx, x)))
+                sn = fpa.sine_pade(ctx, x, variant=variant)
+                u = utils.diff_ulp(sn, expected_sn)
+                ulp[u] += 1
+
+            print(f"{variant=}")
+            rest = 0
+            u5 = None
+            for i, u in enumerate(sorted(ulp)):
+                if i < 5:
+                    print(f"  ULP difference {u}: {ulp[u]}")
+                else:
+                    if u5 is None:
+                        u5 = u
+                    rest += ulp[u]
+            else:
+                if rest:
+                    print(f"  ULP difference >= {u5}: {rest}")
