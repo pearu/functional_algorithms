@@ -732,19 +732,24 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     if _N is None:
         _N = N
 
+    def w(c):
+        if isinstance(c, type(x)):
+            return c
+        return ctx.constant(c, x)
+
     if N == 0:
-        return ctx.constant(coeffs[0], x)
+        return w(coeffs[0])
 
     if N == 1:
-        return ctx.constant(coeffs[0], x) + ctx.constant(coeffs[1], x) * x
+        return w(coeffs[0]) + w(coeffs[1]) * x
 
     d = scheme(N, _N)
 
     if d == 0:
         # evaluate reduced polynomial as it is
-        s = ctx.constant(coeffs[0], x)
+        s = w(coeffs[0])
         for i in range(1, N):
-            s += ctx.constant(coeffs[i], x) * fast_exponent_by_squaring(ctx, x, i)
+            s += w(coeffs[i]) * fast_exponent_by_squaring(ctx, x, i)
         return s
 
     # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
@@ -907,6 +912,75 @@ def sin_kernel(ctx, k, r, t):
     if k == 3:
         return -cs
     assert 0, k  # unreachable
+
+
+def sine_taylor(ctx, x, order=7, split=False):
+    """Return sine of x using Taylor series approximation:
+
+    S(x) = x - x ** 3 / 6 + ... + O(x ** (order + 2))
+
+    If split is True, return `sh, sl` such that
+
+      S(x) = sh + sl
+
+    where the high and low values are obtained from Dekker's split of
+    `x ** 2`.
+
+    For best accuracy, use the order argument according to the
+    following table [assuming abs(x) <= p / 4]:
+
+    dtype   | order | mean ULP error   | numpy comparsion
+    --------+-------+------------------+-----------------
+    float16 |  7    |  91 / 14921      |  72 / 14921
+    float32 |  9    | 356 / 1_000_000  | 276 / 1_000_000
+    float64 |  15   |  56 / 1_000_000  |   5 / 1_000_000
+
+    For the corresponding order choices, we have
+
+      sine_taylor(x, order, split=False) == sum(*sine_taylor(x, order, split=True))
+    """
+
+    """
+    For float16, consider
+      S(x) = x - x ** 3 / 6 + x ** 5 / 120
+    We write
+      S(x) = P(x * x, C=[x, -x/6, x/120])
+    where
+      P(y, C) = C[0] + C[1] * y + C[2] * y ** 2
+    """
+    if not split:
+        C, f = [x], 1
+        for i in range(3, order + 1, 2):
+            f *= -i * (i - 1)
+            C.append(x / ctx.constant(f, x))
+        # Horner's scheme is most accurate
+        return fast_polynomial(
+            ctx, x * x, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+        )
+    """
+    For float16, consider
+      x * x = xxh + xxl
+    which is an exact representation of the square x ** 2.
+    Let's find
+      P(xxh + xxl, C) ~ P(xxh, C) + P'(xxh, C) * xxl
+        = C[0] + C[1] * xxh + C[2] * xxh ** 2 +
+                 (C[1] + 2 * C[2] * xxh) * xxl
+        = P(xxh, C=C0) + P(xxh, C=C1) * xxl
+    where
+      C1 = [i * c for i, c in enumerate(C0) if i > 0]
+    """
+    xxh, xxl = mul_dekker(ctx, x, x)
+    C0 = [x]
+    C1 = []
+    f = 1
+    for i in range(3, order + 1, 2):
+        C1.append(x / ctx.constant(f * (i + 1), x))
+        f *= -i * (i - 1)
+        C0.append(x / ctx.constant(f, x))
+    # Horner's scheme is most accurate
+    p0 = fast_polynomial(ctx, xxh, C0, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    p1 = fast_polynomial(ctx, xxh, C1, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    return p0, p1 * xxl
 
 
 def sine_pade(ctx, x, variant=None):
