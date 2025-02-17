@@ -983,6 +983,61 @@ def sine_taylor(ctx, x, order=7, split=False):
     return p0, p1 * xxl
 
 
+def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
+    """Return sine of x using Taylor series approximation:
+
+    C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
+
+    If split is True, return `ch, cl` such that
+
+      C(x) = ch + cl
+
+    where the high and low values are obtained from Dekker's split of
+    `x ** 2`.
+
+    For best accuracy, use the order argument according to the
+    following table [assuming abs(x) <= p / 4]:
+
+    dtype   | order | mean ULP error    | numpy comparsion
+    --------+-------+-------------------+-----------------
+    float16 |  7    |  174 / 14921      |  80 / 14921
+    float32 |  9    | 1382 / 1_000_000  | 725 / 1_000_000
+    float64 |  19   |  146 / 1_000_000  |   0 / 1_000_000
+
+    For the corresponding order choices, we have
+
+      cosine_taylor(x, order, split=False) == sum(*cosine_taylor(x, order, split=True))
+    """
+    if not split:
+        f = 1
+        xx = x * x
+        C = []
+        for i in range(2, order, 2):
+            f *= -i * (i - 1)
+            C.append(xx * ctx.constant(1 / f, x))
+        # Horner's scheme is most accurate
+        p = fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+        if drop_leading_term:
+            return p
+        return ctx.constant(1, x) + p
+
+    xxh, xxl = mul_dekker(ctx, x, x)
+    C0 = []
+    C1 = []
+    f = 1
+    xx = x * x
+    for i in range(2, order, 2):
+        C1.append(xx * ctx.constant(1 / (f * (i + 1)), x))
+        f *= -i * (i - 1)
+        C0.append(xx * ctx.constant(1 / f, x))
+    # Horner's scheme is most accurate
+    p0 = fast_polynomial(ctx, xxh, C0, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    p1 = fast_polynomial(ctx, xxh, C1, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    if drop_leading_term:
+        return p0, p1 * xxl
+    return ctx.constant(1, x) + p0, p1 * xxl
+
+
 def sine_pade(ctx, x, variant=None):
     # See https://math.stackexchange.com/questions/2196371/how-to-approximate-sinx-using-pad%C3%A9-approximation
 

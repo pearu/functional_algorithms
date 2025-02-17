@@ -836,3 +836,47 @@ def test_sine_taylor(dtype):
             else:
                 if rest:
                     print(f"  ULP difference >= {u5}: {rest}")
+
+
+def test_cosine_taylor(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    optimal_order = {11: 7, 24: 9, 53: 19}[t_prec]
+    ctx = NumpyContext()
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_cs = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)))
+                # expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
+                cs = fpa.cosine_taylor(ctx, x, order=order, split=False)
+
+                csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
+                cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
+                assert cs == cs2
+                # cs = numpy.cos(x)
+                u = utils.diff_ulp(cs, expected_cs)
+                ulp[u] += 1
+
+                # c = '.' if u == 0 else ('v' if cs < expected_cs else '^')
+                # print(c, end='')
+
+            rest = 0
+            u5 = None
+            for i, u in enumerate(sorted(ulp)):
+                if i < 5:
+                    print(f"  ULP difference {u}: {ulp[u]}")
+                else:
+                    if u5 is None:
+                        u5 = u
+                    rest += ulp[u]
+            else:
+                if rest:
+                    print(f"  ULP difference >= {u5}: {rest}")
