@@ -749,3 +749,72 @@ def test_logical_op_collect():
     assert_equal(
         fa.rewrite.op_collect((x & z) | (y & z) | (x & z), over_commutative=True, over_idempotent=True, **kwargs), (x | y) & z
     )
+
+
+def test_series():
+
+    ctx = fa.Context()
+
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+    z = ctx.symbol("z")
+    w = ctx.symbol("w")
+
+    s1 = ctx.series(0, x, y)
+    s2 = ctx.series(0, z, w)
+    s3 = ctx.series(1, z, w)
+    s4 = ctx.series(-1, z, w)
+    s5 = ctx.series(-3, z, w)
+
+    def rewrite(expr):
+        return expr.rewrite(fa.rewrite)
+
+    assert_equal(s1 + s2, ctx.add(s1, s2))
+    assert_equal(rewrite(s1 + s2), ctx.series(0, x + z, y + w))
+    assert_equal(rewrite(s1 + s3), ctx.series(1, z, x + w, y))
+    assert_equal(rewrite(s3 + s1), ctx.series(1, z, w + x, y))
+    assert_equal(rewrite(s1 + s4), ctx.series(0, x, y + z, w))
+    assert_equal(rewrite(s4 + s1), ctx.series(0, x, z + y, w))
+    assert_equal(rewrite(s1 + s5), ctx.series(0, x, y, 0, z, w))
+    assert_equal(rewrite(s5 + s1), ctx.series(0, x, y, 0, z, w))
+    assert_equal(rewrite(s4 + s5), ctx.series(-1, z, w, z, w))
+
+    assert_equal(s1 - s2, ctx.subtract(s1, s2))
+    assert_equal(rewrite(s1 - s2), ctx.series(0, x - z, y - w))
+    assert_equal(rewrite(s1 - s3), ctx.series(1, -z, x - w, y))
+    assert_equal(rewrite(s3 - s1), ctx.series(1, z, w - x, -y))
+    assert_equal(rewrite(s1 - s4), ctx.series(0, x, y - z, -w))
+    assert_equal(rewrite(s4 - s1), ctx.series(0, -x, z - y, w))
+    assert_equal(rewrite(s1 - s5), ctx.series(0, x, y, 0, -z, -w))
+    assert_equal(rewrite(s5 - s1), ctx.series(0, -x, -y, 0, z, w))
+    assert_equal(rewrite(s4 - s5), ctx.series(-1, z, w, -z, -w))
+    assert_equal(rewrite(s5 - s4), ctx.series(-1, -z, -w, z, w))
+
+    assert_equal(rewrite(s1 + z), ctx.series(0, x + z, y))
+    assert_equal(rewrite(s1 - z), ctx.series(0, x - z, y))
+    assert_equal(rewrite(z + s1), ctx.series(0, z + x, y))
+    assert_equal(rewrite(z - s1), ctx.series(0, z - x, -y))
+    assert_equal(rewrite(s2 + x), ctx.series(0, z + x, w))
+    assert_equal(rewrite(s3 + x), ctx.series(1, z, w + x))
+    assert_equal(rewrite(s4 + x), ctx.series(0, x, z, w))
+    assert_equal(rewrite(s5 + x), ctx.series(0, x, 0, 0, z, w))
+
+    assert_equal(s1 * s2, ctx.multiply(s1, s2))
+    assert_equal(rewrite(s1 * s2), ctx.series(0, x * z, x * w + y * z, y * w))
+    assert_equal(rewrite(s2 * s2), ctx.series(0, z * z, z * w + w * z, w * w))
+    assert_equal(rewrite(s3 * s3), ctx.series(2, z * z, z * w + w * z, w * w))
+    assert_equal(rewrite(s4 * s4), ctx.series(-2, z * z, z * w + w * z, w * w))
+    assert_equal(rewrite(s4 * s5), ctx.series(-4, z * z, z * w + w * z, w * w))
+
+    assert_equal(rewrite(s3**2), ctx.series(2, z * z, z * w + w * z, w * w))
+
+    assert_equal(rewrite(s1 * z), ctx.series(0, x * z, y * z))
+    assert_equal(rewrite(z * s1), ctx.series(0, z * x, z * y))
+    assert_equal(rewrite(s2 * x), ctx.series(0, z * x, w * x))
+    assert_equal(rewrite(s3 * x), ctx.series(1, z * x, w * x))
+    assert_equal(rewrite(s5 * x), ctx.series(-3, z * x, w * x))
+
+    assert_equal(rewrite(s1 / z), ctx.series(0, x / z, y / z))
+
+    assert_equal(rewrite(-s1), ctx.series(0, -x, -y))
+    assert_equal(rewrite(-s3), ctx.series(1, -z, -w))

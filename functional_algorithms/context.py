@@ -4,8 +4,8 @@ import types
 import typing
 import warnings
 from collections import defaultdict
-from .utils import UNSPECIFIED, boolean_types, float_types, complex_types
-from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
+from .utils import UNSPECIFIED, boolean_types, float_types, complex_types, integer_types
+from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds, make_series
 from .typesystem import Type
 
 
@@ -248,8 +248,13 @@ class Context:
                 like_expr = self.symbol("_float_value", type(value))
             elif isinstance(value, complex_types):
                 like_expr = self.symbol("_complex_value", type(value))
+            elif isinstance(value, integer_types):
+                like_expr = self.symbol("_integer_value", type(value))
             else:
                 like_expr = self.default_like
+        if like_expr is int:
+            like_expr = self.symbol("_integer_value", int)
+        print(f"LIKE: {like_expr}")
         return make_constant(self, value, like_expr)
 
     def call(self, func, args):
@@ -317,8 +322,10 @@ class Context:
     def pow(self, x, y):
         if isinstance(y, float) and y == 0.5:
             return self.sqrt(x)
-        if isinstance(y, int) and y == 2:
-            return self.square(x)
+        if isinstance(y, int):
+            if y == 2:
+                return self.square(x)
+            return Expr(self, "pow", (x, self.constant(y, int)))
         return Expr(self, "pow", (x, y))
 
     def logical_and(self, x, y):
@@ -341,8 +348,8 @@ class Context:
 
     Not = logical_not
 
-    def bitwise_invert(self):
-        return Expr(self, "bitwise_invert", (self,))
+    def bitwise_invert(self, x):
+        return Expr(self, "bitwise_invert", (x,))
 
     invert = bitwise_invert
 
@@ -516,3 +523,6 @@ class Context:
 
     def is_finite(self, x):
         return Expr(self, "is_finite", (x,))
+
+    def series(self, unit_index, *terms):
+        return make_series(self, unit_index, terms)

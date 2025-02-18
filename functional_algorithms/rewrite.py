@@ -479,6 +479,129 @@ class Rewriter:
                 r = op(xvalue, yvalue)
                 return expr.context.constant(r, xlike)
 
+    @staticmethod
+    def _add_terms(index_terms1, index_terms2, op=None):
+        """\
+
+        Let `^` indicate the location of unity, then
+
+           [a, b, c] + [d, e] -> [a, b + d, c + e]
+               ^        ^            ^
+
+           [a, b, c] + [d, e] ->   [d, a + e, b, c]
+         ^              ^           ^
+
+           [a, b, c] + [d, e] ->   [d, e, a, b, c]
+         ^                 ^           ^
+
+           [a, b, c] + [d, e]   ->   [d, e, 0, a, b, c]
+         ^                    ^             ^
+
+        index12 = max(index1, index2)
+
+        Lower index means smaller magnitude at the first term
+        position. The magnitude differences of terms at different
+        position is undefined but it is assumed to be uniform between
+        different combinations of positions.
+
+        Notice that the location of unity could be outside of the
+        indices range of terms.
+        """
+        if op is None:
+
+            def op(x, y):
+                if x is None:
+                    return y
+                if y is None:
+                    return x
+                return x + y
+
+        swapped = False
+        if index_terms1[0] < index_terms2[0]:
+            index_terms1, index_terms2 = index_terms2, index_terms1
+            swapped = True
+        index1, terms1 = index_terms1[0], index_terms1[1:]
+        index2, terms2 = index_terms2[0], index_terms2[1:]
+
+        terms = []
+
+        for n in range(max(len(terms1), index1 - index2 + len(terms2))):
+            k = n - (index1 - index2)
+            if n < len(terms1):
+                if k >= 0 and k < len(terms2):
+                    if swapped:
+                        terms.append(op(terms2[k], terms1[n]))
+                    else:
+                        terms.append(op(terms1[n], terms2[k]))
+                else:
+                    if swapped:
+                        terms.append(op(None, terms1[n]))
+                    else:
+                        terms.append(op(terms1[n], None))
+            elif k >= 0 and k < len(terms2):
+                if swapped:
+                    terms.append(op(terms2[k], None))
+                else:
+                    terms.append(op(None, terms2[k]))
+            else:
+                terms.append(0)
+
+        return (index1, *terms)
+
+    @staticmethod
+    def _subtract_terms(index_terms1, index_terms2):
+
+        def op(x, y):
+            if x is None:
+                return -y
+            if y is None:
+                return x
+            return x - y
+
+        return Rewriter._add_terms(index_terms1, index_terms2, op=op)
+
+    @staticmethod
+    def _multiply_terms(index_terms1, index_terms2, op=None):
+        """\
+
+        Let `^` indicate the location of unity, then
+
+           [a, b, c] * [d, e] -> [a * d, b * d, b * e + c * d, c + e]
+               ^        ^                ^
+
+           [a, b, c] * [d, e] -> [a * d, a * e + b * d, c * d + b * e]
+            ^              ^             ^
+
+           [a, b, c] * [d, e] -> [a * d, a * e + b * d, c * d + b * e]
+         ^                 ^      ^
+
+        index12 = index1 + index2
+
+        Notice that the location of unity could be outside of the
+        indices range of terms.
+        """
+        if op is None:
+
+            def op(x, y):
+                return x * y
+
+        index1, terms1 = index_terms1[0], index_terms1[1:]
+        index2, terms2 = index_terms2[0], index_terms2[1:]
+
+        terms = []
+        for n in range(len(terms1) + len(terms2) - 1):
+            xy = None
+            for i, x in enumerate(terms1):
+                for j, y in enumerate(terms2):
+                    if i + j == n:
+                        if xy is None:
+                            xy = op(x, y)
+                        else:
+                            xy += op(x, y)
+            assert xy is not None
+            terms.append(xy)
+        return (index1 + index2, *terms)
+
     def add(self, expr):
         result = self._binary_op(expr, lambda x, y: x + y)
         if result is not None:
@@ -490,6 +613,13 @@ class Rewriter:
                 value, like = x_.operands
                 if isinstance(value, number_types) and value == 0:
                     return y_
+
+        if x.kind == "series":
+            if y.kind == "series":
+                return expr.context.series(*self._add_terms(x.operands, y.operands))
+            return expr.context.series(*self._add_terms(x.operands, (0, y)))
+        elif y.kind == "series":
+            return expr.context.series(*self._add_terms((0, x), y.operands))
 
     def subtract(self, expr):
         result = self._binary_op(expr, lambda x, y: x - y)
@@ -504,6 +634,13 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 0:
                     return -y_ if s == -1 else y_
 
+        if x.kind == "series":
+            if y.kind == "series":
+                return expr.context.series(*self._subtract_terms(x.operands, y.operands))
+            return expr.context.series(*self._subtract_terms(x.operands, (0, y)))
+        elif y.kind == "series":
+            return expr.context.series(*self._subtract_terms((0, x), y.operands))
+
     def multiply(self, expr):
         result = self._binary_op(expr, lambda x, y: x * y)
 
@@ -517,6 +654,13 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 1:
                     return y_
 
+        if x.kind == "series":
+            if y.kind == "series":
+                return expr.context.series(*self._multiply_terms(x.operands, y.operands))
+            return expr.context.series(*self._multiply_terms(x.operands, (0, y)))
+        elif y.kind == "series":
+            return expr.context.series(*self._multiply_terms((0, x), y.operands))
+
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))
 
@@ -529,6 +673,13 @@ class Rewriter:
             value, like = y.operands
             if isinstance(value, number_types) and value == 1:
                 return x
+
+        if x.kind == "series" and y.kind != "series":
+
+            def op(x, y):
+                return x / y
+
+            return expr.context.series(*self._multiply_terms(x.operands, (0, y), op=op))
 
     def complex(self, expr):
         pass
@@ -653,6 +804,9 @@ class Rewriter:
         if x.kind == "negative":
             return x.operands[0]
 
+        if x.kind == "series":
+            return expr.context.series(x.operands[0], *(-x_ for x_ in x.operands[1:]))
+
     def conjugate(self, expr):
 
         (x,) = expr.operands
@@ -671,6 +825,9 @@ class Rewriter:
         if x.kind == "conjugate":
             return x
 
+        if x.kind == "series":
+            return expr.context.series(x.operands[0], *(expr.context.conjugate(x_) for x_ in x.operands[1:]))
+
     def real(self, expr):
 
         (x,) = expr.operands
@@ -681,6 +838,9 @@ class Rewriter:
         if x.kind == "complex":
             return x.operands[0]
 
+        if x.kind == "series":
+            return expr.context.series(x.operands[0], *(expr.context.real(x_) for x_ in x.operands[1:]))
+
     def imag(self, expr):
 
         (x,) = expr.operands
@@ -690,6 +850,9 @@ class Rewriter:
 
         if x.kind == "complex":
             return x.operands[1]
+
+        if x.kind == "series":
+            return expr.context.series(x.operands[0], *(expr.context.imag(x_) for x_ in x.operands[1:]))
 
     def _compare(self, expr, relop, relop_index, swap_relop_index):
         x, y = expr.operands
@@ -810,6 +973,16 @@ class Rewriter:
             if isinstance(value, number_types):
                 return self._eval(like, "square", value)
 
+        if x.kind == "series":
+            return expr.context.series(*self._multiply_terms(x.operands, x.operands))
+
+    def pow(self, expr):
+        base, exp = expr.operands
+        if base.kind == "series" and exp.kind == "constant" and isinstance(exp.operands[0], int) and exp.operands[0] >= 0:
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.fast_exponent_by_squaring(expr.context, base, exp.operands[0])
+
     def symbol(self, expr):
         pass
 
@@ -817,6 +990,9 @@ class Rewriter:
         pass
 
     def is_finite(self, expr):
+        pass
+
+    def series(self, expr):
         pass
 
 
@@ -907,4 +1083,18 @@ class Substitute:
                     return expr.context.symbol(replacement, typ=typ)
                 else:
                     raise NotImplementedError(f"{type(replacement)=}")
+        return expr
+
+
+class ReplaceSeries:
+
+    def __rewrite_modifier__(self, expr):
+        if expr.kind == "series":
+            s = None
+            for t in reversed(expr.operands[1:]):
+                if s is None:
+                    s = t
+                else:
+                    s += t
+            return s
         return expr

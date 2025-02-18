@@ -23,7 +23,8 @@ bitwise_invert, bitwise_and, bitwise_or, bitwise_xor, bitwise_left_shift, bitwis
 ceil, floor, floor_divide, remainder, round, truncate,
 copysign, sign, nextafter,
 upcast, downcast,
-is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero
+is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero,
+series
 """.replace(
         " ", ""
     )
@@ -88,6 +89,8 @@ def normalize_like(expr):
             expr = expr.operands[0].operands[0]
         elif expr.kind == "imag" and expr.operands[0].kind == "complex":
             expr = expr.operands[0].operands[1]
+        elif expr.kind == "series":
+            expr = expr.operands[1]
         else:
             break
     return expr
@@ -118,20 +121,29 @@ def make_apply(context, name, args, result):
     return Expr(context, "apply", (name, *args, result))
 
 
+def make_series(context, order, terms):
+    return Expr(context, "series", (order, *terms))
+
+
 def normalize(context, operands):
     """Convert numbers to constant expressions"""
     exprs = [operand for operand in operands if isinstance(operand, Expr)]
     if len(exprs) == 0:
         ref_operand = context.default_like
         if ref_operand is None:
-            raise ValueError("cannot normalize operands with no reference operand or context default constant type")
+            operand_types = ", ".join(sorted(set([type(operand).__name__ for operand in operands])))
+            raise ValueError(
+                f"cannot normalize operands (of types {operand_types}) with no reference operand or context default constant type"
+            )
     else:
         ref_operand = exprs[0]
 
     new_operands = []
     for operand in operands:
-        if isinstance(operand, (int, float, complex, str)):
+        if isinstance(operand, (int, float, complex, str, numpy.floating, numpy.complexfloating, numpy.integer)):
             operand = make_constant(context, operand, ref_operand)
+        else:
+            assert isinstance(operand, Expr), type(operand)
         new_operands.append(operand)
     return tuple(new_operands)
 
@@ -201,10 +213,19 @@ def make_ref(expr):
         elif expr.kind == "absolute":
             # using abs for BC
             ref = f"abs_{make_ref(expr.operands[0])}"
-        else:
+        elif expr.kind == "series":
             all_operands_have_ref_name = not [
-                0 for o in expr.operands if not isinstance(expr.operands[0].props.get("reference_name"), str)
+                0 for o in expr.operands[1:] if not isinstance(o.props.get("reference_name"), str)
             ]
+            if all_operands_have_ref_name:
+                # for readability
+                i = expr.operands[0]
+                lst = [expr.kind] + [f"minus{i}" if i < 0 else str(i)] + list(map(make_ref, expr.operands[1:]))
+                ref = "_".join(lst)
+            else:
+                ref = f"{expr.kind}_{expr.intkey}"
+        else:
+            all_operands_have_ref_name = not [0 for o in expr.operands if not isinstance(o.props.get("reference_name"), str)]
             if all_operands_have_ref_name:
                 # for readability
                 lst = [expr.kind] + list(map(make_ref, expr.operands))
@@ -315,7 +336,7 @@ class Expr:
             if context.alt is not None and not isinstance(operands[0], Expr):
                 operands = [context.alt.constant(operands[0]), operands[1]]
         else:
-            if kind == "select":
+            if kind in {"select", "series"}:
                 operands = operands[:1] + normalize(context, operands[1:])
             else:
                 operands = normalize(context, operands)
@@ -338,7 +359,11 @@ class Expr:
                     operands = (Expr(context.alt, kind, tuple(constant_operands)), constant_like)
                     kind = "constant"
 
-            assert False not in [isinstance(operand, Expr) for operand in operands], operands
+            if kind == "series":
+                assert isinstance(operands[0], int), type(operands[0])
+                assert False not in [isinstance(operand, Expr) for operand in operands[1:]], operands
+            else:
+                assert False not in [isinstance(operand, Expr) for operand in operands], operands
 
         obj.context = context
         obj.kind = kind
@@ -387,6 +412,8 @@ class Expr:
                 value.key if isinstance(value, Expr) else (value, type(value).__name__),
                 like.key,
             )
+        elif self.kind == "series":
+            r = (self.kind, self.operands[0], *(operand.intkey for operand in self.operands[1:]))
         else:
             # Don't use `operand.key` as its size is unbounded and
             # will lead to large overhead in computing the hash value
@@ -465,6 +492,14 @@ class Expr:
             body = self.operands[-1].rewrite(modifier, **rewrite_kwargs)
             if body is not self.operands[-1]:
                 result = make_apply(self.context, self.operands[0], self.operands[1:-1], body)
+            else:
+                result = self
+        elif self.kind == "series":
+            terms = tuple([operand.rewrite(modifier, **rewrite_kwargs) for operand in self.operands[1:]])
+            for o1, o2 in zip(terms, self.operands[1:]):
+                if o1 is not o2:
+                    result = Expr(self.context, self.kind, (self.operands[0], *terms))
+                    break
             else:
                 result = self
         else:
@@ -1023,6 +1058,11 @@ class Expr:
             return self.operands[0].is_complex
         elif self.kind == "apply":
             return self.operands[-1].is_complex
+        elif self.kind == "series":
+            for o in self.operands[1:]:
+                if o.is_complex:
+                    return True
+            return False
         else:
             raise NotImplementedError(f"{type(self).__name__}.is_complex not implemented for {self.kind}")
 
@@ -1080,6 +1120,11 @@ class Expr:
             "atan2",
         }:
             return self.operands[0].get_type().max(self.operands[1].get_type())
+        elif self.kind == "series":
+            t = self.operands[1].get_type()
+            for o in self.operands[2:]:
+                t = t.max(o.get_type())
+            return t
         elif self.kind in {"absolute", "real", "imag"}:
             t = self.operands[0].get_type()
             return t.complex_part if t.is_complex else t
