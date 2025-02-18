@@ -121,8 +121,8 @@ def make_apply(context, name, args, result):
     return Expr(context, "apply", (name, *args, result))
 
 
-def make_series(context, order, terms):
-    return Expr(context, "series", (order, *terms))
+def make_series(context, unit_index, scaling_exp, terms):
+    return Expr(context, "series", ((unit_index, scaling_exp), *terms))
 
 
 def normalize(context, operands):
@@ -219,8 +219,8 @@ def make_ref(expr):
             ]
             if all_operands_have_ref_name:
                 # for readability
-                i = expr.operands[0]
-                lst = [expr.kind] + [f"minus{i}" if i < 0 else str(i)] + list(map(make_ref, expr.operands[1:]))
+                params = [f"minus{p}" if p < 0 else str(p) for p in expr.operands[0]]
+                lst = [expr.kind] + params + list(map(make_ref, expr.operands[1:]))
                 ref = "_".join(lst)
             else:
                 ref = f"{expr.kind}_{expr.intkey}"
@@ -360,7 +360,9 @@ class Expr:
                     kind = "constant"
 
             if kind == "series":
-                assert isinstance(operands[0], int), type(operands[0])
+                assert isinstance(operands[0], tuple) and len(operands[0]) == 2, type(operands[0])
+                assert isinstance(operands[0][0], int)
+                assert isinstance(operands[0][1], int)
                 assert False not in [isinstance(operand, Expr) for operand in operands[1:]], operands
             else:
                 assert False not in [isinstance(operand, Expr) for operand in operands], operands

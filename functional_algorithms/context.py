@@ -254,7 +254,6 @@ class Context:
                 like_expr = self.default_like
         if like_expr is int:
             like_expr = self.symbol("_integer_value", int)
-        print(f"LIKE: {like_expr}")
         return make_constant(self, value, like_expr)
 
     def call(self, func, args):
@@ -524,5 +523,10 @@ class Context:
     def is_finite(self, x):
         return Expr(self, "is_finite", (x,))
 
-    def series(self, unit_index, *terms):
-        return make_series(self, unit_index, terms)
+    def series(self, *terms, **params):
+        unit_index = params.get("unit_index", 0)
+        scaling_exp = params.get("scaling_exp", 0)
+        return make_series(self, unit_index, scaling_exp, terms)
+
+    def _series(self, terms, params):
+        return self.series(*terms, **params)

@@ -480,7 +480,7 @@ class Rewriter:
                 return expr.context.constant(r, xlike)
 
     @staticmethod
-    def _add_terms(index_terms1, index_terms2, op=None):
+    def _add_terms(params_terms1, params_terms2, op=None):
         """\
 
         Let `^` indicate the location of unity, then
@@ -517,11 +517,12 @@ class Rewriter:
                 return x + y
 
         swapped = False
-        if index_terms1[0] < index_terms2[0]:
-            index_terms1, index_terms2 = index_terms2, index_terms1
+        if params_terms1[0][0] < params_terms2[0][0]:
+            params_terms1, params_terms2 = params_terms2, params_terms1
             swapped = True
-        index1, terms1 = index_terms1[0], index_terms1[1:]
-        index2, terms2 = index_terms2[0], index_terms2[1:]
+        (index1, sexp1), terms1 = params_terms1[0], params_terms1[1:]
+        (index2, sexp2), terms2 = params_terms2[0], params_terms2[1:]
+        assert sexp1 == sexp2, (sexp1, sexp2)
 
         terms = []
 
@@ -546,10 +547,10 @@ class Rewriter:
             else:
                 terms.append(0)
 
-        return (index1, *terms)
+        return (terms, dict(unit_index=index1, scaling_exp=sexp1))
 
     @staticmethod
-    def _subtract_terms(index_terms1, index_terms2):
+    def _subtract_terms(params_terms1, params_terms2):
 
         def op(x, y):
             if x is None:
@@ -558,10 +559,10 @@ class Rewriter:
                 return x
             return x - y
 
-        return Rewriter._add_terms(index_terms1, index_terms2, op=op)
+        return Rewriter._add_terms(params_terms1, params_terms2, op=op)
 
     @staticmethod
-    def _multiply_terms(index_terms1, index_terms2, op=None):
+    def _multiply_terms(params_terms1, params_terms2, op=None):
         """\
 
         Let `^` indicate the location of unity, then
@@ -585,8 +586,9 @@ class Rewriter:
             def op(x, y):
                 return x * y
 
-        index1, terms1 = index_terms1[0], index_terms1[1:]
-        index2, terms2 = index_terms2[0], index_terms2[1:]
+        (index1, sexp1), terms1 = params_terms1[0], params_terms1[1:]
+        (index2, sexp2), terms2 = params_terms2[0], params_terms2[1:]
+        assert sexp1 == sexp2, (sexp1, sexp2)
 
         terms = []
         for n in range(len(terms1) + len(terms2) - 1):
@@ -600,7 +602,7 @@ class Rewriter:
                             xy += op(x, y)
             assert xy is not None
             terms.append(xy)
-        return (index1 + index2, *terms)
+        return terms, dict(unit_index=index1 + index2, scaling_exp=sexp1)
 
     def add(self, expr):
         result = self._binary_op(expr, lambda x, y: x + y)
@@ -616,10 +618,10 @@ class Rewriter:
 
         if x.kind == "series":
             if y.kind == "series":
-                return expr.context.series(*self._add_terms(x.operands, y.operands))
-            return expr.context.series(*self._add_terms(x.operands, (0, y)))
+                return expr.context._series(*self._add_terms(x.operands, y.operands))
+            return expr.context._series(*self._add_terms(x.operands, ((0, x.operands[0][1]), y)))
         elif y.kind == "series":
-            return expr.context.series(*self._add_terms((0, x), y.operands))
+            return expr.context._series(*self._add_terms(((0, y.operands[0][1]), x), y.operands))
 
     def subtract(self, expr):
         result = self._binary_op(expr, lambda x, y: x - y)
@@ -636,10 +638,10 @@ class Rewriter:
 
         if x.kind == "series":
             if y.kind == "series":
-                return expr.context.series(*self._subtract_terms(x.operands, y.operands))
-            return expr.context.series(*self._subtract_terms(x.operands, (0, y)))
+                return expr.context._series(*self._subtract_terms(x.operands, y.operands))
+            return expr.context._series(*self._subtract_terms(x.operands, ((0, x.operands[0][1]), y)))
         elif y.kind == "series":
-            return expr.context.series(*self._subtract_terms((0, x), y.operands))
+            return expr.context._series(*self._subtract_terms(((0, y.operands[0][1]), x), y.operands))
 
     def multiply(self, expr):
         result = self._binary_op(expr, lambda x, y: x * y)
@@ -656,10 +658,10 @@ class Rewriter:
 
         if x.kind == "series":
             if y.kind == "series":
-                return expr.context.series(*self._multiply_terms(x.operands, y.operands))
-            return expr.context.series(*self._multiply_terms(x.operands, (0, y)))
+                return expr.context._series(*self._multiply_terms(x.operands, y.operands))
+            return expr.context._series(*self._multiply_terms(x.operands, ((0, x.operands[0][1]), y)))
         elif y.kind == "series":
-            return expr.context.series(*self._multiply_terms((0, x), y.operands))
+            return expr.context._series(*self._multiply_terms(((0, y.operands[0][1]), x), y.operands))
 
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))
@@ -679,7 +681,7 @@ class Rewriter:
             def op(x, y):
                 return x / y
 
-            return expr.context.series(*self._multiply_terms(x.operands, (0, y), op=op))
+            return expr.context._series(*self._multiply_terms(x.operands, ((0, 0), y), op=op))
 
     def complex(self, expr):
         pass
@@ -805,7 +807,7 @@ class Rewriter:
             return x.operands[0]
 
         if x.kind == "series":
-            return expr.context.series(x.operands[0], *(-x_ for x_ in x.operands[1:]))
+            return _expr.make_series(expr.context, *x.operands[0], tuple(-x_ for x_ in x.operands[1:]))
 
     def conjugate(self, expr):
 
@@ -826,7 +828,7 @@ class Rewriter:
             return x
 
         if x.kind == "series":
-            return expr.context.series(x.operands[0], *(expr.context.conjugate(x_) for x_ in x.operands[1:]))
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.conjugate(x_) for x_ in x.operands[1:]))
 
     def real(self, expr):
 
@@ -839,7 +841,7 @@ class Rewriter:
             return x.operands[0]
 
         if x.kind == "series":
-            return expr.context.series(x.operands[0], *(expr.context.real(x_) for x_ in x.operands[1:]))
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.real(x_) for x_ in x.operands[1:]))
 
     def imag(self, expr):
 
@@ -852,7 +854,7 @@ class Rewriter:
             return x.operands[1]
 
         if x.kind == "series":
-            return expr.context.series(x.operands[0], *(expr.context.imag(x_) for x_ in x.operands[1:]))
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.imag(x_) for x_ in x.operands[1:]))
 
     def _compare(self, expr, relop, relop_index, swap_relop_index):
         x, y = expr.operands
@@ -974,7 +976,7 @@ class Rewriter:
                 return self._eval(like, "square", value)
 
         if x.kind == "series":
-            return expr.context.series(*self._multiply_terms(x.operands, x.operands))
+            return expr.context._series(*self._multiply_terms(x.operands, x.operands))
 
     def pow(self, expr):
         base, exp = expr.operands
@@ -1091,10 +1093,18 @@ class ReplaceSeries:
     def __rewrite_modifier__(self, expr):
         if expr.kind == "series":
             s = None
-            for t in reversed(expr.operands[1:]):
-                if s is None:
-                    s = t
+            index, sexp = expr.operands[0]
+            for i, t in enumerate(reversed(expr.operands[1:])):
+                i = len(expr.operands[1:]) - 1 - i + index
+                if sexp == 0 or i == 0:
+                    if s is None:
+                        s = t
+                    else:
+                        s += t
                 else:
-                    s += t
+                    if s is None:
+                        s = t * expr.context.constant(2 ** (-i * sexp), t)
+                    else:
+                        s += t * expr.context.constant(2 ** (-i * sexp), t)
             return s
         return expr
