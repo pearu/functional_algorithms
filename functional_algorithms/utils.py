@@ -70,9 +70,11 @@ def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """
     ctx = x.context
     if ctx.isfinite(x):
-        prec_rounding = ctx._prec_rounding
+        prec_rounding = ctx._prec_rounding[:]
         if prec is not None:
             prec_rounding[0] = prec
+        else:
+            prec_rounding[0] = get_precision(dtype)
         if rounding is not None:
             prec_rounding[1] = rounding
         sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
@@ -2172,7 +2174,7 @@ def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
     result = []
     offset = max(bl - p, 0)
     if max_length is not None and max_length == 1:
-        result.append(mpf2float(dtype, x))
+        result.append(mpf2float(dtype, x, prec=x.context.prec))
         offset = 0
     while True:
         man1 = (man & (mask << offset)) >> offset
@@ -2186,7 +2188,8 @@ def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
             man1 = (man & (mask << offset)) >> offset
             bl1 = man1.bit_length()
         exp1 = exp + offset + len(result) * sexp
-        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)))
+
+        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)), prec=x.context.prec)
         if x1 == dtype(0) and offset == 0:
             # result represents truncated x
             break

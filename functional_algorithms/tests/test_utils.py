@@ -375,7 +375,7 @@ def test_float2mpf(real_dtype):
         if real_dtype != numpy.longdouble:
             assert utils.mpf2bin(m) == utils.float2bin(v)
 
-    if real_dtype in {numpy.float32, numpy.float64}:
+    if real_dtype in {numpy.float16, numpy.float32, numpy.float64}:
         for f in utils.real_samples(1000, dtype=real_dtype):
             v = real_dtype(f)
             m = utils.float2mpf(ctx, v)
@@ -537,9 +537,11 @@ def test_mpf2multiword(real_dtype):
                     assert lst[-1] >= 0
                 assert lst[-1] > 0
                 result = sum([utils.float2mpf(ctx, w) for w in lst], utils.float2mpf(ctx, dtype(0)))
-                assert result == x or abs(utils.mpf2float(dtype, result - x)) == 0
-                if lst[-1] == 0:
-                    break
+                d = result - x
+                if m < max_m:
+                    assert result == x
+                else:
+                    assert abs(utils.mpf2float(dtype, result - x)) == 0
 
 
 def test_mpf2multiword_log2(real_dtype):
