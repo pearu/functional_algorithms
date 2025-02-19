@@ -23,6 +23,21 @@ def binary_op(request):
 NumpyContext = utils.NumpyContext
 
 
+def show_ulp(ulp):
+    rest = 0
+    u5 = None
+    for i, u in enumerate(sorted(ulp)):
+        if i < 5:
+            print(f"  ULP difference {u}: {ulp[u]}")
+        else:
+            if u5 is None:
+                u5 = u
+            rest += ulp[u]
+    else:
+        if rest:
+            print(f"  ULP difference >= {u5}: {rest}")
+
+
 def test_split_veltkamp(dtype):
     ctx = NumpyContext()
     p = utils.get_precision(dtype)
@@ -72,6 +87,25 @@ def test_split_veltkamp(dtype):
         bl = bl[1 + bl.startswith("1.") :].lstrip("0")
         assert len(bh) < (p + 1) // 2
         assert len(bl) < (p + 1) // 2
+
+
+def test_split_veltkamp2(dtype):
+    fi = numpy.finfo(dtype)
+    ctx = NumpyContext()
+    p = utils.get_precision(dtype)
+    C = utils.get_veltkamp_splitter_constant(dtype)
+    largest = fpa.get_largest(ctx, dtype(0))
+
+    max_x = largest
+    min_x = fi.smallest_normal * (C + C - dtype(2))
+    size = 1000
+    for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
+        xh, xl = fpa.split_veltkamp2(ctx, x)
+        assert x == xh + xl + xh
+
+        x = -x
+        xh, xl = fpa.split_veltkamp2(ctx, x)
+        assert x == xh + xl + xh
 
 
 def test_mul_dekker(dtype):
@@ -726,5 +760,152 @@ def test_argument_reduction_trigonometric(dtype):
             else:
                 assert r == expected_r or u_r <= 1
 
-    for u in sorted(ulp_counts):
-        print(f"ULP difference {u}: {ulp_counts[u]}")
+    show_ulp(ulp_counts)
+
+
+def test_sine_pade(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    ctx = NumpyContext()
+    size = 10_000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+
+        for variant in [
+            (11, 2),
+            (11, 3),
+            (11, 4),
+            (11, 5),
+            (13, 2),
+            (13, 3),
+            (13, 4),
+            (13, 5),
+            (13, 6),
+            (17, 2),
+            (17, 3),
+            (17, 4),
+            (17, 5),
+        ]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_sn = utils.mpf2float(dtype, mpctx.sin(utils.float2mpf(mpctx, x)))
+                sn = fpa.sine_pade(ctx, x, variant=variant)
+                u = utils.diff_ulp(sn, expected_sn)
+                ulp[u] += 1
+
+            print(f"{variant=}")
+            show_ulp(ulp)
+
+
+def test_sine_taylor(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    optimal_order = {11: 7, 24: 9, 53: 15}[t_prec]
+    ctx = NumpyContext()
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_sn = utils.mpf2float(dtype, mpctx.sin(utils.float2mpf(mpctx, x)))
+                sn = fpa.sine_taylor(ctx, x, order=order, split=False)
+                snh, snl = fpa.sine_taylor(ctx, x, order=order, split=True)
+                sn2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, snh) + utils.float2mpf(mpctx, snl))
+                assert sn == sn2
+                # sn = numpy.sin(x)
+                u = utils.diff_ulp(sn, expected_sn)
+                ulp[u] += 1
+
+            show_ulp(ulp)
+
+
+def test_cosine_taylor(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    optimal_order = {11: 7, 24: 9, 53: 19}[t_prec]
+    ctx = NumpyContext()
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_cs = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)))
+                # expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
+                cs = fpa.cosine_taylor(ctx, x, order=order, split=False)
+
+                csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
+                cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
+                assert cs == cs2
+                # cs = numpy.cos(x)
+                u = utils.diff_ulp(cs, expected_cs)
+                ulp[u] += 1
+
+                # c = '.' if u == 0 else ('v' if cs < expected_cs else '^')
+                # print(c, end='')
+
+            show_ulp(ulp)
+
+
+@pytest.mark.parametrize("mthname", ["dekker", "fast"])
+@pytest.mark.parametrize("exponent", [2, 3, 4])
+def test_fast_exponent_by_squaring(dtype, exponent, mthname):
+    import mpmath
+
+    if mthname == "dekker":
+
+        def mth(ctx, x, e):
+            r = fpa.fast_exponent_by_squaring_dekker(ctx, x, e)
+            if type(r) is tuple:
+                terms = r[1:]
+                return sum(reversed(terms[:-1]), terms[-1])
+            return r
+
+    elif mthname == "fast":
+        mth = fpa.fast_exponent_by_squaring
+    else:
+        assert 0, mthname  # not immplemented
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    npctx = fa.utils.NumpyContext()
+    ctx = fa.Context(paths=[fpa], default_constant_type=dtype.__name__)
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        ulp = defaultdict(int)
+        for x in samples[::-1]:
+            x_mp = utils.float2mpf(mpctx, x)
+            expected = utils.mpf2float(dtype, x_mp**exponent)
+
+            result = mth(npctx, x, exponent)
+            if type(result) is tuple:
+                r = sum(reversed(result[:-1]), result[-1])
+            else:
+                r = result
+
+            u = utils.diff_ulp(r, expected, flush_subnormals=True)
+            ulp[u] += 1
+
+            # c = "." if u == 0 else ("v" if r < expected else "^")
+            # print(c, end="")
+
+        show_ulp(ulp)

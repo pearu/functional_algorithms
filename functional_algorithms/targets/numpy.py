@@ -194,6 +194,7 @@ type_to_target = dict(
     integer32="numpy.int32",
     integer64="numpy.int64",
     integer="numpy.int64",
+    float16="numpy.float16",
     float32="numpy.float32",
     float64="numpy.float64",
     float="numpy.float64",
@@ -217,7 +218,7 @@ def as_function(graph, debug=0, numpy=numpy):
         warnings=warnings,
     )
     np = graph.tostring(this_module, debug=debug)
-    if debug >= 2:
+    if debug >= 1.5:
         print(np)
     exec(np, d)
     return d[graph.operands[0].operands[0]]
