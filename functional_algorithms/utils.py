@@ -2241,6 +2241,14 @@ class NumpyContext:
             return numpy.round(value)
         assert 0, (value, type(value))  # unreachable
 
+    def _series(self, terms, params):
+        unit_index = params.get("unit_index", 0)
+        scaling_exp = params.get("scaling_exp", 0)
+        return ((unit_index, scaling_exp), *terms)
+
+    def _get_series_operands(self, expr):
+        return expr
+
 
 def get_pi_over_two_multiword(dtype, prec=None, max_length=None):
     if prec is None:

@@ -261,7 +261,7 @@ def mul_dw(ctx, x, y, xh, xl, yh, yl):
 
 
 def mul_dekker(ctx, x, y, C=None):
-    """Dekker product:
+    """Dekker's product:
 
       x * y = xyh + xyl
 
@@ -294,6 +294,129 @@ def mul_dekker(ctx, x, y, C=None):
     xh, xl = split_veltkamp(ctx, x, C)
     yh, yl = split_veltkamp(ctx, y, C)
     return mul_dw(ctx, x, y, xh, xl, yh, yl)
+
+
+def _mul_series_scalar(ctx, x, y):
+    assert type(y) is not tuple
+    terms = tuple(x_ * y for x_ in x[1:])
+    return ctx._series(terms, dict(unit_index=x[0][0], scaling_exp=x[0][1]))
+
+
+def _mul_scalar_series(ctx, x, y):
+    assert type(x) is not tuple
+    terms = tuple(x * y_ for y_ in y[1:])
+    return ctx._series(terms, dict(unit_index=y[0][0], scaling_exp=y[0][1]))
+
+
+def _div_series_scalar(ctx, x, y):
+    assert type(y) is not tuple
+    terms = tuple(x_ / y for x_ in x[1:])
+    return ctx._series(terms, dict(unit_index=x[0][0], scaling_exp=x[0][1]))
+
+
+def _mul_series_series(ctx, x, y):
+    (index1, sexp1), terms1 = x[0], x[1:]
+    (index2, sexp2), terms2 = y[0], y[1:]
+    assert sexp1 == sexp2, (sexp1, sexp2)
+
+    terms = []
+    for n in range(len(terms1) + len(terms2) - 1):
+        xy = None
+        for i, x in enumerate(terms1):
+            for j, y in enumerate(terms2):
+                if i + j == n:
+                    if xy is None:
+                        xy = x * y
+                    else:
+                        xy += x * y
+        assert xy is not None
+        terms.append(xy)
+
+    return ctx._series(tuple(terms), dict(unit_index=index1 + index2, scaling_exp=sexp1))
+
+
+def mul_series(ctx, x, y):
+    """Multiply x and y which may be series."""
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _mul_series_series(ctx, x, y)
+        return _mul_series_scalar(ctx, x, y)
+    elif type(y) is tuple:
+        return _mul_scalar_series(ctx, x, y)
+    return x * y
+
+
+def div_series(ctx, x, y):
+    """Divide x by y where x may be series."""
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+    if type(x) is tuple:
+        if type(y) is tuple:
+            assert 0  # not impl
+        return _div_series_scalar(ctx, x, y)
+    elif type(y) is tuple:
+        assert 0  # not impl
+    return x / y
+
+
+def mul_series_dekker(ctx, x, y, C=None):
+    """Dekker's product on series:
+
+        sum(x) * sum(y) = sum(xy)
+
+    Series are represented by a tuple
+
+      ((index, sexp), term1, term2, ..., termN)
+    """
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+    if type(x) is tuple:
+        if type(y) is tuple:
+            assert x[0][1] == y[0][1]
+            # (x1, x2, ...) * (y1, y2, ...)
+            #  x11h, x11l = mul_dekker(x1, y1)
+            #  x12h, x12l = mul_dekker(x1, y2)
+            #  ...
+            #  xijh == xjih, xijl == xjil
+            # = (x11h, x11h * x12l + x11l * x12h + x21h * x12h + ..., ...)
+            # = (..., ... + x[i,j]h, ... + x[i,j]l + x[i+1,j]h + x[i, j+1]h, ... + x[i+1,j]l + x[i,j+1]l + x[i+1,j+1]h, ... + x[i+1,j+1]l, ...)
+            terms = None
+            for i, x_ in enumerate(x[1:]):
+                for j, y_ in enumerate(y[1:]):
+                    index = i + j
+                    xyh, xyl = mul_dekker(ctx, x_, y_, C=C)
+                    if terms is None:
+                        terms = [xyh, xyl]
+                    elif len(terms) <= index:
+                        terms.append(xyh)
+                        terms.append(xyl)
+                    elif len(terms) <= index + 1:
+                        terms[-1] += xyh
+                        terms.append(xyl)
+                    else:
+                        terms[index] += xyh
+                        terms[index + 1] += xyl
+            return ctx._series(tuple(terms), dict(unit_index=x[0][0] + y[0][0], scaling_exp=x[0][1]))
+        else:
+            # (x1, x2, ...) * y
+            #   x1h, x1l = mul_dekker(x1, y)
+            #   x2h, x2l = mul_dekker(x2, y)
+            #   ...
+            # = (x1h, x1l + x2h, x2l + x3h, ..., xNl)
+            terms = None
+            for x_ in x[1:]:
+                xh, xl = mul_dekker(ctx, x_, y, C=C)
+                if terms is None:
+                    terms = [xh, xl]
+                else:
+                    terms[-1] += xh
+                    terms.append(xl)
+            return ctx._series(tuple(terms), dict(unit_index=x[0][0], scaling_exp=x[0][1]))
+    elif type(y) is tuple:
+        return mul_series_dekker(ctx, y, x, C=C)
+    return ctx._series(mul_dekker(ctx, x, y, C=C), dict(unit_index=0, scaling_exp=0))
 
 
 def add_2sum(ctx, x, y, fast=False):
@@ -691,6 +814,30 @@ def fast_exponent_by_squaring(ctx, x, n):
     if n % 2 == 0:
         return r * r
     return r * r * x
+
+
+def fast_exponent_by_squaring_dekker(ctx, x, n: int, depth=0):
+    """Evaluate x ** n by squaring using Dekker's product."""
+    if n == 0:
+        return ctx.constant(1, x)
+    elif n == 1:
+        return x
+    elif n == 2:
+        if depth == 0:
+            return x * x
+        return mul_series_dekker(ctx, x, x)
+    else:
+        # TODO: introduce dekker_inverse and use
+        #   return inverse_dekker(ctx, fast_exponent_by_squaring_dekker(ctx, x, -n))
+        # or
+        #   return fast_exponent_by_squaring_dekker(ctx, inverse_dekker(ctx, x), -n)
+        # which ever has better accuracy properties
+        assert n > 0, n  # unreachable
+    r = fast_exponent_by_squaring_dekker(ctx, x, n // 2, depth=depth + 1)
+    y = fast_exponent_by_squaring_dekker(ctx, r, 2, depth=depth + 1)
+    if n % 2 == 0:
+        return y
+    return mul_series_dekker(ctx, x, y)
 
 
 def canonical_scheme(k, N):

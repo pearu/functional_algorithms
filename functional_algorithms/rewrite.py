@@ -479,6 +479,7 @@ class Rewriter:
                 r = op(xvalue, yvalue)
                 return expr.context.constant(r, xlike)
 
+    # TODO: move to fpa
     @staticmethod
     def _add_terms(params_terms1, params_terms2, op=None):
         """\
@@ -549,6 +550,7 @@ class Rewriter:
 
         return (terms, dict(unit_index=index1, scaling_exp=sexp1))
 
+    # TODO: move to fpa
     @staticmethod
     def _subtract_terms(params_terms1, params_terms2):
 
@@ -560,49 +562,6 @@ class Rewriter:
             return x - y
 
         return Rewriter._add_terms(params_terms1, params_terms2, op=op)
-
-    @staticmethod
-    def _multiply_terms(params_terms1, params_terms2, op=None):
-        """\
-
-        Let `^` indicate the location of unity, then
-
-           [a, b, c] * [d, e] -> [a * d, b * d, b * e + c * d, c + e]
-               ^        ^                ^
-
-           [a, b, c] * [d, e] -> [a * d, a * e + b * d, c * d + b * e]
-            ^              ^             ^
-
-           [a, b, c] * [d, e] -> [a * d, a * e + b * d, c * d + b * e]
-         ^                 ^      ^
-
-        index12 = index1 + index2
-
-        Notice that the location of unity could be outside of the
-        indices range of terms.
-        """
-        if op is None:
-
-            def op(x, y):
-                return x * y
-
-        (index1, sexp1), terms1 = params_terms1[0], params_terms1[1:]
-        (index2, sexp2), terms2 = params_terms2[0], params_terms2[1:]
-        assert sexp1 == sexp2, (sexp1, sexp2)
-
-        terms = []
-        for n in range(len(terms1) + len(terms2) - 1):
-            xy = None
-            for i, x in enumerate(terms1):
-                for j, y in enumerate(terms2):
-                    if i + j == n:
-                        if xy is None:
-                            xy = op(x, y)
-                        else:
-                            xy += op(x, y)
-            assert xy is not None
-            terms.append(xy)
-        return terms, dict(unit_index=index1 + index2, scaling_exp=sexp1)
 
     def add(self, expr):
         result = self._binary_op(expr, lambda x, y: x + y)
@@ -656,12 +615,10 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 1:
                     return y_
 
-        if x.kind == "series":
-            if y.kind == "series":
-                return expr.context._series(*self._multiply_terms(x.operands, y.operands))
-            return expr.context._series(*self._multiply_terms(x.operands, ((0, x.operands[0][1]), y)))
-        elif y.kind == "series":
-            return expr.context._series(*self._multiply_terms(((0, y.operands[0][1]), x), y.operands))
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.mul_series(expr.context, x, y)
 
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))
@@ -677,11 +634,9 @@ class Rewriter:
                 return x
 
         if x.kind == "series" and y.kind != "series":
+            import functional_algorithms.floating_point_algorithms as fpa
 
-            def op(x, y):
-                return x / y
-
-            return expr.context._series(*self._multiply_terms(x.operands, ((0, 0), y), op=op))
+            return fpa.div_series(expr.context, x, y)
 
     def complex(self, expr):
         pass
@@ -976,7 +931,9 @@ class Rewriter:
                 return self._eval(like, "square", value)
 
         if x.kind == "series":
-            return expr.context._series(*self._multiply_terms(x.operands, x.operands))
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.mul_series(expr.context, x, x)
 
     def pow(self, expr):
         base, exp = expr.operands

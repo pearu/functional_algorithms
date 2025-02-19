@@ -23,6 +23,21 @@ def binary_op(request):
 NumpyContext = utils.NumpyContext
 
 
+def show_ulp(ulp):
+    rest = 0
+    u5 = None
+    for i, u in enumerate(sorted(ulp)):
+        if i < 5:
+            print(f"  ULP difference {u}: {ulp[u]}")
+        else:
+            if u5 is None:
+                u5 = u
+            rest += ulp[u]
+    else:
+        if rest:
+            print(f"  ULP difference >= {u5}: {rest}")
+
+
 def test_split_veltkamp(dtype):
     ctx = NumpyContext()
     p = utils.get_precision(dtype)
@@ -745,8 +760,7 @@ def test_argument_reduction_trigonometric(dtype):
             else:
                 assert r == expected_r or u_r <= 1
 
-    for u in sorted(ulp_counts):
-        print(f"ULP difference {u}: {ulp_counts[u]}")
+    show_ulp(ulp_counts)
 
 
 def test_sine_pade(dtype):
@@ -785,18 +799,7 @@ def test_sine_pade(dtype):
                 ulp[u] += 1
 
             print(f"{variant=}")
-            rest = 0
-            u5 = None
-            for i, u in enumerate(sorted(ulp)):
-                if i < 5:
-                    print(f"  ULP difference {u}: {ulp[u]}")
-                else:
-                    if u5 is None:
-                        u5 = u
-                    rest += ulp[u]
-            else:
-                if rest:
-                    print(f"  ULP difference >= {u5}: {rest}")
+            show_ulp(ulp)
 
 
 def test_sine_taylor(dtype):
@@ -824,18 +827,7 @@ def test_sine_taylor(dtype):
                 u = utils.diff_ulp(sn, expected_sn)
                 ulp[u] += 1
 
-            rest = 0
-            u5 = None
-            for i, u in enumerate(sorted(ulp)):
-                if i < 5:
-                    print(f"  ULP difference {u}: {ulp[u]}")
-                else:
-                    if u5 is None:
-                        u5 = u
-                    rest += ulp[u]
-            else:
-                if rest:
-                    print(f"  ULP difference >= {u5}: {rest}")
+            show_ulp(ulp)
 
 
 def test_cosine_taylor(dtype):
@@ -868,15 +860,52 @@ def test_cosine_taylor(dtype):
                 # c = '.' if u == 0 else ('v' if cs < expected_cs else '^')
                 # print(c, end='')
 
-            rest = 0
-            u5 = None
-            for i, u in enumerate(sorted(ulp)):
-                if i < 5:
-                    print(f"  ULP difference {u}: {ulp[u]}")
-                else:
-                    if u5 is None:
-                        u5 = u
-                    rest += ulp[u]
+            show_ulp(ulp)
+
+
+@pytest.mark.parametrize("mthname", ["dekker", "fast"])
+@pytest.mark.parametrize("exponent", [2, 3, 4])
+def test_fast_exponent_by_squaring(dtype, exponent, mthname):
+    import mpmath
+
+    if mthname == "dekker":
+
+        def mth(ctx, x, e):
+            r = fpa.fast_exponent_by_squaring_dekker(ctx, x, e)
+            if type(r) is tuple:
+                terms = r[1:]
+                return sum(reversed(terms[:-1]), terms[-1])
+            return r
+
+    elif mthname == "fast":
+        mth = fpa.fast_exponent_by_squaring
+    else:
+        assert 0, mthname  # not immplemented
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    npctx = fa.utils.NumpyContext()
+    ctx = fa.Context(paths=[fpa], default_constant_type=dtype.__name__)
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        ulp = defaultdict(int)
+        for x in samples[::-1]:
+            x_mp = utils.float2mpf(mpctx, x)
+            expected = utils.mpf2float(dtype, x_mp**exponent)
+
+            result = mth(npctx, x, exponent)
+            if type(result) is tuple:
+                r = sum(reversed(result[:-1]), result[-1])
             else:
-                if rest:
-                    print(f"  ULP difference >= {u5}: {rest}")
+                r = result
+
+            u = utils.diff_ulp(r, expected, flush_subnormals=True)
+            ulp[u] += 1
+
+            # c = "." if u == 0 else ("v" if r < expected else "^")
+            # print(c, end="")
+
+        show_ulp(ulp)

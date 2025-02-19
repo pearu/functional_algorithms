@@ -530,3 +530,8 @@ class Context:
 
     def _series(self, terms, params):
         return self.series(*terms, **params)
+
+    def _get_series_operands(self, expr):
+        if expr.kind == "series":
+            return expr.operands
+        return expr
