@@ -534,7 +534,8 @@ def test_mpf2multiword(real_dtype):
             for x in [ctx.pi + 0, ctx.log(2)]:
                 lst = utils.mpf2multiword(dtype, x)
                 for w in lst:
-                    assert w > 0
+                    assert lst[-1] >= 0
+                assert lst[-1] > 0
                 result = sum([utils.float2mpf(ctx, w) for w in lst], utils.float2mpf(ctx, dtype(0)))
                 assert result == x or abs(utils.mpf2float(dtype, result - x)) == 0
                 if lst[-1] == 0:

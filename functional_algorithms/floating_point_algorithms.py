@@ -129,12 +129,16 @@ def get_is_power_of_two_constants(ctx, largest: float):
     fp64 = ctx.constant(1 << (53 - 1), largest)
     fp32 = ctx.constant(1 << (24 - 1), largest)
     fp16 = ctx.constant(1 << (11 - 1), largest)
-    Q = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Qispowof2", force=True)
+    Q = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
 
     fp64 = ctx.constant(1 << (53 - 1) + 1, largest)
     fp32 = ctx.constant(1 << (24 - 1) + 1, largest)
     fp16 = ctx.constant(1 << (11 - 1) + 1, largest)
-    P = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Pispowof2", force=True)
+    P = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    if hasattr(Q, "reference"):
+        Q = Q.reference("Qispowof2", force=True)
+        P = P.reference("Pispowof2", force=True)
     return Q, P
 
 
@@ -395,11 +399,15 @@ def add_3sum(ctx, x, y, z, Q, P, three_over_two):
     return s, e, t
 
 
-def add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two):
+def add_dw(ctx, xh, xl, yh, yl, Q=None, P=None, three_over_two=None):
     """Add two double-word numbers:
 
     xh + xl + yh + yl = s
     """
+    if Q is None:
+        largest = get_largest(ctx, xh)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     sh, sl = add_2sum(ctx, xh, yh)
     th, tl = add_2sum(ctx, xl, yl)
     gh, gl = add_2sum(ctx, sl, th)
@@ -419,7 +427,7 @@ def add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two):
     )
 
 
-def add_4sum(ctx, x, y, z, w, Q, P, three_over_two):
+def add_4sum(ctx, x, y, z, w, Q=None, P=None, three_over_two=None):
     """Add four numbers:
 
     x + y + z + w = s
@@ -432,6 +440,10 @@ def add_4sum(ctx, x, y, z, w, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x + y + z + w`.
     """
+    if Q is None:
+        largest = get_largest(ctx, x)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     xh, xl = add_2sum(ctx, x, y)
     yh, yl = add_2sum(ctx, z, w)
     return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)

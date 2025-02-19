@@ -2064,10 +2064,10 @@ def multiword2mpf(ctx, mw):
     return s
 
 
-def mpf2multiword(dtype, x, p=None, max_length=None):
+def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
     """Return a list of fixed-width floating point numbers such that
 
-      x == sum([float2mpf(mpmath.mp, v) for v in result]) + O(smallest subnormal of dtype)
+      x == sum([float2mpf(mpmath.mp, v) / (2 ** (i * sexp)) for i, v in enumerate(result)]) + O(...)
 
     where x is a mpmath mpf instance.
 
@@ -2096,6 +2096,69 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
       len(result) <= max_length
 
     holds.
+
+    The truncation from the limited exponent size can be avoided by
+    specifying positive value to the scaling exponent argument sexp:
+
+    Take x = pi:
+    p       | sexp        | maximal x precision in bits
+    --------+-------------+----------------------------
+    float16
+    2       | 0,1,...     | 11,11,...
+    3       | 0,1,...[4]  | 26,38,49,49,[49],40,25,18,17,11,...
+    4       | 0,1,...[5]  | 26,33,42,65,105,[105],63,34,24,20,...
+    5       | 0,1,...[6]  | 26,33,38,47,78,105,[105],69,33,29,...
+    6       | 0,1,...[7]  | 26,30,38,44,59,82,105,[105],73,38,
+    7       | 0,1,...[8]  | 26,30,34,42,54,61,87,150,[800],109,44,...
+    8       | 0,1,...[9]  | 26,29,33,38,42,53,63,76,122,[2978],187,...
+    9       | 0,1,...[11] | ...,99,106,135,208,[357],99,...
+    10      | 0,1,...[11] | ...,155,[1096],249,99,...
+    11      | 0,1,...[13] | ...,99,114,208,451,150,...
+    float32
+    4       | 0,1,...[10] | ...,105,105,...,[105],103,99,...
+    5       | 0,1,...[13] | ...,105,105,...,[105],93,...
+    6       | 0,1,...[16] | ...,105,105,...,[105],92,...
+    7       | 0,1,...[9]  | ...,299,396,602,912,[912],871,...
+    8       | 0,1,...[9]  | ...,676,1343,[4280],1061,....
+    9       | 0,1,...[10] | ...,1205,[3726],1600,...
+    10      | 0,1,...[11] | ...,1851,[16429],1182
+    11      | 0,1,...[12]   | ...,1462,[>44000],1797
+    12      | 0,1,...[13]   | ...,1823,[>50000],...
+    13      | 0,1,...[14]   | ...,1609,[>50000],1987,...
+    ...
+    24      | 0,1,...[25]   | ...,1738,3202,[>50000],...
+    float64
+    8       | 0,1,...[11]     | ...,3188,4280,4280,4280,4280,[4280],3129,...
+    12      | 0,1,...[13]     | ...,13847,[>50000],13356,...
+    ...
+    53      | 0,1,...,53,[..] | ...,55030,[...],...
+
+    From the above table follows a relation
+
+      sexp == p + 1
+
+    that maximizes the precision of x that can be represented exactly
+    as a multiword.
+
+    The maximal bit-size of the multiword representation depends on
+    the value of x. For example, take sexp = p + 1, then for
+    p=1,...,11 the maximal bit-size sequence is as follows [float16]:
+
+      pi    : 4,4, 49,105,105,105,800,2978, 208,1096, 208
+      log(2): 6,6,101, 19,101,139,101, 107,1345, 830, 596
+      2 / pi: 5,6,  6,129,127,322,324,2299,1093,1127,1339
+
+    that is, the optimal value for p also depends on the value of x.
+
+    The dtype dependence of the maximal bit-size sequence is as
+    follows [2 / pi]:
+
+      float16: 5,6,6,129,127,322,324,2299,1093,1127,1339
+      float32: 5,6,6,129,127,322,324,2299,2835,[>5000]
+      float64: 5,6,6,129,127,322,324,2299,[>5000]
+
+    that is, the optimal value for p increases with increasing dtype
+    bitsize.
     """
     sign, man, exp, bc = x._mpf_
     mpf = x.context.mpf
@@ -2122,9 +2185,9 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
             offset -= d
             man1 = (man & (mask << offset)) >> offset
             bl1 = man1.bit_length()
-        exp1 = exp + offset
+        exp1 = exp + offset + len(result) * sexp
         x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)))
-        if x1 == dtype(0):
+        if x1 == dtype(0) and offset == 0:
             # result represents truncated x
             break
         result.append(x1)

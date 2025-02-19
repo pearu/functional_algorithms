@@ -1092,19 +1092,11 @@ class ReplaceSeries:
 
     def __rewrite_modifier__(self, expr):
         if expr.kind == "series":
-            s = None
+            from functional_algorithms import floating_point_algorithms as fpa
+
             index, sexp = expr.operands[0]
-            for i, t in enumerate(reversed(expr.operands[1:])):
-                i = len(expr.operands[1:]) - 1 - i + index
-                if sexp == 0 or i == 0:
-                    if s is None:
-                        s = t
-                    else:
-                        s += t
-                else:
-                    if s is None:
-                        s = t * expr.context.constant(2 ** (-i * sexp), t)
-                    else:
-                        s += t * expr.context.constant(2 ** (-i * sexp), t)
-            return s
+            S = expr.context.constant(2 ** (-sexp), expr)
+            if sexp == 0:
+                return sum(reversed(expr.operands[1:-1]), expr.operands[-1])
+            return fpa.fast_polynomial(expr.context, S, expr.operands[1:], reverse=False, scheme=[None, fpa.horner_scheme][1])
         return expr
