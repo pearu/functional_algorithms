@@ -66,6 +66,15 @@ def downcast_func(target, expr):
     return f"{t_new}({s})"
 
 
+def fma_func(target, expr):
+    assert expr.kind == "fma", expr.kind
+    (x, y, z) = expr.operands
+    xs = target.tostring(x)
+    ys = target.tostring(y)
+    zs = target.tostring(z)
+    return f"(({xs}) * ({ys}) + ({zs}))"
+
+
 trace_arguments = dict(
     absolute=[(":complex128",), (":complex64",)],
     asin_acos_kernel=[(":complex128",), (":complex64",)],
@@ -175,6 +184,7 @@ kind_to_target = dict(
     upcast=upcast_func,
     downcast=downcast_func,
     is_finite="numpy.isfinite({0})",
+    fma=fma_func,
 )
 
 constant_to_target = dict(
@@ -273,3 +283,17 @@ class Printer(PrinterBase):
             lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
         lines.append(f"{tab}    return result")
         return utils.format_python("\n".join(lines))
+
+
+def jit(**params):
+
+    import functional_algorithms as fa
+
+    def jit_decor(func):
+        ctx = fa.Context(paths=params.get("paths"))
+        dtype = params.get("dtype", numpy.float32)
+        graph = ctx.trace(func, dtype)
+        graph2 = graph.rewrite(fa.rewrite.ReplaceFma(backend=params.get("fma_backend", "upcast")), this_module, fa.rewrite)
+        return as_function(graph2, debug=params.get("debug", 0))
+
+    return jit_decor

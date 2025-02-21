@@ -2257,6 +2257,9 @@ class NumpyContext:
     def _get_series_operands(self, expr):
         return expr
 
+    def fma(self, x, y, z):
+        return x * y + z
+
     def upcast(self, x):
         t = type(x).__name__
         return dict(

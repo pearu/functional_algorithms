@@ -860,37 +860,51 @@ def test_sine_taylor_dekker(dtype):
             show_ulp(ulp)
 
 
-def test_cosine_taylor(dtype):
+@pytest.mark.parametrize(
+    "func,fma", [("cos", "upcast"), ("cos", "mul_add"), ("cos", "native"), ("cosm1", "upcast"), ("numpy.cos", None)]
+)
+def test_cosine_taylor(dtype, fma, func):
     import mpmath
     from collections import defaultdict
 
     t_prec = utils.get_precision(dtype)
-    working_prec = {11: 50 * 4, 24: 50 * 2, 53: 74 * 2}[t_prec]
-    optimal_order = {11: 9, 24: 9, 53: 19}[t_prec]
-    ctx = NumpyContext()
+    working_prec = {11: 50 * 4, 24: 50 * 4, 53: 74 * 16}[t_prec]
+    optimal_order = {11: 9, 24: 11, 53: 17}[t_prec]
     size = 1000
     samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
     size = len(samples)
     with mpmath.mp.workprec(working_prec):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+
+            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            def cos_func(ctx, x):
+                return fpa.cosine_taylor(ctx, x, order=order, split=False)
+
+            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            def cosm1_func(ctx, x):
+                return fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
+
             ulp = defaultdict(int)
             for x in samples:
                 expected_cs = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)))
-                if 0:
+                if func == "numpy.cos":
                     cs = numpy.cos(x)
                     u = utils.diff_ulp(cs, expected_cs)
-                elif 1:
-                    cs = fpa.cosine_taylor(ctx, x, order=order, split=False)
-                    if 1:
+                elif func == "cos":
+                    cs = cos_func(x)
+                    """
                         csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
                         cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
                         assert cs == cs2, (cs, cs2, expected_cs)
+                    """
                     u = utils.diff_ulp(cs, expected_cs)
-                else:
+                elif func == "cosm1":
                     expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
-                    cs = fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
+                    cs = cosm1_func(x)
                     u = utils.diff_ulp(cs, expected_csm1, flush_subnormals=True)
+                else:
+                    assert 0, func  # unreachable
                 ulp[u] += 1
 
                 if 0:

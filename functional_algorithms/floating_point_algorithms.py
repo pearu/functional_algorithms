@@ -717,7 +717,7 @@ def dot2(ctx, x, y, z, w, C, Q, P, three_over_two):
     return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)
 
 
-def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
+def mul_add(ctx, x, y, z, C=None, Q=None, P=None, three_over_two=None):
     """Multiply and add:
 
     x * y + z = s
@@ -733,6 +733,11 @@ def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x * y + z`.
     """
+    if C is None:
+        largest = get_largest(ctx, x)
+        C, _, _ = get_veltkamp_splitter_constants(ctx, largest)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     xh, xl = mul_dekker(ctx, x, y, C)
 
     # Inlined code of add_dw(xh, xl, c, 0):
@@ -1028,7 +1033,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
         return w(coeffs[0])
 
     if N == 1:
-        return w(coeffs[0]) + w(coeffs[1]) * x
+        return ctx.fma(w(coeffs[1]), x, w(coeffs[0]))
 
     d = scheme(N, _N)
 
@@ -1036,7 +1041,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
         # evaluate reduced polynomial as it is
         s = w(coeffs[0])
         for i in range(1, N):
-            s += w(coeffs[i]) * fast_exponent_by_squaring(ctx, x, i)
+            s = ctx.fma(w(coeffs[i]), fast_exponent_by_squaring(ctx, x, i), s)
         return s
 
     # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
@@ -1048,7 +1053,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     a = fast_polynomial(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
-    return a * xd + b
+    return ctx.fma(a, xd, b)
 
 
 def fast_polynomial2(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
@@ -1422,6 +1427,10 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
 
       cosine_taylor(x, order, split=False) == sum(*cosine_taylor(x, order, split=True))
 
+    To compute cosm1(x), use drop_leading_term=True.
+    """
+    """
+    An alternative evaluation scheme:
 
     C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
          = 1 + x ** 4 / 4! + ... + - (x ** 2 / 2 + x ** 6 / 6! + x ** 10 / 10!)
@@ -1431,10 +1440,10 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
 
       C1 = [1, 1/4!, 1/8!, ...]
       C2 = [1/2!, 1/6!, 1/10!, ...]
-
-
     """
     if not split:
+        zero = ctx.constant(0, x)
+        one = ctx.constant(1, x)
         if 0:
             f = 1
             iC1 = [1]
@@ -1458,16 +1467,16 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
             )
 
         f = 1
-        xx = x * x
+        xx = ctx.fma(x, x, zero)
         C = []
         for i in range(2, order, 2):
             f *= -i * (i - 1)
-            C.append(xx / ctx.constant(f, x))
+            C.append(ctx.fma(xx, ctx.constant(1 / f, x), zero))
         # Horner's scheme is most accurate
         p = fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
         if drop_leading_term:
             return p
-        return ctx.constant(1, x) + p
+        return ctx.fma(one, one, p)
 
     xxh, xxl = mul_dekker(ctx, x, x)
     C0 = []

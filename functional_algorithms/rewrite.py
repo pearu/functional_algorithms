@@ -866,6 +866,9 @@ class Rewriter:
     def series(self, expr):
         pass
 
+    def fma(self, expr):
+        pass
+
 
 def rewrite(expr):
     """Return rewritten expression, otherwise return None."""
@@ -974,7 +977,7 @@ class ReplaceSeries:
 class ReplaceFma:
 
     def __init__(self, backend="native"):
-        assert backend in {"native", "upcast", None}, backend
+        assert backend in {"native", "upcast", "mul_add", None}, backend
         self.backend = backend
 
     def __rewrite_modifier__(self, expr):
@@ -985,6 +988,8 @@ class ReplaceFma:
                 return fpa.fma_upcast(expr.context, *expr.operands)
             elif self.backend == "native":
                 return fpa.fma_native(expr.context, *expr.operands)
+            elif self.backend == "mul_add":
+                return fpa.mul_add(expr.context, *expr.operands)
             elif self.backend is None:
                 pass  # skip fma replace
             else:
