@@ -24,7 +24,7 @@ ceil, floor, floor_divide, remainder, round, truncate,
 copysign, sign, nextafter,
 upcast, downcast,
 is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero,
-series
+series, fma
 """.replace(
         " ", ""
     )
@@ -81,6 +81,7 @@ def normalize_like(expr):
             "sqrt",
             "square",
             "asin_acos_kernel",
+            "fma",
         }:
             expr = expr.operands[0]
         elif expr.kind == "absolute" and not expr.operands[0].is_complex:
@@ -1032,6 +1033,8 @@ class Expr:
             return True
         elif self.kind in {"add", "subtract", "divide", "multiply", "pow"}:
             return self.operands[0].is_complex or self.operands[1].is_complex
+        elif self.kind == "fma":
+            return self.operands[0].is_complex or self.operands[1].is_complex or self.operands[2].is_complex
         elif self.kind in {
             "positive",
             "negative",
@@ -1125,6 +1128,11 @@ class Expr:
         elif self.kind == "series":
             t = self.operands[1].get_type()
             for o in self.operands[2:]:
+                t = t.max(o.get_type())
+            return t
+        elif self.kind == "fma":
+            t = self.operands[0].get_type()
+            for o in self.operands[1:]:
                 t = t.max(o.get_type())
             return t
         elif self.kind in {"absolute", "real", "imag"}:

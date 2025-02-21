@@ -6,6 +6,27 @@
 """
 
 
+def fma_native(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z."""
+    return x * y + z
+
+
+def fma_upcast(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z using upcast of operands."""
+    x_ = ctx.upcast(x)
+    y_ = ctx.upcast(y)
+    z_ = ctx.upcast(z)
+    return ctx.downcast(x_ * y_ + z_)
+
+
+def fma_upcast2(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z using double upcast of operands."""
+    x_ = ctx.upcast2(x)
+    y_ = ctx.upcast2(y)
+    z_ = ctx.upcast2(z)
+    return ctx.downcast2(x_ * y_ + z_)
+
+
 def get_largest(ctx, x: float):
     largest = ctx.constant("largest", x)
     if hasattr(largest, "reference"):

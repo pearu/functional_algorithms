@@ -969,3 +969,24 @@ class ReplaceSeries:
                 return sum(reversed(expr.operands[1:-1]), expr.operands[-1])
             return fpa.fast_polynomial(expr.context, S, expr.operands[1:], reverse=False, scheme=[None, fpa.horner_scheme][1])
         return expr
+
+
+class ReplaceFma:
+
+    def __init__(self, backend="native"):
+        assert backend in {"native", "upcast", None}, backend
+        self.backend = backend
+
+    def __rewrite_modifier__(self, expr):
+        if expr.kind == "fma":
+            from functional_algorithms import floating_point_algorithms as fpa
+
+            if self.backend == "upcast":
+                return fpa.fma_upcast(expr.context, *expr.operands)
+            elif self.backend == "native":
+                return fpa.fma_native(expr.context, *expr.operands)
+            elif self.backend is None:
+                pass  # skip fma replace
+            else:
+                raise NotImplementedError(f"replace fma using backend={self.backend}")
+        return expr

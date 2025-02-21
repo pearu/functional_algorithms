@@ -920,6 +920,7 @@ def test_fast_exponent_by_squaring(dtype, exponent, mthname):
         assert 0, mthname  # not immplemented
 
     t_prec = utils.get_precision(dtype)
+
     working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
     npctx = fa.utils.NumpyContext()
     ctx = fa.Context(paths=[fpa], default_constant_type=dtype.__name__)
@@ -941,4 +942,41 @@ def test_fast_exponent_by_squaring(dtype, exponent, mthname):
                 c = "." if u == 0 else ("v" if r < expected else "^")
                 print(c, end="")
 
+        show_ulp(ulp)
+
+
+@pytest.mark.parametrize("backend", ["native", "upcast", "upcast2"])
+def test_fma(dtype, backend):
+
+    if (dtype, backend) in {
+        (numpy.float64, "upcast2"),
+        (numpy.float128, "upcast"),
+        (numpy.float128, "upcast2"),
+    }:
+        pytest.skip(f"support not implemented")
+
+    import mpmath
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 4, 24: 50 * 4, 53: 74 * 4}[t_prec]
+    mth = dict(native=fpa.fma_native, upcast=fpa.fma_upcast, upcast2=fpa.fma_upcast2)[backend]
+    npctx = NumpyContext()
+    size = 30
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(-1), max_value=dtype(1)))
+
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        samples_mp = [utils.float2mpf(mpctx, v) for v in samples]
+        ulp = defaultdict(int)
+        for x, x_mp in zip(samples, samples_mp):
+            for y, y_mp in zip(samples, samples_mp):
+                for z, z_mp in zip(samples, samples_mp):
+                    expected = utils.mpf2float(dtype, x_mp * y_mp + z_mp)
+                    r = mth(npctx, x, y, z)
+                    u = utils.diff_ulp(r, expected, flush_subnormals=True)
+
+                    ulp[u] += 1
+                    if 0:
+                        c = "." if u == 0 else ("v" if r < expected else "^")
+                        print(c, end="")
         show_ulp(ulp)

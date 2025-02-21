@@ -2257,6 +2257,44 @@ class NumpyContext:
     def _get_series_operands(self, expr):
         return expr
 
+    def upcast(self, x):
+        t = type(x).__name__
+        return dict(
+            float16=numpy.float32,
+            float32=numpy.float64,
+            float64=numpy.float128,
+        )[
+            t
+        ](x)
+
+    def downcast(self, x):
+        t = type(x).__name__
+        return dict(
+            float32=numpy.float16,
+            float64=numpy.float32,
+            longdouble=numpy.float64,
+        )[
+            t
+        ](x)
+
+    def upcast2(self, x):
+        t = type(x).__name__
+        return dict(
+            float16=numpy.float64,
+            float32=numpy.float128,
+        )[
+            t
+        ](x)
+
+    def downcast2(self, x):
+        t = type(x).__name__
+        return dict(
+            float64=numpy.float16,
+            longdouble=numpy.float32,
+        )[
+            t
+        ](x)
+
 
 def get_pi_over_two_multiword(dtype, prec=None, max_length=None):
     if prec is None:

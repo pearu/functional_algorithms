@@ -535,3 +535,6 @@ class Context:
         if expr.kind == "series":
             return expr.operands
         return expr
+
+    def fma(self, x, y, z):
+        return Expr(self, "fma", (x, y, z))
