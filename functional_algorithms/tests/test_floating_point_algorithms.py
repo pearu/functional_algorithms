@@ -830,13 +830,43 @@ def test_sine_taylor(dtype):
             show_ulp(ulp)
 
 
-def test_cosine_taylor(dtype):
+def test_sine_taylor_dekker(dtype):
     import mpmath
     from collections import defaultdict
 
     t_prec = utils.get_precision(dtype)
     working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
-    optimal_order = {11: 7, 24: 9, 53: 19}[t_prec]
+    optimal_order = {11: 7, 24: 9, 53: 15}[t_prec]
+    ctx = NumpyContext()
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+        for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+            ulp = defaultdict(int)
+            for x in samples:
+                expected_sn = utils.mpf2float(dtype, mpctx.sin(utils.float2mpf(mpctx, x)))
+                sn = fpa.sine_taylor_dekker(ctx, x, order=order)
+                if type(sn) is tuple:
+                    sn = sum(reversed(sn[1:-1]), sn[-1])
+                u = utils.diff_ulp(sn, expected_sn)
+                ulp[u] += 1
+
+                if 0:
+                    c = "." if u == 0 else ("v" if sn < expected_sn else "^")
+                    print(c, end="")
+
+            show_ulp(ulp)
+
+
+def test_cosine_taylor(dtype):
+    import mpmath
+    from collections import defaultdict
+
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 50 * 4, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    optimal_order = {11: 9, 24: 9, 53: 19}[t_prec]
     ctx = NumpyContext()
     size = 1000
     samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
@@ -847,24 +877,31 @@ def test_cosine_taylor(dtype):
             ulp = defaultdict(int)
             for x in samples:
                 expected_cs = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)))
-                # expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
-                cs = fpa.cosine_taylor(ctx, x, order=order, split=False)
-
-                csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
-                cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
-                assert cs == cs2
-                # cs = numpy.cos(x)
-                u = utils.diff_ulp(cs, expected_cs)
+                if 0:
+                    cs = numpy.cos(x)
+                    u = utils.diff_ulp(cs, expected_cs)
+                elif 1:
+                    cs = fpa.cosine_taylor(ctx, x, order=order, split=False)
+                    if 1:
+                        csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
+                        cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
+                        assert cs == cs2, (cs, cs2, expected_cs)
+                    u = utils.diff_ulp(cs, expected_cs)
+                else:
+                    expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
+                    cs = fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
+                    u = utils.diff_ulp(cs, expected_csm1, flush_subnormals=True)
                 ulp[u] += 1
 
-                # c = '.' if u == 0 else ('v' if cs < expected_cs else '^')
-                # print(c, end='')
+                if 0:
+                    c = "." if u == 0 else ("v" if cs < expected_cs else "^")
+                    print(c, end="", flush=True)
 
             show_ulp(ulp)
 
 
 @pytest.mark.parametrize("mthname", ["dekker", "fast"])
-@pytest.mark.parametrize("exponent", [2, 3, 4])
+@pytest.mark.parametrize("exponent", [2, 3, 4, 5])
 def test_fast_exponent_by_squaring(dtype, exponent, mthname):
     import mpmath
 
@@ -896,16 +933,12 @@ def test_fast_exponent_by_squaring(dtype, exponent, mthname):
             x_mp = utils.float2mpf(mpctx, x)
             expected = utils.mpf2float(dtype, x_mp**exponent)
 
-            result = mth(npctx, x, exponent)
-            if type(result) is tuple:
-                r = sum(reversed(result[:-1]), result[-1])
-            else:
-                r = result
-
+            r = mth(npctx, x, exponent)
             u = utils.diff_ulp(r, expected, flush_subnormals=True)
             ulp[u] += 1
 
-            # c = "." if u == 0 else ("v" if r < expected else "^")
-            # print(c, end="")
+            if 0:
+                c = "." if u == 0 else ("v" if r < expected else "^")
+                print(c, end="")
 
         show_ulp(ulp)

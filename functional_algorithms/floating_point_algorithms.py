@@ -361,6 +361,96 @@ def div_series(ctx, x, y):
     return x / y
 
 
+def _add_series_series(ctx, x, y):
+
+    def op(x, y):
+        if x is None:
+            return y
+        if y is None:
+            return x
+        return x + y
+
+    return _binaryop_series_series(ctx, x, y, op)
+
+
+def _subtract_series_series(ctx, x, y):
+
+    def op(x, y):
+        if x is None:
+            return -y
+        if y is None:
+            return x
+        return x - y
+
+    return _binaryop_series_series(ctx, x, y, op)
+
+
+def _binaryop_series_series(ctx, x, y, op):
+    swapped = False
+    if x[0][0] < y[0][0]:
+        x, y = y, x
+        swapped = True
+
+    (index1, sexp1), terms1 = x[0], x[1:]
+    (index2, sexp2), terms2 = y[0], y[1:]
+    assert sexp1 == sexp2, (sexp1, sexp2)
+
+    terms = []
+
+    for n in range(max(len(terms1), index1 - index2 + len(terms2))):
+        k = n - (index1 - index2)
+        if n < len(terms1):
+            if k >= 0 and k < len(terms2):
+                if swapped:
+                    terms.append(op(terms2[k], terms1[n]))
+                else:
+                    terms.append(op(terms1[n], terms2[k]))
+            else:
+                if swapped:
+                    terms.append(op(None, terms1[n]))
+                else:
+                    terms.append(op(terms1[n], None))
+        elif k >= 0 and k < len(terms2):
+            if swapped:
+                terms.append(op(terms2[k], None))
+            else:
+                terms.append(op(None, terms2[k]))
+        else:
+            terms.append(ctx.constant(0, terms1[0]))
+
+    return ctx._series(tuple(terms), dict(unit_index=index1, scaling_exp=sexp1))
+
+
+def add_series(ctx, x, y):
+    """Add x and y which may be series."""
+
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _add_series_series(ctx, x, y)
+        return _add_series_series(ctx, x, ((0, 0), y))
+    elif type(y) is tuple:
+        return _add_series_series(ctx, ((0, 0), x), y)
+    return x + y
+
+
+def subtract_series(ctx, x, y):
+    """Subtract y from x which may be series."""
+
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _subtract_series_series(ctx, x, y)
+        return _subtract_series_series(ctx, x, ((0, 0), y))
+    elif type(y) is tuple:
+        return _subtract_series_series(ctx, ((0, 0), x), y)
+    return x - y
+
+
 def mul_series_dekker(ctx, x, y, C=None):
     """Dekker's product on series:
 
@@ -372,6 +462,25 @@ def mul_series_dekker(ctx, x, y, C=None):
     """
     x = ctx._get_series_operands(x)
     y = ctx._get_series_operands(y)
+
+    def terms_add(terms, index, *operands):
+        for i, v in enumerate(operands):
+            if index + i < len(terms):
+                if 1:
+                    terms[index + i] += v
+                else:
+                    h, l = add_2sum(ctx, terms[index + i], v)
+                    terms[index + i] = h
+                    if index + i <= len(terms):
+                        terms.append(l)
+                    else:
+                        terms[index + i + 1] += l
+            else:
+                assert index + i == len(terms)
+                terms.append(v)
+
+    offset = 10000
+
     if type(x) is tuple:
         if type(y) is tuple:
             assert x[0][1] == y[0][1]
@@ -382,22 +491,13 @@ def mul_series_dekker(ctx, x, y, C=None):
             #  xijh == xjih, xijl == xjil
             # = (x11h, x11h * x12l + x11l * x12h + x21h * x12h + ..., ...)
             # = (..., ... + x[i,j]h, ... + x[i,j]l + x[i+1,j]h + x[i, j+1]h, ... + x[i+1,j]l + x[i,j+1]l + x[i+1,j+1]h, ... + x[i+1,j+1]l, ...)
-            terms = None
+            terms = []
             for i, x_ in enumerate(x[1:]):
                 for j, y_ in enumerate(y[1:]):
-                    index = i + j
-                    xyh, xyl = mul_dekker(ctx, x_, y_, C=C)
-                    if terms is None:
-                        terms = [xyh, xyl]
-                    elif len(terms) <= index:
-                        terms.append(xyh)
-                        terms.append(xyl)
-                    elif len(terms) <= index + 1:
-                        terms[-1] += xyh
-                        terms.append(xyl)
+                    if i + j >= offset:
+                        terms_add(terms, i + j, x_ * y_)
                     else:
-                        terms[index] += xyh
-                        terms[index + 1] += xyl
+                        terms_add(terms, i + j, *mul_dekker(ctx, x_, y_, C=C))
             return ctx._series(tuple(terms), dict(unit_index=x[0][0] + y[0][0], scaling_exp=x[0][1]))
         else:
             # (x1, x2, ...) * y
@@ -405,17 +505,21 @@ def mul_series_dekker(ctx, x, y, C=None):
             #   x2h, x2l = mul_dekker(x2, y)
             #   ...
             # = (x1h, x1l + x2h, x2l + x3h, ..., xNl)
-            terms = None
-            for x_ in x[1:]:
-                xh, xl = mul_dekker(ctx, x_, y, C=C)
-                if terms is None:
-                    terms = [xh, xl]
+            terms = []
+            for i, x_ in enumerate(x[1:]):
+                if i >= offset:
+                    terms_add(terms, i, x_ * y)
                 else:
-                    terms[-1] += xh
-                    terms.append(xl)
+                    terms_add(terms, i, *mul_dekker(ctx, x_, y, C=C))
             return ctx._series(tuple(terms), dict(unit_index=x[0][0], scaling_exp=x[0][1]))
     elif type(y) is tuple:
-        return mul_series_dekker(ctx, y, x, C=C)
+        terms = []
+        for i, y_ in enumerate(y[1:]):
+            if i >= offset:
+                terms_add(terms, i, x * y_)
+            else:
+                terms_add(terms, i, *mul_dekker(ctx, x, y_, C=C))
+        return ctx._series(tuple(terms), dict(unit_index=y[0][0], scaling_exp=y[0][1]))
     return ctx._series(mul_dekker(ctx, x, y, C=C), dict(unit_index=0, scaling_exp=0))
 
 
@@ -824,6 +928,9 @@ def fast_exponent_by_squaring_dekker(ctx, x, n: int, depth=0):
         return x
     elif n == 2:
         if depth == 0:
+            # `sum(mul_dekker(x, x))` is less accurate than `x * x`.
+            # However, `sum(mul_dekker(x, mul_dekker(x, x)))` is more
+            # accurate that `x * x * x`.
             return x * x
         return mul_series_dekker(ctx, x, x)
     else:
@@ -863,7 +970,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
 
      P(x) = coeffs[N] + coeffs[N - 1] * x + ... + coeffs[0] * x ** N
 
-    when reverse is True, otherwise evaluate a polynomial
+    when reverse is True, otherwise, evaluate a polynomial
 
       P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
 
@@ -921,6 +1028,116 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
     return a * xd + b
+
+
+def fast_polynomial2(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
+    """Evaluate a polynomial
+
+     P(x) = coeffs[N] + coeffs[N - 1] * (x**2) + ... + coeffs[0] * (x**2) ** N
+
+    when reverse is True, otherwise, evaluate a polynomial
+
+      P(x) = coeffs[0] + coeffs[1] * (x**2) + ... + coeffs[N] * (x**2) ** N
+
+    where `N = len(coeffs) - 1`.
+
+    See also fast_polynomial2.
+    """
+
+    if reverse:
+        return fast_polynomial2(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
+
+    if scheme is None:
+        scheme = balanced_dac_scheme
+
+    N = len(coeffs) - 1
+    if _N is None:
+        _N = N
+
+    def w(c):
+        if isinstance(c, type(x)):
+            return c
+        return ctx.constant(c, x)
+
+    if N == 0:
+        return w(coeffs[0])
+
+    if N == 1:
+        return w(coeffs[0]) + x * w(coeffs[1]) * x
+
+    d = scheme(N, _N)
+
+    if d == 0:
+        # evaluate reduced polynomial as it is
+        s = w(coeffs[0])
+        for i in range(1, N):
+            c = fast_exponent_by_squaring(ctx, x, i)
+            s += c * w(coeffs[i]) * c
+        return s
+
+    # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+    #      = A(x) * x ** d + B(x)
+    # where
+    #   A(x) = coeffs[d] + coeffs[d + 1] * x + ... + coeffs[N] * x ** (N - d)
+    #   B(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[d - 1] * x ** (d - 1)
+
+    a = fast_polynomial2(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
+    b = fast_polynomial2(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
+    xd = fast_exponent_by_squaring(ctx, x, d)
+    return xd * a * xd + b
+
+
+def fast_polynomial_dekker(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
+    """Evaluate a polynomial using Dekker's product.
+
+    See also fast_polynomial.
+    """
+    if reverse:
+        return fast_polynomial_dekker(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
+
+    if scheme is None:
+        scheme = balanced_dac_scheme
+
+    N = len(coeffs) - 1
+    if _N is None:
+        _N = N
+
+    def w(c):
+        if type(c) is tuple:  # c is series
+            return c
+        if type(x) is tuple:  # x is series
+            x_ = x[1]
+        else:
+            x_ = x
+        if isinstance(c, type(x_)):
+            return c
+        return ctx.constant(c, x_)
+
+    if N == 0:
+        return w(coeffs[0])
+
+    if N == 1:
+        return add_series(ctx, w(coeffs[0]), mul_series_dekker(ctx, w(coeffs[1]), x))
+
+    d = scheme(N, _N)
+
+    if d == 0:
+        # evaluate reduced polynomial as it is
+        s = w(coeffs[0])
+        for i in range(1, N):
+            s = add_series(ctx, s, mul_series_dekker(ctx, w(coeffs[i]), fast_exponent_by_squaring_dekker(ctx, x, i)))
+        return s
+
+    # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+    #      = A(x) * x ** d + B(x)
+    # where
+    #   A(x) = coeffs[d] + coeffs[d + 1] * x + ... + coeffs[N] * x ** (N - d)
+    #   B(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[d - 1] * x ** (d - 1)
+
+    a = fast_polynomial_dekker(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
+    b = fast_polynomial_dekker(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
+    xd = fast_exponent_by_squaring_dekker(ctx, x, d)
+    return add_series(ctx, b, mul_series_dekker(ctx, a, xd))
 
 
 def split_tripleword(ctx, x, scale=False):
@@ -1142,6 +1359,23 @@ def sine_taylor(ctx, x, order=7, split=False):
     return p0, p1 * xxl
 
 
+def sine_taylor_dekker(ctx, x, order=7):
+    """Return sine of x using Taylor series approximation and Dekker's product.
+
+    See also sine_taylor.
+    """
+    C, f = [x], 1
+    for i in range(3, order + 1, 2):
+        f *= -i * (i - 1)
+        f1 = ctx.constant(1 / f, x)
+        C.append(mul_series(ctx, x, f1))
+    xx = mul_series(ctx, x, x)
+    # Horner's scheme is most accurate
+    return fast_polynomial_dekker(
+        ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+    )
+
+
 def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
     """Return sine of x using Taylor series approximation:
 
@@ -1166,14 +1400,48 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
     For the corresponding order choices, we have
 
       cosine_taylor(x, order, split=False) == sum(*cosine_taylor(x, order, split=True))
+
+
+    C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
+         = 1 + x ** 4 / 4! + ... + - (x ** 2 / 2 + x ** 6 / 6! + x ** 10 / 10!)
+         = P1(x ** 4, C=C1) - x**2 * P(x**4, C=C2)
+
+    where
+
+      C1 = [1, 1/4!, 1/8!, ...]
+      C2 = [1/2!, 1/6!, 1/10!, ...]
+
+
     """
     if not split:
+        if 0:
+            f = 1
+            iC1 = [1]
+            iC2 = []
+            for i in range(2, order, 2):
+                f *= i * (i - 1)
+                if i % 4 == 0:
+                    iC1.append(f)
+                else:
+                    iC2.append(f)
+            s1 = iC1[-1]
+            s2 = iC2[-1]
+            C1 = [s1 // c for c in iC1]
+            C2 = [s2 // c for c in iC2]
+            assert len(C1) == len(C2), (C1, C2)
+            xx = x * x
+            xxxx = xx * xx
+            C = [c1 / s1 - x * (c2 / s2) * x for c1, c2 in zip(C1, C2)]
+            return fast_polynomial(
+                ctx, xxxx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+            )
+
         f = 1
         xx = x * x
         C = []
         for i in range(2, order, 2):
             f *= -i * (i - 1)
-            C.append(xx * ctx.constant(1 / f, x))
+            C.append(xx / ctx.constant(f, x))
         # Horner's scheme is most accurate
         p = fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
         if drop_leading_term:
@@ -1188,7 +1456,7 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
     for i in range(2, order, 2):
         C1.append(xx * ctx.constant(1 / (f * (i + 1)), x))
         f *= -i * (i - 1)
-        C0.append(xx * ctx.constant(1 / f, x))
+        C0.append(xx / ctx.constant(f, x))
     # Horner's scheme is most accurate
     p0 = fast_polynomial(ctx, xxh, C0, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
     p1 = fast_polynomial(ctx, xxh, C1, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])

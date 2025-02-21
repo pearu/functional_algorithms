@@ -479,90 +479,6 @@ class Rewriter:
                 r = op(xvalue, yvalue)
                 return expr.context.constant(r, xlike)
 
-    # TODO: move to fpa
-    @staticmethod
-    def _add_terms(params_terms1, params_terms2, op=None):
-        """\
-
-        Let `^` indicate the location of unity, then
-
-           [a, b, c] + [d, e] -> [a, b + d, c + e]
-               ^        ^            ^
-
-           [a, b, c] + [d, e] ->   [d, a + e, b, c]
-         ^              ^           ^
-
-           [a, b, c] + [d, e] ->   [d, e, a, b, c]
-         ^                 ^           ^
-
-           [a, b, c] + [d, e]   ->   [d, e, 0, a, b, c]
-         ^                    ^             ^
-
-        index12 = max(index1, index2)
-
-        Lower index means smaller magnitude at the first term
-        position. The magnitude differences of terms at different
-        position is undefined but it is assumed to be uniform between
-        different combinations of positions.
-
-        Notice that the location of unity could be outside of the
-        indices range of terms.
-        """
-        if op is None:
-
-            def op(x, y):
-                if x is None:
-                    return y
-                if y is None:
-                    return x
-                return x + y
-
-        swapped = False
-        if params_terms1[0][0] < params_terms2[0][0]:
-            params_terms1, params_terms2 = params_terms2, params_terms1
-            swapped = True
-        (index1, sexp1), terms1 = params_terms1[0], params_terms1[1:]
-        (index2, sexp2), terms2 = params_terms2[0], params_terms2[1:]
-        assert sexp1 == sexp2, (sexp1, sexp2)
-
-        terms = []
-
-        for n in range(max(len(terms1), index1 - index2 + len(terms2))):
-            k = n - (index1 - index2)
-            if n < len(terms1):
-                if k >= 0 and k < len(terms2):
-                    if swapped:
-                        terms.append(op(terms2[k], terms1[n]))
-                    else:
-                        terms.append(op(terms1[n], terms2[k]))
-                else:
-                    if swapped:
-                        terms.append(op(None, terms1[n]))
-                    else:
-                        terms.append(op(terms1[n], None))
-            elif k >= 0 and k < len(terms2):
-                if swapped:
-                    terms.append(op(terms2[k], None))
-                else:
-                    terms.append(op(None, terms2[k]))
-            else:
-                terms.append(0)
-
-        return (terms, dict(unit_index=index1, scaling_exp=sexp1))
-
-    # TODO: move to fpa
-    @staticmethod
-    def _subtract_terms(params_terms1, params_terms2):
-
-        def op(x, y):
-            if x is None:
-                return -y
-            if y is None:
-                return x
-            return x - y
-
-        return Rewriter._add_terms(params_terms1, params_terms2, op=op)
-
     def add(self, expr):
         result = self._binary_op(expr, lambda x, y: x + y)
         if result is not None:
@@ -575,12 +491,10 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 0:
                     return y_
 
-        if x.kind == "series":
-            if y.kind == "series":
-                return expr.context._series(*self._add_terms(x.operands, y.operands))
-            return expr.context._series(*self._add_terms(x.operands, ((0, x.operands[0][1]), y)))
-        elif y.kind == "series":
-            return expr.context._series(*self._add_terms(((0, y.operands[0][1]), x), y.operands))
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.add_series(expr.context, x, y)
 
     def subtract(self, expr):
         result = self._binary_op(expr, lambda x, y: x - y)
@@ -595,12 +509,10 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 0:
                     return -y_ if s == -1 else y_
 
-        if x.kind == "series":
-            if y.kind == "series":
-                return expr.context._series(*self._subtract_terms(x.operands, y.operands))
-            return expr.context._series(*self._subtract_terms(x.operands, ((0, x.operands[0][1]), y)))
-        elif y.kind == "series":
-            return expr.context._series(*self._subtract_terms(((0, y.operands[0][1]), x), y.operands))
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.subtract_series(expr.context, x, y)
 
     def multiply(self, expr):
         result = self._binary_op(expr, lambda x, y: x * y)

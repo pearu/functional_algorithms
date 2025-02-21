@@ -2244,6 +2244,11 @@ class NumpyContext:
             return numpy.round(value)
         assert 0, (value, type(value))  # unreachable
 
+    def sqrt(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.sqrt(value)
+        assert 0, (value, type(value))  # unreachable
+
     def _series(self, terms, params):
         unit_index = params.get("unit_index", 0)
         scaling_exp = params.get("scaling_exp", 0)
