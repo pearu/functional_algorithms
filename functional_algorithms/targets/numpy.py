@@ -293,7 +293,12 @@ def jit(**params):
         ctx = fa.Context(paths=params.get("paths"))
         dtype = params.get("dtype", numpy.float32)
         graph = ctx.trace(func, dtype)
-        graph2 = graph.rewrite(fa.rewrite.ReplaceFma(backend=params.get("fma_backend", "upcast")), this_module, fa.rewrite)
+        graph2 = graph.rewrite(
+            fa.rewrite.ReplaceSeries(),
+            fa.rewrite.ReplaceFma(backend=params.get("fma_backend", "upcast")),
+            this_module,
+            fa.rewrite,
+        )
         return as_function(graph2, debug=params.get("debug", 0))
 
     return jit_decor

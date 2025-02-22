@@ -933,17 +933,18 @@ def compensated_horner(ctx, x, coeffs, reverse=True):
 
 def fast_exponent_by_squaring(ctx, x, n):
     """Evaluate x ** n by squaring."""
+    zero = ctx.constant(0, x)
     if n == 0:
         return ctx.constant(1, x)
-    if n == 1:
+    elif n == 1:
         return x
-    if n == 2:
-        return x * x
+    elif n == 2:
+        return ctx.fma(x, x, zero)
     assert n > 0
     r = fast_exponent_by_squaring(ctx, x, n // 2)
     if n % 2 == 0:
-        return r * r
-    return r * r * x
+        return ctx.fma(r, r, zero)
+    return ctx.fma(ctx.fma(r, r, zero), x, zero)
 
 
 def fast_exponent_by_squaring_dekker(ctx, x, n: int, depth=0):
@@ -1351,14 +1352,14 @@ def sine_taylor(ctx, x, order=7, split=False):
       P(y, C) = C[0] + C[1] * y + C[2] * y ** 2
     """
     if not split:
+        zero = ctx.constant(0, x)
         C, f = [x], 1
         for i in range(3, order + 1, 2):
             f *= -i * (i - 1)
-            C.append(x / ctx.constant(f, x))
+            C.append(ctx.fma(x, ctx.constant(1 / f, x), zero))
         # Horner's scheme is most accurate
-        return fast_polynomial(
-            ctx, x * x, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
-        )
+        xx = ctx.fma(x, x, zero)
+        return fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
     """
     For float16, consider
       x * x = xxh + xxl

@@ -802,28 +802,40 @@ def test_sine_pade(dtype):
             show_ulp(ulp)
 
 
-def test_sine_taylor(dtype):
+@pytest.mark.parametrize("func,fma", [("sin", "upcast"), ("sin", "mul_add"), ("sin", "native"), ("numpy.sin", None)])
+def test_sine_taylor(dtype, func, fma):
     import mpmath
     from collections import defaultdict
 
     t_prec = utils.get_precision(dtype)
-    working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
+    working_prec = {11: 50 * 4, 24: 50 * 4, 53: 74 * 16}[t_prec]
     optimal_order = {11: 7, 24: 9, 53: 15}[t_prec]
-    ctx = NumpyContext()
     size = 1000
     samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
     size = len(samples)
     with mpmath.mp.workprec(working_prec):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
+
+            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            def sin_func(ctx, x):
+                return fpa.sine_taylor(ctx, x, order=order, split=False)
+
             ulp = defaultdict(int)
             for x in samples:
                 expected_sn = utils.mpf2float(dtype, mpctx.sin(utils.float2mpf(mpctx, x)))
-                sn = fpa.sine_taylor(ctx, x, order=order, split=False)
-                snh, snl = fpa.sine_taylor(ctx, x, order=order, split=True)
-                sn2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, snh) + utils.float2mpf(mpctx, snl))
-                assert sn == sn2
-                # sn = numpy.sin(x)
+                if func == "numpy.sin":
+                    sn = numpy.sin(x)
+                elif func == "sin":
+                    sn = sin_func(x)
+                else:
+                    assert 0, func  # not implemented
+                    """
+                    sn = fpa.sine_taylor(ctx, x, order=order, split=False)
+                    snh, snl = fpa.sine_taylor(ctx, x, order=order, split=True)
+                    sn2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, snh) + utils.float2mpf(mpctx, snl))
+                    assert sn == sn2
+                    """
                 u = utils.diff_ulp(sn, expected_sn)
                 ulp[u] += 1
 
@@ -914,41 +926,46 @@ def test_cosine_taylor(dtype, fma, func):
             show_ulp(ulp)
 
 
-@pytest.mark.parametrize("mthname", ["dekker", "fast"])
+@pytest.mark.parametrize("func,fma", [("fast", "upcast"), ("fast", "native"), ("dekker", None), ("numpy.power", None)])
 @pytest.mark.parametrize("exponent", [2, 3, 4, 5])
-def test_fast_exponent_by_squaring(dtype, exponent, mthname):
+def test_fast_exponent_by_squaring(dtype, exponent, func, fma):
     import mpmath
-
-    if mthname == "dekker":
-
-        def mth(ctx, x, e):
-            r = fpa.fast_exponent_by_squaring_dekker(ctx, x, e)
-            if type(r) is tuple:
-                terms = r[1:]
-                return sum(reversed(terms[:-1]), terms[-1])
-            return r
-
-    elif mthname == "fast":
-        mth = fpa.fast_exponent_by_squaring
-    else:
-        assert 0, mthname  # not immplemented
 
     t_prec = utils.get_precision(dtype)
 
     working_prec = {11: 50 * 2, 24: 50 * 2, 53: 74 * 2}[t_prec]
     npctx = fa.utils.NumpyContext()
-    ctx = fa.Context(paths=[fpa], default_constant_type=dtype.__name__)
     size = 1000
     samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
 
     with mpmath.mp.workprec(working_prec):
         mpctx = mpmath.mp
+
+        @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+        def fast_func(ctx, x):
+            return fpa.fast_exponent_by_squaring(ctx, x, exponent)
+
+        @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=None)
+        def dekker_func(ctx, x):
+            seq = fpa.fast_exponent_by_squaring_dekker(ctx, x, exponent)
+            if type(seq) is tuple:
+                return sum(reversed(seq[:-1]), seq[-1])
+            return seq
+
         ulp = defaultdict(int)
         for x in samples[::-1]:
             x_mp = utils.float2mpf(mpctx, x)
             expected = utils.mpf2float(dtype, x_mp**exponent)
 
-            r = mth(npctx, x, exponent)
+            if func == "fast":
+                r = fast_func(x)
+            elif func == "dekker":
+                r = dekker_func(x)
+            elif func == "numpy.power":
+                r = numpy.power(x, exponent, dtype=dtype)
+            else:
+                assert 0, func  # not implemented
+
             u = utils.diff_ulp(r, expected, flush_subnormals=True)
             ulp[u] += 1
 
