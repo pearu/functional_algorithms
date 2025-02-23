@@ -817,7 +817,12 @@ def test_sine_taylor(dtype, func, fma):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
 
-            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            @fa.targets.numpy.jit(
+                paths=[fpa],
+                dtype=dtype,
+                debug=(1.5 if size <= 10 else 0),
+                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+            )
             def sin_func(ctx, x):
                 return fpa.sine_taylor(ctx, x, order=order, split=False)
 
@@ -889,11 +894,21 @@ def test_cosine_taylor(dtype, fma, func):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
 
-            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            @fa.targets.numpy.jit(
+                paths=[fpa],
+                dtype=dtype,
+                debug=(1.5 if size <= 10 else 0),
+                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+            )
             def cos_func(ctx, x):
                 return fpa.cosine_taylor(ctx, x, order=order, split=False)
 
-            @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+            @fa.targets.numpy.jit(
+                paths=[fpa],
+                dtype=dtype,
+                debug=(1.5 if size <= 10 else 0),
+                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+            )
             def cosm1_func(ctx, x):
                 return fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
 
@@ -941,11 +956,21 @@ def test_fast_exponent_by_squaring(dtype, exponent, func, fma):
     with mpmath.mp.workprec(working_prec):
         mpctx = mpmath.mp
 
-        @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=fma)
+        @fa.targets.numpy.jit(
+            paths=[fpa],
+            dtype=dtype,
+            debug=(1.5 if size <= 10 else 0),
+            rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+        )
         def fast_func(ctx, x):
             return fpa.fast_exponent_by_squaring(ctx, x, exponent)
 
-        @fa.targets.numpy.jit(paths=[fpa], dtype=dtype, debug=(1.5 if size <= 10 else 0), fma_backend=None)
+        @fa.targets.numpy.jit(
+            paths=[fpa],
+            dtype=dtype,
+            debug=(1.5 if size <= 10 else 0),
+            rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+        )
         def dekker_func(ctx, x):
             seq = fpa.fast_exponent_by_squaring_dekker(ctx, x, exponent)
             if type(seq) is tuple:

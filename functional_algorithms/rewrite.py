@@ -382,8 +382,9 @@ def op_unflatten(operands, kind):
 
 class Rewriter:
 
-    def __init__(self):
+    def __init__(self, parameters=None):
         self._printer = Printer()
+        self._parameters = parameters or {}
 
     def __call__(self, expr):
         result = getattr(self, expr.kind, self._notimpl)(expr)
@@ -596,12 +597,12 @@ class Rewriter:
 
     def upcast(self, expr):
         (x,) = expr.operands
-        if x.kind == "downcast":
+        if x.kind == "downcast" and self._parameters.get("optimize_cast", True):
             return x.operands[0]
 
     def downcast(self, expr):
         (x,) = expr.operands
-        if x.kind == "upcast":
+        if x.kind == "upcast" and self._parameters.get("optimize_cast", True):
             return x.operands[0]
 
     def log(self, expr):
@@ -870,10 +871,10 @@ class Rewriter:
         pass
 
 
-def rewrite(expr):
+def rewrite(expr, parameters=None):
     """Return rewritten expression, otherwise return None."""
 
-    rewriter = Rewriter()
+    rewriter = Rewriter(parameters=parameters)
 
     last_result = None
     result = expr
@@ -890,6 +891,16 @@ def rewrite(expr):
 def __rewrite_modifier__(expr):
     result = rewrite(expr)
     return expr if result is None else result
+
+
+class RewriteWithParameters:
+
+    def __init__(self, **parameters):
+        self._parameters = parameters
+
+    def __rewrite_modifier__(self, expr):
+        result = rewrite(expr, self._parameters)
+        return expr if result is None else result
 
 
 class RewriteContext:

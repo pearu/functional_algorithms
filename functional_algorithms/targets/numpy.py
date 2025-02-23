@@ -289,15 +289,17 @@ def jit(**params):
 
     import functional_algorithms as fa
 
+    rewrite_parameters = params.get("rewrite_parameters", {})
+
     def jit_decor(func):
-        ctx = fa.Context(paths=params.get("paths"))
+        ctx = fa.Context(paths=params.get("paths"), parameters=params.get("parameters"))
         dtype = params.get("dtype", numpy.float32)
         graph = ctx.trace(func, dtype)
         graph2 = graph.rewrite(
             fa.rewrite.ReplaceSeries(),
-            fa.rewrite.ReplaceFma(backend=params.get("fma_backend", "upcast")),
+            fa.rewrite.ReplaceFma(backend=rewrite_parameters.get("fma_backend", "upcast")),
             this_module,
-            fa.rewrite,
+            fa.rewrite.RewriteWithParameters(**rewrite_parameters),
         )
         return as_function(graph2, debug=params.get("debug", 0))
 
