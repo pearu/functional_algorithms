@@ -624,6 +624,8 @@ class Expr:
     def __repr__(self):
         if self.kind in {"symbol"}:
             operands = tuple(repr(o) for o in self.operands)
+        elif self.kind in {"series", "constant"}:
+            operands = (repr(self.operands[0]),) + tuple(f"{o.kind}:{o.intkey}" for o in self.operands[1:])
         else:
             operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
         return f"{type(self).__name__}({self.kind!r}, {operands}, {self.props})"

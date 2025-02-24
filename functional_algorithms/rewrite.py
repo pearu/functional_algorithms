@@ -2,7 +2,7 @@ import math
 import numpy
 from collections import defaultdict
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types, boolean_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types, warn_once
 
 
 class Printer:
@@ -478,6 +478,8 @@ class Rewriter:
             yvalue, ylike = y.operands
             if isinstance(xvalue, number_types) and isinstance(yvalue, number_types):
                 r = op(xvalue, yvalue)
+                if numpy.isfinite(xvalue) and numpy.isfinite(yvalue) and not numpy.isfinite(r):
+                    warn_once(f"{expr} evaluation resulted a non-finite value `{r}`")
                 return expr.context.constant(r, xlike)
 
     def add(self, expr):

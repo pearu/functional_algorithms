@@ -894,7 +894,19 @@ def test_sine_taylor_dekker(dtype):
 
 
 @pytest.mark.parametrize(
-    "func,fma", [("cos", "upcast"), ("cos", "mul_add"), ("cos", "native"), ("cosm1", "upcast"), ("numpy.cos", None)]
+    "func,fma",
+    [
+        ("cos", "upcast"),
+        ("cos", "mul_add"),
+        ("cos", "native"),
+        ("cos_dekker", "native"),
+        ("cos_numpy", None),
+        ("cosm1_dekker", "native"),
+        ("cosm1", "upcast"),
+        ("cosm1_sin", "upcast"),
+        ("cosm1_sin_numpy", None),
+        ("cosm1_numpy", None),
+    ],
 )
 def test_cosine_taylor(dtype, fma, func):
     import mpmath
@@ -902,7 +914,7 @@ def test_cosine_taylor(dtype, fma, func):
 
     t_prec = utils.get_precision(dtype)
     working_prec = {11: 50 * 4, 24: 50 * 4, 53: 74 * 16}[t_prec]
-    optimal_order = {11: 9, 24: 11, 53: 17}[t_prec]
+    optimal_order = {11: 9, 24: 13, 53: 19}[t_prec]
     size = 1000
     samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
     size = len(samples)
@@ -910,50 +922,89 @@ def test_cosine_taylor(dtype, fma, func):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
 
-            @fa.targets.numpy.jit(
-                paths=[fpa],
-                dtype=dtype,
-                debug=(1.5 if size <= 10 else 0),
-                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
-            )
-            def cos_func(ctx, x):
-                return fpa.cosine_taylor(ctx, x, order=order, split=False)
+            if func.startswith("cosm1"):
 
-            @fa.targets.numpy.jit(
-                paths=[fpa],
-                dtype=dtype,
-                debug=(1.5 if size <= 10 else 0),
-                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
-            )
-            def cosm1_func(ctx, x):
-                return fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
+                def f_expected(x):
+                    return mpctx.cos(x) - 1
+
+            else:
+
+                def f_expected(x):
+                    return mpctx.cos(x)
+
+            if func in {"cos_dekker", "cosm1_dekker"}:
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                    parameters=dict(series_uses_dekker=True, series_uses_2sum=True),
+                )
+                def f(ctx, x):
+                    return fpa.cosine_taylor_dekker(ctx, x, order=order, drop_leading_term=func.startswith("cosm1"))
+
+            elif func == "cos":
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+                )
+                def f(ctx, x):
+                    return fpa.cosine_taylor(ctx, x, order=order, split=False)
+
+            elif func == "cosm1":
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+                )
+                def f(ctx, x):
+                    return fpa.cosine_taylor(ctx, x, order=order, split=False, drop_leading_term=True)
+
+            elif func == "cosm1_sin":
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
+                )
+                def f(ctx, x):
+                    two = ctx.constant(2, x)
+                    sn = fpa.sine_taylor(ctx, x / two, order=order, split=False)
+                    return -two * sn * sn
+
+            elif func == "cos_numpy":
+
+                f = numpy.cos
+
+            elif func == "cosm1_numpy":
+
+                def f(x):
+                    return numpy.cos(x) - dtype(1)
+
+            elif func == "cosm1_sin_numpy":
+
+                def f(x):
+                    two = dtype(2)
+                    sn = numpy.sin(x / two)
+                    return -two * sn * sn
+
+            else:
+                assert 0, func  # not impl
 
             ulp = defaultdict(int)
             for x in samples:
-                expected_cs = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)))
-                if func == "numpy.cos":
-                    cs = numpy.cos(x)
-                    u = utils.diff_ulp(cs, expected_cs)
-                elif func == "cos":
-                    cs = cos_func(x)
-                    """
-                        csh, csl = fpa.cosine_taylor(ctx, x, order=order, split=True)
-                        cs2 = utils.mpf2float(dtype, utils.float2mpf(mpctx, csh) + utils.float2mpf(mpctx, csl))
-                        assert cs == cs2, (cs, cs2, expected_cs)
-                    """
-                    u = utils.diff_ulp(cs, expected_cs)
-                elif func == "cosm1":
-                    expected_csm1 = utils.mpf2float(dtype, mpctx.cos(utils.float2mpf(mpctx, x)) - 1)
-                    cs = cosm1_func(x)
-                    u = utils.diff_ulp(cs, expected_csm1, flush_subnormals=True)
-                else:
-                    assert 0, func  # unreachable
+                expected = utils.mpf2float(dtype, f_expected(utils.float2mpf(mpctx, x)))
+                cs = f(x)
+                u = utils.diff_ulp(cs, expected)
                 ulp[u] += 1
 
-                if 0:
-                    c = "." if u == 0 else ("v" if cs < expected_cs else "^")
-                    print(c, end="", flush=True)
-
+            print()
             show_ulp(ulp)
 
 

@@ -305,8 +305,8 @@ def mul_dw(ctx, xh, xl, yh, yl):
 def div_dw(ctx, xh, xl, yh, yl):
     """Dekker's division"""
     q = xh / yh
-    th, tl = mul_dw(q, yh)
-    l = (xh - th - tl + xl - q * yl) / yh
+    th, tl = mul_dekker(ctx, q, yh)
+    l = ((((xh - th) - tl) + xl) - q * yl) / yh
     rh = q + l
     rl = q - rh + l
     return rh, rl
@@ -1447,26 +1447,11 @@ def sine_taylor(ctx, x, order=7, split=False):
     return p0, p1 * xxl
 
 
-def sine_taylor_dekker(ctx, x, order=7):
-    """Return sine of x using Taylor series approximation and Dekker's product.
-
-    See also sine_taylor.
-    """
-    C, f = [x], 1
-    for i in range(3, order + 1, 2):
-        f *= -i * (i - 1)
-        C.append(div_series(ctx, x, ctx.constant(f, x)))
-    xx = mul_series(ctx, x, x)
-    # Horner's scheme is most accurate
-    return fast_polynomial_dekker(
-        ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
-    )
-
-
 def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
     """Return sine of x using Taylor series approximation:
 
     C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
+         = 1 + x**2 * P(x**2, C=[-1/2!, 1/4!, -1/6!, ...])
 
     If split is True, return `ch, cl` such that
 
@@ -1554,6 +1539,51 @@ def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
     if drop_leading_term:
         return p0, p1 * xxl
     return ctx.constant(1, x) + p0, p1 * xxl
+
+
+def sine_taylor_dekker(ctx, x, order=7):
+    """Return sine of x using Taylor series approximation and Dekker's product.
+
+    See also sine_taylor.
+    """
+    C, f = [x], 1
+    for i in range(3, order + 1, 2):
+        f *= -i * (i - 1)
+        C.append(div_series(ctx, x, ctx.constant(f, x)))
+    xx = mul_series(ctx, x, x)
+    # Horner's scheme is most accurate
+    return fast_polynomial_dekker(
+        ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+    )
+
+
+def cosine_taylor_dekker(ctx, x, order=7, drop_leading_term=False):
+    """Return cosine of x using Taylor series approximation and Dekker's product.
+
+    See also cosine_taylor.
+    """
+    one = ctx.constant(1, x)
+    xx = mul_series(ctx, x, x)
+    if not drop_leading_term:
+        # P(x**2, Ce=[1, -1/2!, 1/4!, -1/6!, ...])
+        C, f = [one], 1
+        for i in range(2, order + 1, 2):
+            f *= -i * (i - 1)
+            C.append(div_series(ctx, one, ctx.constant(f, x)))
+            # Horner's scheme is most accurate
+        return fast_polynomial_dekker(
+            ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+        )
+    else:
+        # x**2 * P(x**2, C=[-1/2!, 1/4!, -1/6!, ...])
+        C, f = [], 1
+        for i in range(2, order + 1 - 2, 2):
+            f *= -i * (i - 1)
+            C.append(div_series(ctx, xx, ctx.constant(f, x)))
+            # Horner's scheme is most accurate
+        return fast_polynomial_dekker(
+            ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+        )
 
 
 def sine_pade(ctx, x, variant=None):
