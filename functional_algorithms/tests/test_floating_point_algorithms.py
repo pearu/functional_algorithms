@@ -825,6 +825,7 @@ def test_sine_taylor(dtype, func, fma):
                     paths=[fpa],
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
+                    parameters=dict(series_uses_dekker=True, series_uses_2sum=True),
                 )
                 def sin_dekker_func(ctx, x):
                     return fpa.sine_taylor_dekker(ctx, x, order=order)
@@ -835,7 +836,8 @@ def test_sine_taylor(dtype, func, fma):
                     paths=[fpa],
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
-                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma, series_uses_2sum=True),
+                    parameters=dict(series_uses_2sum=True),
+                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
                 )
                 def sin_func(ctx, x):
                     return fpa.sine_taylor(ctx, x, order=order, split=False)

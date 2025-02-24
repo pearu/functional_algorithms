@@ -274,6 +274,7 @@ def split_veltkamp2(ctx, x):
 
 
 def mul_dw(ctx, x, y, xh, xl, yh, yl):
+    """Veltkamp's multiplication"""
     xyh = x * y
     t1 = (-xyh) + xh * yh
     t2 = t1 + xh * yl
@@ -318,18 +319,6 @@ def mul_dekker(ctx, x, y, C=None):
     return mul_dw(ctx, x, y, xh, xl, yh, yl)
 
 
-def _mul_series_scalar(ctx, x, y):
-    assert type(y) is not tuple
-    terms = tuple(x_ * y for x_ in x[1:])
-    return ctx._series(terms, dict(unit_index=x[0][0], scaling_exp=x[0][1]))
-
-
-def _mul_scalar_series(ctx, x, y):
-    assert type(x) is not tuple
-    terms = tuple(x * y_ for y_ in y[1:])
-    return ctx._series(terms, dict(unit_index=y[0][0], scaling_exp=y[0][1]))
-
-
 def _div_series_scalar(ctx, x, y):
     assert type(y) is not tuple
     terms = tuple(x_ / y for x_ in x[1:])
@@ -343,16 +332,13 @@ def _mul_series_series(ctx, x, y):
 
     terms = []
     for n in range(len(terms1) + len(terms2) - 1):
-        xy = None
         for i, x in enumerate(terms1):
             for j, y in enumerate(terms2):
                 if i + j == n:
-                    if xy is None:
-                        xy = x * y
+                    if ctx.parameters.get("series_uses_dekker"):
+                        _terms_add(ctx, terms, n, *mul_dekker(ctx, x, y))
                     else:
-                        xy += x * y
-        assert xy is not None
-        terms.append(xy)
+                        _terms_add(ctx, terms, n, x * y)
 
     return ctx._series(tuple(terms), dict(unit_index=index1 + index2, scaling_exp=sexp1))
 
@@ -364,10 +350,10 @@ def mul_series(ctx, x, y):
     if type(x) is tuple:
         if type(y) is tuple:
             return _mul_series_series(ctx, x, y)
-        return _mul_series_scalar(ctx, x, y)
+        return _mul_series_series(ctx, x, ((0, 0), y))
     elif type(y) is tuple:
-        return _mul_scalar_series(ctx, x, y)
-    return x * y
+        return _mul_series_series(ctx, ((0, 0), x), y)
+    return _mul_series_series(ctx, ((0, 0), x), ((0, 0), y))
 
 
 def div_series(ctx, x, y):
@@ -1415,8 +1401,14 @@ def sine_taylor_dekker(ctx, x, order=7):
     C, f = [x], 1
     for i in range(3, order + 1, 2):
         f *= -i * (i - 1)
-        f1 = ctx.constant(1 / f, x)
-        C.append(mul_series(ctx, x, f1))
+        # See sine_taylor:
+        if i >= 5:
+            f1 = ctx.constant(1 / f, x)
+            C.append(mul_series(ctx, x, f1))
+        else:
+            fh, fl = split_veltkamp(ctx, ctx.constant(f, x))
+            a = fl / fh
+            C.append(ctx._series((x / fh, -a * x / fh), dict()))
     xx = mul_series(ctx, x, x)
     # Horner's scheme is most accurate
     return fast_polynomial_dekker(

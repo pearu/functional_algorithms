@@ -622,8 +622,11 @@ class Expr:
         return Printer().tostring(self)
 
     def __repr__(self):
-        operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
-        return f"{type(self).__name__}({self.kind}, {operands}, {self.props})"
+        if self.kind in {"symbol"}:
+            operands = tuple(repr(o) for o in self.operands)
+        else:
+            operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
+        return f"{type(self).__name__}({self.kind!r}, {operands}, {self.props})"
 
     def __abs__(self):
         return self.context.absolute(self)
