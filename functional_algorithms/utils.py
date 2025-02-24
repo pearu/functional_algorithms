@@ -2213,6 +2213,10 @@ def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
 class NumpyContext:
     """A light-weight context for evaluating select with numpy inputs."""
 
+    @property
+    def parameters(self):
+        return {}
+
     def select(self, cond, x, y):
         assert isinstance(cond, (bool, numpy.bool_))
         return x if cond else y

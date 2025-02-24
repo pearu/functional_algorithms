@@ -297,7 +297,7 @@ def jit(**params):
         graph = ctx.trace(func, dtype)
         graph2 = graph.rewrite(
             fa.rewrite.ReplaceSeries(),
-            fa.rewrite.ReplaceFma(backend=rewrite_parameters.get("fma_backend", "upcast")),
+            fa.rewrite.ReplaceFma(backend=rewrite_parameters.get("fma_backend", "native")),
             this_module,
             fa.rewrite.RewriteWithParameters(**rewrite_parameters),
         )

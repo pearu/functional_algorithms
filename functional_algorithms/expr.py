@@ -174,7 +174,7 @@ def toidentifier(value):
     elif isinstance(value, numpy.floating):
         try:
             intvalue = int(value)
-        except OverflowError:
+        except (OverflowError, ValueError):
             intvalue = None
         if value == intvalue:
             return value.dtype.kind + toidentifier(intvalue)

@@ -222,6 +222,7 @@ def split_veltkamp(ctx, x, C=None, scale=False):
 
     """
     if C is None:
+        one = ctx.constant(1, x)
         C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
     elif scale:
         one = ctx.constant(1, x)
@@ -382,6 +383,23 @@ def div_series(ctx, x, y):
     return x / y
 
 
+def _terms_add(ctx, terms, index, *operands):
+    for i, v in enumerate(operands):
+        if index + i < len(terms):
+            if 1:
+                terms[index + i] += v
+            else:
+                h, l = add_2sum(ctx, terms[index + i], v)
+                terms[index + i] = h
+                if index + i <= len(terms):
+                    terms.append(l)
+                else:
+                    terms[index + i + 1] += l
+        else:
+            assert index + i == len(terms)
+            terms.append(v)
+
+
 def _add_series_series(ctx, x, y):
 
     def op(x, y):
@@ -389,6 +407,8 @@ def _add_series_series(ctx, x, y):
             return y
         if y is None:
             return x
+        if ctx.parameters.get("series_uses_2sum"):
+            return add_2sum(ctx, x, y)
         return x + y
 
     return _binaryop_series_series(ctx, x, y, op)
@@ -401,6 +421,8 @@ def _subtract_series_series(ctx, x, y):
             return -y
         if y is None:
             return x
+        if ctx.parameters.get("series_uses_2sum"):
+            return add_2sum(ctx, x, -y)
         return x - y
 
     return _binaryop_series_series(ctx, x, y, op)
@@ -417,28 +439,30 @@ def _binaryop_series_series(ctx, x, y, op):
     assert sexp1 == sexp2, (sexp1, sexp2)
 
     terms = []
-
     for n in range(max(len(terms1), index1 - index2 + len(terms2))):
         k = n - (index1 - index2)
         if n < len(terms1):
             if k >= 0 and k < len(terms2):
                 if swapped:
-                    terms.append(op(terms2[k], terms1[n]))
+                    r = op(terms2[k], terms1[n])
                 else:
-                    terms.append(op(terms1[n], terms2[k]))
+                    r = op(terms1[n], terms2[k])
             else:
                 if swapped:
-                    terms.append(op(None, terms1[n]))
+                    r = op(None, terms1[n])
                 else:
-                    terms.append(op(terms1[n], None))
+                    r = op(terms1[n], None)
         elif k >= 0 and k < len(terms2):
             if swapped:
-                terms.append(op(terms2[k], None))
+                r = op(terms2[k], None)
             else:
-                terms.append(op(None, terms2[k]))
+                r = op(None, terms2[k])
         else:
-            terms.append(ctx.constant(0, terms1[0]))
-
+            r = ctx.constant(0, terms1[0])
+        if type(r) is tuple:
+            _terms_add(ctx, terms, n, *r)
+        else:
+            _terms_add(ctx, terms, n, r)
     return ctx._series(tuple(terms), dict(unit_index=index1, scaling_exp=sexp1))
 
 
@@ -454,7 +478,7 @@ def add_series(ctx, x, y):
         return _add_series_series(ctx, x, ((0, 0), y))
     elif type(y) is tuple:
         return _add_series_series(ctx, ((0, 0), x), y)
-    return x + y
+    return _add_series_series(ctx, ((0, 0), x), ((0, 0), y))
 
 
 def subtract_series(ctx, x, y):
@@ -469,7 +493,7 @@ def subtract_series(ctx, x, y):
         return _subtract_series_series(ctx, x, ((0, 0), y))
     elif type(y) is tuple:
         return _subtract_series_series(ctx, ((0, 0), x), y)
-    return x - y
+    return _subtract_series_series(ctx, ((0, 0), x), ((0, 0), y))
 
 
 def mul_series_dekker(ctx, x, y, C=None):
@@ -483,22 +507,6 @@ def mul_series_dekker(ctx, x, y, C=None):
     """
     x = ctx._get_series_operands(x)
     y = ctx._get_series_operands(y)
-
-    def terms_add(terms, index, *operands):
-        for i, v in enumerate(operands):
-            if index + i < len(terms):
-                if 1:
-                    terms[index + i] += v
-                else:
-                    h, l = add_2sum(ctx, terms[index + i], v)
-                    terms[index + i] = h
-                    if index + i <= len(terms):
-                        terms.append(l)
-                    else:
-                        terms[index + i + 1] += l
-            else:
-                assert index + i == len(terms)
-                terms.append(v)
 
     offset = 10000
 
@@ -516,9 +524,9 @@ def mul_series_dekker(ctx, x, y, C=None):
             for i, x_ in enumerate(x[1:]):
                 for j, y_ in enumerate(y[1:]):
                     if i + j >= offset:
-                        terms_add(terms, i + j, x_ * y_)
+                        _terms_add(ctx, terms, i + j, x_ * y_)
                     else:
-                        terms_add(terms, i + j, *mul_dekker(ctx, x_, y_, C=C))
+                        _terms_add(ctx, terms, i + j, *mul_dekker(ctx, x_, y_, C=C))
             return ctx._series(tuple(terms), dict(unit_index=x[0][0] + y[0][0], scaling_exp=x[0][1]))
         else:
             # (x1, x2, ...) * y
@@ -529,17 +537,17 @@ def mul_series_dekker(ctx, x, y, C=None):
             terms = []
             for i, x_ in enumerate(x[1:]):
                 if i >= offset:
-                    terms_add(terms, i, x_ * y)
+                    _terms_add(ctx, terms, i, x_ * y)
                 else:
-                    terms_add(terms, i, *mul_dekker(ctx, x_, y, C=C))
+                    _terms_add(ctx, terms, i, *mul_dekker(ctx, x_, y, C=C))
             return ctx._series(tuple(terms), dict(unit_index=x[0][0], scaling_exp=x[0][1]))
     elif type(y) is tuple:
         terms = []
         for i, y_ in enumerate(y[1:]):
             if i >= offset:
-                terms_add(terms, i, x * y_)
+                _terms_add(ctx, terms, i, x * y_)
             else:
-                terms_add(terms, i, *mul_dekker(ctx, x, y_, C=C))
+                _terms_add(ctx, terms, i, *mul_dekker(ctx, x, y_, C=C))
         return ctx._series(tuple(terms), dict(unit_index=y[0][0], scaling_exp=y[0][1]))
     return ctx._series(mul_dekker(ctx, x, y, C=C), dict(unit_index=0, scaling_exp=0))
 
@@ -1356,7 +1364,20 @@ def sine_taylor(ctx, x, order=7, split=False):
         C, f = [x], 1
         for i in range(3, order + 1, 2):
             f *= -i * (i - 1)
-            C.append(ctx.fma(x, ctx.constant(1 / f, x), zero))
+            if i >= 5:
+                C.append(ctx.fma(x, ctx.constant(1 / f, x), zero))
+            else:
+                # The following is required for float16 and float32 when f is
+                # small and early evaluation of 1/f leads to accuracy loss.
+                # For float64, there is a very minor accuracy loss.
+                #
+                # fh, fl = split_veltkamp(f)
+                # 1 / f = 1 / (fh + fl) = 1 / fh - fl / fh ** 2 + fl ** 2 / fh ** 3 - ...
+                #                       = [a = fl/fh] = 1 / fh - a / fh + a ** 2 / fh - ...
+                #                       ~ fma(-a, 1 / fh, 1 / fh)
+                fh, fl = split_veltkamp(ctx, ctx.constant(f, x))
+                a = fl / fh
+                C.append(ctx.fma(-a, x / fh, x / fh))
         # Horner's scheme is most accurate
         xx = ctx.fma(x, x, zero)
         return fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])

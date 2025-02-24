@@ -802,7 +802,9 @@ def test_sine_pade(dtype):
             show_ulp(ulp)
 
 
-@pytest.mark.parametrize("func,fma", [("sin", "upcast"), ("sin", "mul_add"), ("sin", "native"), ("numpy.sin", None)])
+@pytest.mark.parametrize(
+    "func,fma", [("sin", "upcast"), ("sin", "mul_add"), ("sin_dekker", "native"), ("sin", "native"), ("numpy.sin", None)]
+)
 def test_sine_taylor(dtype, func, fma):
     import mpmath
     from collections import defaultdict
@@ -817,14 +819,26 @@ def test_sine_taylor(dtype, func, fma):
         mpctx = mpmath.mp
         for order in [optimal_order, 1, 3, 5, 7, 9, 11, 13, 17, 19][:1]:
 
-            @fa.targets.numpy.jit(
-                paths=[fpa],
-                dtype=dtype,
-                debug=(1.5 if size <= 10 else 0),
-                rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
-            )
-            def sin_func(ctx, x):
-                return fpa.sine_taylor(ctx, x, order=order, split=False)
+            if func == "sin_dekker":
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                )
+                def sin_dekker_func(ctx, x):
+                    return fpa.sine_taylor_dekker(ctx, x, order=order)
+
+            elif func == "sin":
+
+                @fa.targets.numpy.jit(
+                    paths=[fpa],
+                    dtype=dtype,
+                    debug=(1.5 if size <= 10 else 0),
+                    rewrite_parameters=dict(optimize_cast=False, fma_backend=fma, series_uses_2sum=True),
+                )
+                def sin_func(ctx, x):
+                    return fpa.sine_taylor(ctx, x, order=order, split=False)
 
             ulp = defaultdict(int)
             for x in samples:
@@ -833,6 +847,8 @@ def test_sine_taylor(dtype, func, fma):
                     sn = numpy.sin(x)
                 elif func == "sin":
                     sn = sin_func(x)
+                elif func == "sin_dekker":
+                    sn = sin_dekker_func(x)
                 else:
                     assert 0, func  # not implemented
                     """
