@@ -139,10 +139,8 @@ def test_mul_dekker(dtype):
         for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
             x_mp = utils.float2mpf(ctx, x)
             for y in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-                xy = x * y
                 xyh, xyl = fpa.mul_dekker(None, x, y, C)
                 assert numpy.isfinite(xyl)
-                assert xyh == xy
                 y_mp = utils.float2mpf(ctx, y)
                 xyh_mp = utils.float2mpf(ctx, xyh)
                 xyl_mp = utils.float2mpf(ctx, xyl)
@@ -156,7 +154,7 @@ def test_mul_dekker(dtype):
                 ex = utils.mpf2float(dtype, expected)
                 u = utils.diff_ulp(xyh + xyl, ex)
                 ulp_counts[u] += 1
-                ulp_counts_native[utils.diff_ulp(xy, ex)] += 1
+                ulp_counts_native[utils.diff_ulp(x * y, ex)] += 1
                 assert u <= max_valid_ulp_count
 
     print(f"\nULP counts using mul_dekker: {dict(ulp_counts)}\nULP counts using x*y: {dict(ulp_counts_native)}")

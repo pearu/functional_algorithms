@@ -273,14 +273,43 @@ def split_veltkamp2(ctx, x):
     return xh * S, xl * S2
 
 
-def mul_dw(ctx, x, y, xh, xl, yh, yl):
-    """Veltkamp's multiplication"""
+def mul_veltkamp(ctx, x, y, xh, xl, yh, yl):
+    """Veltkamp's multiplication
+
+    mul_veltkamp and mul12 are equivalent accuracy-wise.
+    """
     xyh = x * y
     t1 = (-xyh) + xh * yh
     t2 = t1 + xh * yl
     t3 = t2 + xl * yh
     xyl = t3 + xl * yl
     return xyh, xyl
+
+
+def mul_dw(ctx, xh, xl, yh, yl):
+    """Dekker's multiplication
+
+    mul_veltkamp and mul12 are equivalent accuracy-wise.
+
+    References:
+      http://resolver.sub.uni-goettingen.de/purl?GDZPPN001170007
+      https://gdz.sub.uni-goettingen.de/download/pdf/PPN362160546_0018/PPN362160546_0018.pdf
+    """
+    p = xh * yh
+    q = xh * yl + xl * yh
+    rh = p + q
+    rl = p - rh + q + xl * yl
+    return rh, rl
+
+
+def div_dw(ctx, xh, xl, yh, yl):
+    """Dekker's division"""
+    q = xh / yh
+    th, tl = mul_dw(q, yh)
+    l = (xh - th - tl + xl - q * yl) / yh
+    rh = q + l
+    rl = q - rh + l
+    return rh, rl
 
 
 def mul_dekker(ctx, x, y, C=None):
@@ -316,13 +345,38 @@ def mul_dekker(ctx, x, y, C=None):
         C = get_veltkamp_splitter_constant(ctx, largest)
     xh, xl = split_veltkamp(ctx, x, C)
     yh, yl = split_veltkamp(ctx, y, C)
-    return mul_dw(ctx, x, y, xh, xl, yh, yl)
+    if 1:
+        return mul_dw(ctx, xh, xl, yh, yl)
+    return mul_veltkamp(ctx, x, y, xh, xl, yh, yl)
+
+
+def div_dekker(ctx, x, y, C=None):
+    """Dekker's divison:
+
+    x / y = xyh + xyl
+    """
+    if C is None:
+        largest = get_largest(ctx, x)
+        C = get_veltkamp_splitter_constant(ctx, largest)
+    xh, xl = split_veltkamp(ctx, x, C)
+    yh, yl = split_veltkamp(ctx, y, C)
+    return div_dw(ctx, xh, xl, yh, yl)
+
+
+# TODO: sqrt_dekker
 
 
 def _div_series_scalar(ctx, x, y):
     assert type(y) is not tuple
-    terms = tuple(x_ / y for x_ in x[1:])
-    return ctx._series(terms, dict(unit_index=x[0][0], scaling_exp=x[0][1]))
+
+    terms = []
+    (index1, sexp1), terms1 = x[0], x[1:]
+    for n in range(len(terms1)):
+        if ctx.parameters.get("series_uses_dekker"):
+            _terms_add(ctx, terms, n, *div_dekker(ctx, terms1[n], y))
+        else:
+            _terms_add(ctx, terms, n, terms1[n] / y)
+    return ctx._series(tuple(terms), dict(unit_index=index1, scaling_exp=sexp1))
 
 
 def _mul_series_series(ctx, x, y):
@@ -1401,14 +1455,7 @@ def sine_taylor_dekker(ctx, x, order=7):
     C, f = [x], 1
     for i in range(3, order + 1, 2):
         f *= -i * (i - 1)
-        # See sine_taylor:
-        if i >= 5:
-            f1 = ctx.constant(1 / f, x)
-            C.append(mul_series(ctx, x, f1))
-        else:
-            fh, fl = split_veltkamp(ctx, ctx.constant(f, x))
-            a = fl / fh
-            C.append(ctx._series((x / fh, -a * x / fh), dict()))
+        C.append(div_series(ctx, x, ctx.constant(f, x)))
     xx = mul_series(ctx, x, x)
     # Horner's scheme is most accurate
     return fast_polynomial_dekker(
