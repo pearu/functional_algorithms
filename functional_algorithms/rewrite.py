@@ -506,6 +506,7 @@ class Rewriter:
             return result
 
         x, y = expr.operands
+
         for x_, y_, s in [(x, y, -1), (y, x, 1)]:
             if x_.kind == "constant":
                 value, like = x_.operands
@@ -527,8 +528,11 @@ class Rewriter:
         for x_, y_ in [(x, y), (y, x)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, number_types) and value == 1:
-                    return y_
+                if isinstance(value, number_types):
+                    if value == 1:
+                        return y_
+                    if value == 0 and self._parameters.get("eliminate_zero_factors"):
+                        return x_
 
         if x.kind == "series" or y.kind == "series":
             import functional_algorithms.floating_point_algorithms as fpa
@@ -545,8 +549,15 @@ class Rewriter:
         x, y = expr.operands
         if y.kind == "constant":
             value, like = y.operands
-            if isinstance(value, number_types) and value == 1:
-                return x
+            if isinstance(value, number_types):
+                if value == 1:
+                    return x
+
+        if x.kind == "constant":
+            value, like = x.operands
+            if isinstance(value, number_types):
+                if value == 0 and self._parameters.get("eliminate_zero_factors"):
+                    return x
 
         if x.kind == "series" and y.kind != "series":
             import functional_algorithms.floating_point_algorithms as fpa

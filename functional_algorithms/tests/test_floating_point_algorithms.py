@@ -939,6 +939,7 @@ def test_cosine_taylor(dtype, fma, func):
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
                     parameters=dict(series_uses_dekker=True, series_uses_2sum=True),
+                    rewrite_parameters=dict(eliminate_zero_factors=True),
                 )
                 def f(ctx, x):
                     return fpa.cosine_taylor_dekker(ctx, x, order=order, drop_leading_term=func.startswith("cosm1"))
