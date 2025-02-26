@@ -1,3 +1,4 @@
+import contextlib
 import inspect
 import sys
 import types
@@ -7,6 +8,28 @@ from collections import defaultdict
 from .utils import UNSPECIFIED, boolean_types, float_types, complex_types, integer_types
 from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds, make_series
 from .typesystem import Type
+
+
+class Parameters(dict):
+    """A dictionary that call method enables context manager support to
+    temporarily modify dictionary content.
+    """
+
+    def __call__(self, **items):
+
+        @contextlib.contextmanager
+        def manager(items):
+            prev_items = dict((k, v) for k, v in self.items() if k in items)
+            new_keys = {k for k in items if k not in self}
+            try:
+                self.update(items)
+                yield self
+            finally:
+                self.update(prev_items)
+                for k in new_keys:
+                    self.pop(k)
+
+        return manager(items)
 
 
 class Context:
@@ -39,7 +62,7 @@ class Context:
         self._enable_alt = enable_alt
         self._default_constant_type = default_constant_type
         self._default_like = None
-        self.parameters = parameters or {}
+        self.parameters = Parameters(parameters or {})
         if "using" not in self.parameters:
             self.parameters["using"] = set()
 

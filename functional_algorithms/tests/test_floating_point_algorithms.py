@@ -823,10 +823,10 @@ def test_sine_taylor(dtype, func, fma):
                     paths=[fpa],
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
-                    parameters=dict(series_uses_dekker=True, series_uses_2sum=True),
                 )
                 def sin_dekker_func(ctx, x):
-                    return fpa.sine_taylor_dekker(ctx, x, order=order)
+                    with ctx.parameters(series_uses_dekker=True, series_uses_2sum=True):
+                        return fpa.sine_taylor_dekker(ctx, x, order=order)
 
             elif func == "sin":
 
@@ -834,11 +834,11 @@ def test_sine_taylor(dtype, func, fma):
                     paths=[fpa],
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
-                    parameters=dict(series_uses_2sum=True),
                     rewrite_parameters=dict(optimize_cast=False, fma_backend=fma),
                 )
                 def sin_func(ctx, x):
-                    return fpa.sine_taylor(ctx, x, order=order, split=False)
+                    with ctx.parameters(series_uses_2sum=True):
+                        return fpa.sine_taylor(ctx, x, order=order, split=False)
 
             ulp = defaultdict(int)
             for x in samples:
@@ -938,11 +938,11 @@ def test_cosine_taylor(dtype, fma, func):
                     paths=[fpa],
                     dtype=dtype,
                     debug=(1.5 if size <= 10 else 0),
-                    parameters=dict(series_uses_dekker=True, series_uses_2sum=True),
                     rewrite_parameters=dict(eliminate_zero_factors=True),
                 )
                 def f(ctx, x):
-                    return fpa.cosine_taylor_dekker(ctx, x, order=order, drop_leading_term=func.startswith("cosm1"))
+                    with ctx.parameters(series_uses_dekker=True, series_uses_2sum=True):
+                        return fpa.cosine_taylor_dekker(ctx, x, order=order, drop_leading_term=func.startswith("cosm1"))
 
             elif func == "cos":
 

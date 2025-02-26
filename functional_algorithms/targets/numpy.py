@@ -292,6 +292,7 @@ def jit(**params):
     rewrite_parameters = params.get("rewrite_parameters", {})
 
     def jit_decor(func):
+        assert "parameters" not in params  # use `with ctx.parameters(...)` instead
         ctx = fa.Context(paths=params.get("paths"), parameters=params.get("parameters"))
         dtype = params.get("dtype", numpy.float32)
         graph = ctx.trace(func, dtype)
