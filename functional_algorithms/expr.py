@@ -1032,6 +1032,8 @@ class Expr:
             "minimum",
             "floor_divide",
             "remainder",
+            "truncate",
+            "round",
         }:
             return False
         elif self.kind in {"complex", "conjugate"}:
@@ -1115,6 +1117,8 @@ class Expr:
             "copysign",
             "conjugate",
             "asin_acos_kernel",
+            "truncate",
+            "round",
         }:
             return self.operands[0].get_type()
         elif self.kind in {

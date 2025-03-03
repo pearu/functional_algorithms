@@ -257,8 +257,8 @@ def split_veltkamp(x, s=None, C=None):
         assert s >= 2 and s <= p - 2
         C = type(x)(2**s + 1)
     g = C * x  # for large x and s, this will overflow!
-    d = x - g
-    xh = g + d
+    d = g - x
+    xh = g - d
     xl = x - xh
     return xh, xl
 
@@ -2210,6 +2210,37 @@ def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
     return result
 
 
+def mpf2multiword_split(dtype, x, p=None, max_length=None):
+    """Return a list of fixed-width floating point numbers such that
+
+      x == sum([float2mpf(mpmath.mp, v) for i, v in enumerate(result)]) + O(...)
+
+    where x is a mpmath mpf instance. The result values mantissa fits into p bits.
+
+    Different from mpf2multiword, the result may not be a monotonic sequence.
+    """
+    tp = get_precision(dtype)
+    fi = numpy.finfo(dtype)
+    if p is None:
+        p = (tp + 1) // 2
+    result = []
+    ctx = x.context
+
+    C = dtype(2**p + 1)
+    f = mpf2float(dtype, x)
+    while f != 0:
+        if max_length is not None and len(result) == max_length - 1:
+            result.append(f)
+            break
+        fh, fl = split_veltkamp(f, C=C)
+        result.append(fh)
+        assert split_veltkamp(fh, C=C)[1] == 0
+        x = x - float2mpf(ctx, fh)
+        f = mpf2float(dtype, x)
+
+    return result
+
+
 class NumpyContext:
     """A light-weight context for evaluating select with numpy inputs."""
 
@@ -2238,7 +2269,12 @@ class NumpyContext:
             return numpy.floor(value)
         assert 0, (value, type(value))  # unreachable
 
-    def trunc(self, value):
+    def ceil(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.ceil(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def truncate(self, value):
         if isinstance(value, numpy.floating):
             return numpy.trunc(value)
         assert 0, (value, type(value))  # unreachable
@@ -2246,6 +2282,21 @@ class NumpyContext:
     def round(self, value):
         if isinstance(value, numpy.floating):
             return numpy.round(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def rint(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.rint(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def remainder(self, value, other):
+        if isinstance(value, numpy.floating):
+            return numpy.remainder(value, other)
+        assert 0, (value, type(value))  # unreachable
+
+    def fmod(self, value, other):
+        if isinstance(value, numpy.floating):
+            return numpy.fmod(value, other)
         assert 0, (value, type(value))  # unreachable
 
     def sqrt(self, value):
@@ -2302,20 +2353,31 @@ class NumpyContext:
             t
         ](x)
 
+    def logical_or(self, x, y):
+        return x or y
 
-def get_pi_over_two_multiword(dtype, prec=None, max_length=None):
-    if prec is None:
-        prec = {numpy.float16: 4, numpy.float32: 11, numpy.float64: 20}[dtype]
+    def logical_and(self, x, y):
+        return x and y
+
+
+def get_pi_over_two_multiword(dtype):
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
     ctx = mpmath.mp
     with ctx.workprec(max_prec):
-        return mpf2multiword(dtype, ctx.pi / 2, p=prec, max_length=max_length)
+        r_mp = ctx.pi / 2
+        pi2h = mpf2float(dtype, r_mp)
+        pi2l = mpf2float(dtype, r_mp - float2mpf(ctx, pi2h))
+        return pi2h, pi2l
 
 
 def get_two_over_pi_multiword(dtype, prec=None, max_length=None):
     if prec is None:
-        prec = {numpy.float16: 4, numpy.float32: 10, numpy.float64: 20}[dtype]
+        prec = {numpy.float16: 6, numpy.float32: 10, numpy.float64: 20}[dtype]
+        prec = {numpy.float16: 6, numpy.float32: 12, numpy.float64: 27}[dtype]
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
     ctx = mpmath.mp
     with ctx.workprec(max_prec):
-        return mpf2multiword(dtype, 2 / ctx.pi, p=prec, max_length=max_length)
+        r_mp = 2 / ctx.pi
+        if 0:
+            return mpf2multiword(dtype, r_mp, p=prec, max_length=max_length)
+        return mpf2multiword_split(dtype, r_mp, p=prec, max_length=max_length)

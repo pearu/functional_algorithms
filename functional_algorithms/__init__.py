@@ -20,3 +20,4 @@ from . import rewrite
 from .restrict import restrict
 from .signatures import filter_signatures
 from . import fpu
+from .typesystem import Type

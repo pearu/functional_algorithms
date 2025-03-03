@@ -883,6 +883,15 @@ class Rewriter:
     def fma(self, expr):
         pass
 
+    def truncate(self, expr):
+        pass
+
+    def remainder(self, expr):
+        pass
+
+    def round(self, expr):
+        pass
+
 
 def rewrite(expr, parameters=None):
     """Return rewritten expression, otherwise return None."""

@@ -23,9 +23,11 @@ def binary_op(request):
 NumpyContext = utils.NumpyContext
 
 
-def show_ulp(ulp):
+def show_ulp(ulp, title=None):
     rest = 0
     u5 = None
+    if ulp and title is not None:
+        print(f"{title}:")
     for i, u in enumerate(sorted(ulp)):
         if i < 5:
             print(f"  ULP difference {u}: {ulp[u]}")
@@ -700,6 +702,7 @@ def test_argument_reduction_trigonometric(dtype):
     ctx = NumpyContext()
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
+    min_value = dtype(0.5)  # argument reduction is used only for value larger that pi / 4
     max_value = fi.max
 
     largest = fpa.get_largest(ctx, dtype(0))
@@ -707,58 +710,275 @@ def test_argument_reduction_trigonometric(dtype):
 
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
 
-    if dtype == numpy.float64:
-        x = numpy.ldexp(6381956970095103, 797)
-        k, r, t = fpa.argument_reduction_trigonometric(ctx, x)  # 4.687165924254629e-19
-        # ulp difference from dtype(4.687165924254624e-19) is 5. Is
-        # the reference value from
-        # https://userpages.cs.umbc.edu/phatak/645/supl/Ng-ArgReduction.pdf
-        # wrong?
-        u = utils.diff_ulp(r + t, dtype(4.687165924254624e-19))
-        assert u <= 5, (r, t, r + t)
-
     size = 1000
     samples = utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_x)
     ulp_counts = defaultdict(int)
-    for x in samples:
-        assert isinstance(x, dtype)
-        k, r, t = fpa.argument_reduction_trigonometric(ctx, x)
+    mp_ctx = mpmath.mp
+    with mp_ctx.workprec(max_prec):
+        # multiprecision value of 2 / pi and pi / 2
+        two_over_pi_mp = 2 / mp_ctx.pi
+        pi_over_two_mp = mp_ctx.pi / 2
 
-        assert k in [0, 1, 2, 3], x
-        assert abs(r) <= dtype(numpy.pi / 4) * 1.1, (r, k, x)
-        assert isinstance(r, dtype)
+        # multiword represention of 2 / pi
+        two_over_pi_max_length = {numpy.float16: 4, numpy.float32: 11, numpy.float64: 39}.get(dtype, None)
+        two_over_pi_mw = utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)
+        print(f"{two_over_pi_mw=}")
+        two_over_pi_mw_mp = None
+        for v in reversed(two_over_pi_mw):
+            if two_over_pi_max_length is None:
+                assert abs(fpa.split_veltkamp(ctx, v)[1]) == 0
+            elif two_over_pi_mw_mp is not None:
+                assert abs(fpa.split_veltkamp(ctx, v)[1]) == 0
+            v_mp = utils.float2mpf(mp_ctx, v)
+            if two_over_pi_mw_mp is None:
+                two_over_pi_mw_mp = v_mp
+            else:
+                two_over_pi_mw_mp += v_mp
 
-        mp_ctx = mpmath.mp
-        with mp_ctx.workprec(max_prec * 10):
+        if two_over_pi_max_length is None:
+            assert two_over_pi_mw_mp == two_over_pi_mp
+
+        # pi / 2 = pi2h + pi2l
+        pi2h = utils.mpf2float(dtype, pi_over_two_mp)
+        pi2l = utils.mpf2float(dtype, pi_over_two_mp - utils.float2mpf(mp_ctx, pi2h))
+
+        ulp_stage1 = defaultdict(int)
+        ulp_stage2 = defaultdict(int)
+        four = dtype(4)
+        two = dtype(2)
+        zero = dtype(0)
+        cumerr = defaultdict(dtype)
+        for x in samples:
             x_mp = utils.float2mpf(mp_ctx, x)
-            y_mp = x_mp * (2 / mp_ctx.pi)
-            Nk = mp_ctx.floor(y_mp)
 
-            expected_r1 = utils.mpf2float(dtype, (y_mp - Nk) * (mp_ctx.pi / 2))
-            expected_k1 = utils.mpf2float(dtype, Nk % 4)
+            # multiprecision value of x * (2 / pi)
+            with mp_ctx.workprec(max_prec * 2):
+                x2pi_mp = x_mp * two_over_pi_mp
+                x2pi_mp_m4 = x2pi_mp - mp_ctx.floor((x2pi_mp + 2) / 4) * 4
+                assert abs(x2pi_mp_m4) <= 2
 
-            expected_r2 = utils.mpf2float(dtype, (y_mp - (Nk + 1)) * (mp_ctx.pi / 2))
-            expected_k2 = utils.mpf2float(dtype, (Nk + 1) % 4)
+            # split x into xh + xl + xh, valid for any x larger than 1/2
+            xh, xl = fpa.split_veltkamp2(ctx, x)
+            assert xh + xl + xh == x
+            assert fpa.split_veltkamp(ctx, xh)[1] == 0
+            assert fpa.split_veltkamp(ctx, xl)[1] == 0
 
-            u_r1 = utils.diff_ulp(r + t, expected_r1)
-            u_r2 = utils.diff_ulp(r + t, expected_r2)
-            u_r = min(u_r1, u_r2)
-            if u_r == u_r1:
-                expected_r = expected_r1
-                expected_k = expected_k1
-            else:
-                expected_r = expected_r2
-                expected_k = expected_k2
+            # multiword representation of x * (2 / pi)
+            r_mw_h = [v * xh for v in two_over_pi_mw]
+            r_mw_l = [v * xl for v in two_over_pi_mw]
 
-            ulp_counts[u_r] += 1
+            """Next. we'll reduce x * (2 / pi) by subtracting 4 * N, N is integer.
 
-            assert k == expected_k
-            if dtype == numpy.float16:
-                assert r == expected_r or u_r <= 10
-            else:
-                assert r == expected_r or u_r <= 1
+            There exists several ways to reduce a value by 4 * N that
+            involve using functions like truncate, round, floor, ceil,
+            remainder, fmod, rint, %, etc.
 
-    show_ulp(ulp_counts)
+            As a result of the following tests, the cumulative error
+            of these approches is as follows:
+
+            float16:
+            fmod      : 4.172325134277344e-06
+            rint      : 4.172325134277344e-06
+            round     : 4.172325134277344e-06
+            truncate  : 4.172325134277344e-06
+            ceil      : 0.4892578125
+            %         : 0.53466796875
+            floor     : 0.53466796875
+            remainder : 0.53466796875
+
+            float32:
+            fmod      : 3.2229864679470793e-44
+            rint      : 3.2229864679470793e-44
+            round     : 3.2229864679470793e-44
+            truncate  : 3.2229864679470793e-44
+            ceil      : 6.776367808924988e-05
+            %         : 7.783176988596097e-05
+            floor     : 7.783176988596097e-05
+            remainder : 7.783176988596097e-05
+
+            float64:
+            fmod      : 2.5e-323
+            rint      : 2.5e-323
+            round     : 2.5e-323
+            truncate  : 2.5e-323
+            ceil      : 1.20780455651524e-13
+            %         : 1.3584433071495718e-13
+            floor     : 1.3584433071495718e-13
+            remainder : 1.3584433071495718e-13
+
+            StableHLO provides the following functions: ceil, floor,
+            remainder, round_nearest_afz, round_nearest_even.
+
+            In the following, we'll use round-nearest-even approach for reducing by 4*N.
+            """
+            if 0:
+                # (2 * xh) - truncate((2 * xh) / 4) * 4 = (xh - truncate(xh / 2) * 2) * 2
+                r_mw_h_m4_t = [v - ctx.truncate(v / two) * two for v in r_mw_h]
+                r_mw_l_m4_t = [v - ctx.truncate(v / four) * four for v in r_mw_l]
+
+                r_mw_h_m4_r = [v - ctx.round(v / two) * two for v in r_mw_h]
+                r_mw_l_m4_r = [v - ctx.round(v / four) * four for v in r_mw_l]
+
+                r_mw_h_m4_f = [v - ctx.floor(v / two) * two for v in r_mw_h]
+                r_mw_l_m4_f = [v - ctx.floor(v / four) * four for v in r_mw_l]
+
+                r_mw_h_m4_c = [v - ctx.ceil(v / two) * two for v in r_mw_h]
+                r_mw_l_m4_c = [v - ctx.ceil(v / four) * four for v in r_mw_l]
+
+                r_mw_h_m4_rem = [ctx.remainder(v, two) for v in r_mw_h]
+                r_mw_l_m4_rem = [ctx.remainder(v, four) for v in r_mw_l]
+
+                r_mw_h_m4_mod = [v % two for v in r_mw_h]
+                r_mw_l_m4_mod = [v % four for v in r_mw_l]
+
+                r_mw_h_m4_fm = [ctx.fmod(v, two) for v in r_mw_h]
+                r_mw_l_m4_fm = [ctx.fmod(v, four) for v in r_mw_l]
+
+                r_mw_h_m4_rint = [v - ctx.rint(v / two) * two for v in r_mw_h]
+                r_mw_l_m4_rint = [v - ctx.rint(v / four) * four for v in r_mw_l]
+
+                def mp_m4(v):
+                    if v >= 4 or v < 0:
+                        r = v - mp_ctx.floor(v / 4) * 4
+                    else:
+                        r = v
+                    assert r >= 0
+                    assert r < 4
+                    return r
+
+                with mp_ctx.workprec(max_prec * 2):
+                    r_mw_mp = utils.multiword2mpf(mp_ctx, r_mw_h) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l)
+                    r_mw_mp_m4_t = utils.multiword2mpf(mp_ctx, r_mw_h_m4_t) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_t)
+                    r_mw_mp_m4_r = utils.multiword2mpf(mp_ctx, r_mw_h_m4_r) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_r)
+                    r_mw_mp_m4_mod = utils.multiword2mpf(mp_ctx, r_mw_h_m4_mod) * 2 + utils.multiword2mpf(
+                        mp_ctx, r_mw_l_m4_mod
+                    )
+                    r_mw_mp_m4_f = utils.multiword2mpf(mp_ctx, r_mw_h_m4_f) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_f)
+                    r_mw_mp_m4_c = utils.multiword2mpf(mp_ctx, r_mw_h_m4_c) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_c)
+                    r_mw_mp_m4_rem = utils.multiword2mpf(mp_ctx, r_mw_h_m4_rem) * 2 + utils.multiword2mpf(
+                        mp_ctx, r_mw_l_m4_rem
+                    )
+                    r_mw_mp_m4_fm = utils.multiword2mpf(mp_ctx, r_mw_h_m4_fm) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_fm)
+                    r_mw_mp_m4_rint = utils.multiword2mpf(mp_ctx, r_mw_h_m4_rint) * 2 + utils.multiword2mpf(
+                        mp_ctx, r_mw_l_m4_rint
+                    )
+
+                    r_mw_mp_m4_t = mp_m4(r_mw_mp_m4_t)
+                    r_mw_mp_m4_r = mp_m4(r_mw_mp_m4_r)
+                    r_mw_mp_m4_mod = mp_m4(r_mw_mp_m4_mod)
+                    r_mw_mp_m4_f = mp_m4(r_mw_mp_m4_f)
+                    r_mw_mp_m4_c = mp_m4(r_mw_mp_m4_c)
+                    r_mw_mp_m4_rem = mp_m4(r_mw_mp_m4_rem)
+                    r_mw_mp_m4_fm = mp_m4(r_mw_mp_m4_fm)
+                    r_mw_mp_m4_rint = mp_m4(r_mw_mp_m4_rint)
+
+                assert utils.mpf2float(dtype, x2pi_mp) == utils.mpf2float(dtype, r_mw_mp)
+
+                cumerr["truncate"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_t - x2pi_mp_m4))
+                cumerr["round"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_r - x2pi_mp_m4))
+                cumerr["%"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_mod - x2pi_mp_m4))
+                cumerr["floor"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_f - x2pi_mp_m4))
+                cumerr["ceil"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_c - x2pi_mp_m4))
+                cumerr["remainder"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_rem - x2pi_mp_m4))
+                cumerr["fmod"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_fm - x2pi_mp_m4))
+                cumerr["rint"] += utils.mpf2float(dtype, abs(r_mw_mp_m4_rint - x2pi_mp_m4))
+
+            r_mw_h_m4_r = [(v - ctx.round(v / two) * two) for v in r_mw_h]
+            r_mw_l_m4_r = [v - ctx.round(v / four) * four for v in r_mw_l]
+            with mp_ctx.workprec(max_prec * 2):
+                r_mw_mp_m4_r = utils.multiword2mpf(mp_ctx, r_mw_h_m4_r) * 2 + utils.multiword2mpf(mp_ctx, r_mw_l_m4_r)
+                r_mw_mp_m4_r = r_mw_mp_m4_r - mp_ctx.floor(r_mw_mp_m4_r / 4) * 4
+
+            if two_over_pi_max_length is None:
+                assert utils.mpf2float(dtype, r_mw_mp_m4_r) == utils.mpf2float(dtype, x2pi_mp_m4)
+
+            y = None
+            t = None
+            for zh, zl in zip(reversed(r_mw_h_m4_r), reversed(r_mw_l_m4_r)):
+                if y is None:
+                    y, t = fpa.add_2sum(ctx, zh + zh, zl)
+                else:
+                    y, th = fpa.add_2sum(ctx, y, zh + zh)
+                    y, tl = fpa.add_2sum(ctx, y, zl)
+                    t += th + tl
+
+            # compute `(y + t) - round((y + t) / 4) * 4 -> y' + t`
+            # such that -2.0 <= y' + t <= 2.0
+            n1 = ctx.round(y / four) * four
+            y1 = y - n1
+            y = ctx.select(y1 + two < -t, y - (n1 - four), ctx.select(y1 - two > -t, y - (n1 + four), y1))
+            assert abs(y + t) <= two, (x, y, t)
+
+            if 1:
+                y2, t2 = fpa.argument_reduction_trigonometric_stage1_impl(ctx, dtype, x)
+                assert y2 == y
+                assert t2 == t
+
+            with mp_ctx.workprec(max_prec * 2):
+                y_mp = utils.float2mpf(mp_ctx, y) + utils.float2mpf(mp_ctx, t)
+
+            u = utils.diff_ulp(utils.mpf2float(dtype, y_mp), utils.mpf2float(dtype, x2pi_mp_m4))
+            ulp_stage1[u] += 1
+            if u > 0:
+                print(f"1: {x=} {y, t=}")
+                print(
+                    f"diff(result={str(utils.mpf2float(dtype, y_mp))}, expected={str(utils.mpf2float(dtype, x2pi_mp_m4))}) -> {u}"
+                )
+
+            k = ctx.round(y)
+            yk = y - k
+
+            if 1:
+                assert k in [-2, -1, 0, 1, 2], (y, k, y - k, t, (y2, t2))
+
+            """
+            (yk + t) * (pi2h + pi2l) = yk * pi2h + yk * pi2l + t * pi2h + t * pi2l
+            """
+            r1h, r1l = fpa.mul_dekker(ctx, yk, pi2h)
+            r2h, r2l = fpa.mul_dekker(ctx, yk, pi2l)
+            r3h, r3l = fpa.mul_dekker(ctx, t, pi2h)
+            r4 = t * pi2l
+
+            r, rrl1 = fpa.add_2sum(ctx, r1h, r2h, fast=True)
+            r, rrl2 = fpa.add_2sum(ctx, r, r3h, fast=True)
+            r, rrl3 = fpa.add_2sum(ctx, r, r4, fast=True)
+            s = rrl3 + r3l + rrl2 + r2l + rrl1 + r1l
+
+            if 1:
+                k2, r2, s2 = fpa.argument_reduction_trigonometric_stage2_impl(ctx, dtype, y, t)
+
+                assert k == k2, ((k, r, s), (k2, r2, s2))
+                assert r == r2
+                assert s == s2
+
+            with mp_ctx.workprec(max_prec * 2):
+                if 0:
+                    rx_mp = (
+                        utils.float2mpf(mp_ctx, k) * pi_over_two_mp
+                        + (utils.float2mpf(mp_ctx, y - k) + utils.float2mpf(mp_ctx, t)) * pi_over_two_mp
+                    )
+                else:
+                    rx_mp = (
+                        utils.float2mpf(mp_ctx, r) + utils.float2mpf(mp_ctx, s) + utils.float2mpf(mp_ctx, k) * pi_over_two_mp
+                    )
+                rx_mp_mp = x2pi_mp_m4 * pi_over_two_mp
+
+                rrrt_mp = utils.float2mpf(mp_ctx, r) + utils.float2mpf(mp_ctx, s)
+                ub = utils.mpf2float(dtype, pi_over_two_mp / 2)
+                for i in range(5):
+                    ub = numpy.nextafter(ub, dtype(1000))
+                assert utils.mpf2float(dtype, abs(rrrt_mp)) <= ub
+
+                u = utils.diff_ulp(utils.mpf2float(dtype, rx_mp), utils.mpf2float(dtype, rx_mp_mp))
+            ulp_stage2[u] += 1
+            if u > 0:
+                print(f"2: {x=} {y, t=} {k, r, s=} {u=}")
+                print(f"{rrl3, r3l, rrl2, r2l, rrl1, r1l=}")
+        show_ulp(ulp_stage1, title="Stage1[x * (2 / pi) mod 4 -> y + t]")
+        show_ulp(ulp_stage2, title="Stage2[(y + t) * (pi / 2) -> k * pi / 2 + r + s]")
+
+        for e, m in sorted((e, m) for (m, e) in cumerr.items()):
+            print(f"{m:10}: {e}")
 
 
 def test_sine_pade(dtype):
@@ -1103,4 +1323,53 @@ def test_fma(dtype, backend):
                     if 0:
                         c = "." if u == 0 else ("v" if r < expected else "^")
                         print(c, end="")
+        show_ulp(ulp)
+
+
+@pytest.mark.parametrize("func", ["sine", "numpy.sin"])
+def test_sine(dtype, func):
+    import mpmath
+    from collections import defaultdict
+
+    npctx = NumpyContext()
+    fi = numpy.finfo(dtype)
+    t_prec = utils.get_precision(dtype)
+    working_prec = {11: 24, 24: 50 * 4, 53: 74 * 16}[t_prec]
+    size = 1000
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=dtype(numpy.pi / 4)))
+    samples = list(utils.real_samples(size, dtype=dtype, min_value=dtype(0), max_value=fi.max))
+    size = len(samples)
+    with mpmath.mp.workprec(working_prec):
+        mpctx = mpmath.mp
+
+        def f_expected(x):
+            return mpctx.sin(x)
+
+        if func == "sine":
+
+            @fa.targets.numpy.jit(
+                paths=[fpa],
+                dtype=dtype,
+                debug=(1.5 if size <= 10 else 0),
+            )
+            def f(ctx, x):
+                return fpa.sine(ctx, x)
+
+        elif func == "numpy.sin":
+
+            f = numpy.sin
+
+        else:
+            assert 0, func  # not implemented
+
+        ulp = defaultdict(int)
+        for x in samples:
+            expected = utils.mpf2float(dtype, f_expected(utils.float2mpf(mpctx, x)))
+            result = f(x)
+            u = utils.diff_ulp(result, expected)
+            if u > 5:
+                print(f"{u=} {x, result, expected=}")
+            ulp[u] += 1
+
+        print()
         show_ulp(ulp)

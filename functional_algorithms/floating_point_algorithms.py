@@ -27,8 +27,33 @@ def fma_upcast2(ctx, x: float, y: float, z: float):
     return ctx.downcast2(x_ * y_ + z_)
 
 
+def get_number(ctx, expr):
+    import functional_algorithms as fa
+
+    if isinstance(expr, fa.utils.number_types):
+        return expr
+    if hasattr(expr, "kind"):
+        if expr.kind == "constant" and isinstance(expr.operands[0], fa.utils.number_types):
+            typ = ctx.parameters.get("type")
+            dtype = None if typ is None else typ.asdtype()
+            if dtype is not None:
+                return dtype(expr.operands[0])
+
+
 def get_largest(ctx, x: float):
-    largest = ctx.constant("largest", x)
+    import functional_algorithms as fa
+
+    if isinstance(x, fa.utils.float_types):
+        import numpy
+
+        return numpy.finfo(type(x)).max
+
+    typ = ctx.parameters.get("type")
+    if typ is not None:
+        largest_value = typ.get_largest() or "largest"
+    else:
+        largest_value = "largest"
+    largest = ctx.constant(largest_value, x)
     if hasattr(largest, "reference"):
         largest = largest.reference("largest")
     return largest
@@ -91,6 +116,7 @@ def get_veltkamp_splitter_constants(ctx, largest: float):
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
     """
+    import functional_algorithms as fa
 
     fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
     fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
@@ -104,6 +130,20 @@ def get_veltkamp_splitter_constants(ctx, largest: float):
     fp32 = ctx.constant(0.5 ** (24 // 2), largest)
     fp16 = ctx.constant(0.5 ** (12 // 2), largest)
     invN = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    if hasattr(largest, "operands") and isinstance(largest.operands[0], fa.utils.number_types):
+        if largest.operands[0] > 1e308:
+            C = C.operands[1]
+            N = N.operands[1]
+            invN = invN.operands[1]
+        elif largest.operands[0] > 1e38:
+            C = C.operands[2].operands[1]
+            N = N.operands[2].operands[1]
+            invN = invN.operands[2].operands[1]
+        else:
+            C = C.operands[2].operands[2]
+            N = N.operands[2].operands[2]
+            invN = invN.operands[2].operands[2]
     if hasattr(C, "reference"):
         C = C.reference("veltkamp_C", force=True)
         N = N.reference("veltkamp_N", force=True)
@@ -197,7 +237,20 @@ def nextdown(ctx, x: float):
     return next(ctx, x, up=False)
 
 
-def split_veltkamp(ctx, x, C=None, scale=False):
+def _split_veltkamp(ctx, x, C, N):
+    if N is not None:
+        x_orig = x
+        x = x / N
+    g = C * x
+    d = g - x
+    xh = g - d
+    xl = x - xh
+    if N is not None:
+        xh, xl = xh * N, xl * N
+    return xh, xl
+
+
+def split_veltkamp(ctx, x, C=None, scale=None):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -221,26 +274,45 @@ def split_veltkamp(ctx, x, C=None, scale=False):
       abs(x) <= largest / C            otherwise
 
     """
+    import numpy
+
+    largest = get_largest(ctx, x)
     if C is None:
-        one = ctx.constant(1, x)
-        C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
-    elif scale:
-        one = ctx.constant(1, x)
-        N = C - one
-        invN = one / N
+        C, N, _ = get_veltkamp_splitter_constants(ctx, largest)
+    else:
+        if ctx is None:
+            N = C - type(C)(1)
+        else:
+            N = C - ctx.constant(1, x)
 
-    if scale:
-        N = ctx.select(abs(x) < one, one, N)
-        invN = ctx.select(abs(x) < one, one, invN)
+    x_ = get_number(ctx, x)
+    largest_ = get_number(ctx, largest)
 
-    x_n = x * invN if scale else x
+    if x_ is not None and largest_ is not None:
+        C_ = get_number(ctx, C)
+        N_ = C_ - type(C_)(1)
+        assert C_ is not None
+        assert N_ is not None
+        if scale is None:
+            scale = abs(x_) * C_ > largest_
+        elif abs(x_) <= 1:
+            scale = False
+        if not numpy.isfinite(x_):
+            xh_, xl_ = x_, 0
+        else:
+            one = type(C_)(1)
+            xh_, xl_ = _split_veltkamp(ctx, x_, C_, (N_ if scale else None))
+            if not numpy.isfinite(xh_):
+                import functional_algorithms as fa
 
-    g = C * x_n
-    d = g - x_n
-    xh = g - d
-    xl = x_n - xh
+                # Warning: result is not a Veltkamp split!
+                fa.utils.warn_once(f"split_veltkamp({x_}) not finite: returning ({x_}, 0)")
+                xh_, xl_ = x_, 0
+        if ctx is None:
+            return xh_, xl_
+        return ctx.constant(xh_, x), ctx.constant(xl_, x)
 
-    return (xh * N, xl * N) if scale else (xh, xl)
+    return _split_veltkamp(ctx, x, C, ctx.select(abs(x) < 1, ctx.constant(1, x), N) if scale else None)
 
 
 def split_veltkamp2(ctx, x):
@@ -360,7 +432,16 @@ def div_dekker(ctx, x, y, C=None):
         C = get_veltkamp_splitter_constant(ctx, largest)
     xh, xl = split_veltkamp(ctx, x, C)
     yh, yl = split_veltkamp(ctx, y, C)
-    return div_dw(ctx, xh, xl, yh, yl)
+
+    if yh.kind == "constant":
+        import numpy
+
+        if numpy.isinf(yh.operands[0]):
+            # Warning: x / inf -> 0
+            return ctx.constant(0, x), ctx.constant(0, x)
+
+    xyh, xyl = div_dw(ctx, xh, xl, yh, yl)
+    return xyh, xyl
 
 
 # TODO: sqrt_dekker
@@ -1255,38 +1336,6 @@ def mul_mw(ctx, x, y):
     return lst
 
 
-def mul_mw_mod4(ctx, x, y):
-    zero = ctx.constant(0, x[0])
-    one = ctx.constant(1, x[0])
-    four = ctx.constant(4, x[0])
-
-    def rem4(v):
-        return ctx.trunc(v / four) * four
-
-    total = zero
-    rest = zero
-    ss = 0
-    for k in reversed(range(len(x) + len(y) - 1)):
-        s = zero
-        acc = zero
-        for i in reversed(range(len(x))):
-            j = k - i
-            if j < 0 or j >= len(y):
-                continue
-            xy = x[i] * y[j]
-            xy = xy - rem4(xy)
-            ss += float(x[i]) * float(y[j])
-            s, t = add_2sum(ctx, s, xy, fast=True)
-            acc += t
-        rest += acc
-        total, t = add_2sum(ctx, s, total, fast=True)
-        total = total - rem4(total)
-        rest += t
-    k = ctx.round(total)  # % four
-    r = total - k  # % one
-    return k % four, r, rest
-
-
 def mw2dw(ctx, x):
     """Return multiword as a double-word.
 
@@ -1302,10 +1351,97 @@ def mw2dw(ctx, x):
     return y, t
 
 
+def argument_reduction_trigonometric_stage1(ctx, x):
+    """Return y, t such that
+
+    x * (2 / pi) = 4 * N + y + t
+
+    where N is some integral, 0 <= y <= 4, and abs(t) < 1.
+    """
+    import numpy
+
+    if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
+        return argument_reduction_trigonometric_stage1_impl(ctx, type(x), x)
+
+    largest = get_largest(ctx, x)
+    fp64_y, fp64_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float64, x)
+    fp32_y, fp32_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float32, x)
+    fp16_y, fp16_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float16, x)
+    y = ctx.select(largest > 1e308, fp64_y, ctx.select(largest > 1e38, fp32_y, fp16_y))
+    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
+    return y, t
+
+
+def argument_reduction_trigonometric_stage1_impl(ctx, dtype, x):
+    import functional_algorithms as fa
+
+    zero = ctx.constant(0, x)
+    two = ctx.constant(2, x)
+    four = ctx.constant(4, x)
+
+    two_over_pi_max_length = None
+    two_over_pi_mw = fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)
+    xh, xl = split_veltkamp2(ctx, x)
+    r_mw_h = [v * xh for v in two_over_pi_mw]
+    r_mw_l = [v * xl for v in two_over_pi_mw]
+    r_mw_h_m4_r = [v - ctx.round(v / two) * two for v in r_mw_h]
+    r_mw_l_m4_r = [v - ctx.round(v / four) * four for v in r_mw_l]
+
+    y = None
+    t = None
+    for zh, zl in zip(reversed(r_mw_h_m4_r), reversed(r_mw_l_m4_r)):
+        if y is None:
+            y, t = add_2sum(ctx, zh + zh, zl)
+        else:
+            y, th = add_2sum(ctx, y, zh + zh)
+            y, tl = add_2sum(ctx, y, zl)
+            t += th + tl
+
+    n1 = ctx.round(y / four) * four
+    y1 = y - n1
+    y = ctx.select(y1 + two < -t, y - (n1 - four), ctx.select(y1 - two > -t, y - (n1 + four), y1))
+    return y, t
+
+
+def argument_reduction_trigonometric_stage2_impl(ctx, dtype, y, t):
+    import functional_algorithms as fa
+
+    k = ctx.round(y)
+    rmk = y - k
+    k = ctx.select(k == ctx.constant(4, k), ctx.constant(0, k), k)
+
+    pi2h, pi2l = fa.utils.get_pi_over_two_multiword(dtype)
+    pi2h = ctx.constant(pi2h, y)
+    pi2l = ctx.constant(pi2l, y)
+
+    r1h, r1l = mul_dekker(ctx, rmk, pi2h)
+    r2h, r2l = mul_dekker(ctx, rmk, pi2l)
+    r3h, r3l = mul_dekker(ctx, t, pi2h)
+    r4 = t * pi2l
+
+    r, rrl1 = add_2sum(ctx, r1h, r2h, fast=True)
+    r, rrl2 = add_2sum(ctx, r, r3h, fast=False)
+    r, rrl3 = add_2sum(ctx, r, r4, fast=True)
+    s = rrl3 + r3l + rrl2 + r2l + rrl1 + r1l
+
+    return k, r, s
+
+
+def argument_reduction_trigonometric_stages_impl(ctx, dtype, x):
+    y, t = argument_reduction_trigonometric_stage1_impl(ctx, dtype, x)
+    k, r, s = argument_reduction_trigonometric_stage2_impl(ctx, dtype, y, t)
+
+    f = abs(x) > ctx.constant("pi", x) / ctx.constant(4, x)
+    k = ctx.select(f, ctx.select(k < ctx.constant(-0.5, k), k + ctx.constant(4, x), k), ctx.constant(0, x))
+    r = ctx.select(f, r, x)
+    s = ctx.select(f, s, ctx.constant(0, x))
+    return k, r, s
+
+
 def argument_reduction_trigonometric(ctx, x):
     """Return k, r, t such that
 
-      x = 2 * pi * N + k * pi / 2 + r + t
+      x = 2 * pi * N + k * pi / 2 + r + s
 
     where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 4.
 
@@ -1315,40 +1451,16 @@ def argument_reduction_trigonometric(ctx, x):
     import numpy
 
     if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
-        return argument_reduction_trigonometric_impl(ctx, type(x), x)
+        return argument_reduction_trigonometric_stages_impl(ctx, type(x), x)
 
     largest = get_largest(ctx, x)
-    fp64_k, fp64_r, fp64_t = argument_reduction_trigonometric_impl(ctx, numpy.float64, x)
-    fp32_k, fp32_r, fp32_t = argument_reduction_trigonometric_impl(ctx, numpy.float32, x)
-    fp16_k, fp16_r, fp16_t = argument_reduction_trigonometric_impl(ctx, numpy.float16, x)
+    fp64_k, fp64_r, fp64_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float64, x)
+    fp32_k, fp32_r, fp32_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float32, x)
+    fp16_k, fp16_r, fp16_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float16, x)
     k = ctx.select(largest > 1e308, fp64_k, ctx.select(largest > 1e38, fp32_k, fp16_k))
     r = ctx.select(largest > 1e308, fp64_r, ctx.select(largest > 1e38, fp32_r, fp16_r))
-    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
-    return k, r, t
-
-
-def argument_reduction_trigonometric_impl(ctx, dtype, x):
-
-    import numpy
-    import functional_algorithms as fa
-
-    def make_constant(v):
-        return ctx.constant(v, x)
-
-    two = ctx.constant(2, x)
-    two_over_pi_max_length = {numpy.float16: None, numpy.float32: None, numpy.float64: None}[dtype]
-    two_over_pi_mw = list(map(make_constant, fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)))
-    pi_over_two_prec = {numpy.float16: 4, numpy.float32: 20, numpy.float64: 40}[dtype]
-    pi_over_two, pi_over_two_lo = map(
-        make_constant, fa.utils.get_pi_over_two_multiword(dtype, prec=pi_over_two_prec, max_length=2)
-    )
-    x_tw = split_tripleword(ctx, x, scale=True)
-    k, y, t = mul_mw_mod4(ctx, x_tw, two_over_pi_mw)
-    r_hi, tt = add_2sum(ctx, y * pi_over_two, y * pi_over_two_lo + t * pi_over_two, fast=True)
-    r_lo = t * pi_over_two_lo + tt
-    r = ctx.select(abs(x) < pi_over_two / two, x, r_hi)
-    t = ctx.select(abs(x) < pi_over_two / two, ctx.constant(0, x), r_lo)
-    return k, r, t
+    s = ctx.select(largest > 1e308, fp64_s, ctx.select(largest > 1e38, fp32_s, fp16_s))
+    return k, r, s
 
 
 def sin_kernel(ctx, k, r, t):
@@ -1679,3 +1791,37 @@ def cosine_dw(ctx, x, y):
     hz = half * z
     w = one - hz
     return w + (((one - w) - hz) + ((z * r) - (x * y)))
+
+
+def sine_cosine_kernel(ctx, r, t):
+    import numpy
+
+    if isinstance(r, (numpy.float64, numpy.float32, numpy.float16)):
+        return sine_cosine_kernel_impl(ctx, type(r), r, t)
+
+    largest = get_largest(ctx, r)
+    fp64_sn, fp64_cs = sine_cosine_kernel_impl(ctx, numpy.float64, r, t)
+    fp32_sn, fp32_cs = sine_cosine_kernel_impl(ctx, numpy.float32, r, t)
+    fp16_sn, fp16_cs = sine_cosine_kernel_impl(ctx, numpy.float16, r, t)
+    sn = ctx.select(largest > 1e308, fp64_sn, ctx.select(largest > 1e38, fp32_sn, fp16_sn))
+    cs = ctx.select(largest > 1e308, fp64_cs, ctx.select(largest > 1e38, fp32_cs, fp16_cs))
+    return sn, cs
+
+
+def sine_cosine_kernel_impl(ctx, dtype, r, t):
+    import functional_algorithms as fa
+    import numpy
+
+    order = {numpy.float16: 9, numpy.float32: 13, numpy.float64: 19}[dtype]
+    # order = {numpy.float16: 7, numpy.float32: 9, numpy.float64: 15}[dtype]
+    x = ctx.series(r, t)
+    with ctx.parameters(series_uses_dekker=True, series_uses_2sum=True, type=fa.Type.fromobject(ctx, dtype)):
+        sn = sine_taylor_dekker(ctx, x, order=order)
+        cs = cosine_taylor_dekker(ctx, x, order=order)
+    return sn, cs
+
+
+def sine(ctx, x):
+    k, r, t = argument_reduction_trigonometric(ctx, x)
+    sn, cs = sine_cosine_kernel(ctx, r, t)
+    return ctx.select(k == 0, sn, ctx.select(k == 1, cs, ctx.select(k == 2, -sn, -cs)))
