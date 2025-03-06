@@ -129,3 +129,8 @@ class Type:
 
     def asdtype(self):
         return getattr(numpy, str(self), None)
+
+    def get_largest(self):
+        dtype = self.asdtype()
+        if dtype is not None:
+            return numpy.finfo(dtype).max

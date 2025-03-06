@@ -4,7 +4,7 @@ from ..expr import Expr
 
 
 def modifier_base(target, expr):
-    if expr.kind in {"symbol", "constant", "apply"}:
+    if expr.kind in {"symbol", "constant", "apply", "series"}:
         pass
     elif target.kind_to_target.get(expr.kind, NotImplemented) is NotImplemented:
         ctx = expr.context

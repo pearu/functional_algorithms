@@ -375,7 +375,7 @@ def test_float2mpf(real_dtype):
         if real_dtype != numpy.longdouble:
             assert utils.mpf2bin(m) == utils.float2bin(v)
 
-    if real_dtype in {numpy.float32, numpy.float64}:
+    if real_dtype in {numpy.float16, numpy.float32, numpy.float64}:
         for f in utils.real_samples(1000, dtype=real_dtype):
             v = real_dtype(f)
             m = utils.float2mpf(ctx, v)
@@ -534,11 +534,14 @@ def test_mpf2multiword(real_dtype):
             for x in [ctx.pi + 0, ctx.log(2)]:
                 lst = utils.mpf2multiword(dtype, x)
                 for w in lst:
-                    assert w > 0
+                    assert lst[-1] >= 0
+                assert lst[-1] > 0
                 result = sum([utils.float2mpf(ctx, w) for w in lst], utils.float2mpf(ctx, dtype(0)))
-                assert result == x or abs(utils.mpf2float(dtype, result - x)) == 0
-                if lst[-1] == 0:
-                    break
+                d = result - x
+                if m < max_m:
+                    assert result == x
+                else:
+                    assert abs(utils.mpf2float(dtype, result - x)) == 0
 
 
 def test_mpf2multiword_log2(real_dtype):
@@ -667,3 +670,50 @@ def test_mpf2multiword_log2(real_dtype):
                         stats["redundant"] += 1
                     break
         assert stats["non_redundant"] > 0
+
+
+def test_float2fraction(real_dtype):
+    import mpmath
+
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+
+    for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True):
+        q = utils.float2fraction(x)
+        r = utils.fraction2float(real_dtype, q)
+        assert x == r
+
+
+def test_heron_10005():
+    import mpmath
+
+    x = 10005
+
+    for niter in range(1, 8):
+        q = utils.heron(x, niter=niter)
+        num, denom = q.numerator, q.denominator
+        last_prec_with_zero_err = 0
+        for prec in range(10, 2000):
+            with mpmath.workprec(prec):
+                ctx = mpmath.mp
+                expected = ctx.sqrt(x)
+                result = ctx.mpf(num) / denom
+                if result - expected == 0:
+                    last_prec_with_zero_err = prec
+        # print(niter, last_prec_with_zero_err, q)
+
+
+def test_pi2fraction():
+    import mpmath
+
+    for n in range(2, 10):
+        for niter in range(2, 5):
+            q = utils.pi2fraction(n, niter=niter)
+            num, denom = q.numerator, q.denominator
+            last_prec_with_zero_err = 0
+            for prec in range(10, 2000):
+                with mpmath.workprec(prec):
+                    ctx = mpmath.mp
+                    result = ctx.mpf(num) / denom
+                    if result - ctx.pi == 0:
+                        last_prec_with_zero_err = prec

@@ -1,12 +1,35 @@
+import contextlib
 import inspect
 import sys
 import types
 import typing
 import warnings
 from collections import defaultdict
-from .utils import UNSPECIFIED, boolean_types, float_types, complex_types
-from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
+from .utils import UNSPECIFIED, boolean_types, float_types, complex_types, integer_types
+from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds, make_series
 from .typesystem import Type
+
+
+class Parameters(dict):
+    """A dictionary that call method enables context manager support to
+    temporarily modify dictionary content.
+    """
+
+    def __call__(self, **items):
+
+        @contextlib.contextmanager
+        def manager(items):
+            prev_items = dict((k, v) for k, v in self.items() if k in items)
+            new_keys = {k for k in items if k not in self}
+            try:
+                self.update(items)
+                yield self
+            finally:
+                self.update(prev_items)
+                for k in new_keys:
+                    self.pop(k)
+
+        return manager(items)
 
 
 class Context:
@@ -39,7 +62,7 @@ class Context:
         self._enable_alt = enable_alt
         self._default_constant_type = default_constant_type
         self._default_like = None
-        self.parameters = parameters or {}
+        self.parameters = Parameters(parameters or {})
         if "using" not in self.parameters:
             self.parameters["using"] = set()
 
@@ -248,8 +271,12 @@ class Context:
                 like_expr = self.symbol("_float_value", type(value))
             elif isinstance(value, complex_types):
                 like_expr = self.symbol("_complex_value", type(value))
+            elif isinstance(value, integer_types):
+                like_expr = self.symbol("_integer_value", type(value))
             else:
                 like_expr = self.default_like
+        if like_expr is int:
+            like_expr = self.symbol("_integer_value", int)
         return make_constant(self, value, like_expr)
 
     def call(self, func, args):
@@ -317,8 +344,10 @@ class Context:
     def pow(self, x, y):
         if isinstance(y, float) and y == 0.5:
             return self.sqrt(x)
-        if isinstance(y, int) and y == 2:
-            return self.square(x)
+        if isinstance(y, int):
+            if y == 2:
+                return self.square(x)
+            return Expr(self, "pow", (x, self.constant(y, int)))
         return Expr(self, "pow", (x, y))
 
     def logical_and(self, x, y):
@@ -341,8 +370,8 @@ class Context:
 
     Not = logical_not
 
-    def bitwise_invert(self):
-        return Expr(self, "bitwise_invert", (self,))
+    def bitwise_invert(self, x):
+        return Expr(self, "bitwise_invert", (x,))
 
     invert = bitwise_invert
 
@@ -516,3 +545,19 @@ class Context:
 
     def is_finite(self, x):
         return Expr(self, "is_finite", (x,))
+
+    def series(self, *terms, **params):
+        unit_index = params.get("unit_index", 0)
+        scaling_exp = params.get("scaling_exp", 0)
+        return make_series(self, unit_index, scaling_exp, terms)
+
+    def _series(self, terms, params):
+        return self.series(*terms, **params)
+
+    def _get_series_operands(self, expr):
+        if expr.kind == "series":
+            return expr.operands
+        return expr
+
+    def fma(self, x, y, z):
+        return Expr(self, "fma", (x, y, z))

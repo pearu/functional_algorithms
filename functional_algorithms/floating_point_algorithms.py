@@ -6,8 +6,54 @@
 """
 
 
+def fma_native(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z."""
+    return x * y + z
+
+
+def fma_upcast(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z using upcast of operands."""
+    x_ = ctx.upcast(x)
+    y_ = ctx.upcast(y)
+    z_ = ctx.upcast(z)
+    return ctx.downcast(x_ * y_ + z_)
+
+
+def fma_upcast2(ctx, x: float, y: float, z: float):
+    """Evaluate x * y + z using double upcast of operands."""
+    x_ = ctx.upcast2(x)
+    y_ = ctx.upcast2(y)
+    z_ = ctx.upcast2(z)
+    return ctx.downcast2(x_ * y_ + z_)
+
+
+def get_number(ctx, expr):
+    import functional_algorithms as fa
+
+    if isinstance(expr, fa.utils.number_types):
+        return expr
+    if hasattr(expr, "kind"):
+        if expr.kind == "constant" and isinstance(expr.operands[0], fa.utils.number_types):
+            typ = ctx.parameters.get("type")
+            dtype = None if typ is None else typ.asdtype()
+            if dtype is not None:
+                return dtype(expr.operands[0])
+
+
 def get_largest(ctx, x: float):
-    largest = ctx.constant("largest", x)
+    import functional_algorithms as fa
+
+    if isinstance(x, fa.utils.float_types):
+        import numpy
+
+        return numpy.finfo(type(x)).max
+
+    typ = ctx.parameters.get("type")
+    if typ is not None:
+        largest_value = typ.get_largest() or "largest"
+    else:
+        largest_value = "largest"
+    largest = ctx.constant(largest_value, x)
     if hasattr(largest, "reference"):
         largest = largest.reference("largest")
     return largest
@@ -70,6 +116,7 @@ def get_veltkamp_splitter_constants(ctx, largest: float):
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
     """
+    import functional_algorithms as fa
 
     fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
     fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
@@ -83,6 +130,20 @@ def get_veltkamp_splitter_constants(ctx, largest: float):
     fp32 = ctx.constant(0.5 ** (24 // 2), largest)
     fp16 = ctx.constant(0.5 ** (12 // 2), largest)
     invN = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    if hasattr(largest, "operands") and isinstance(largest.operands[0], fa.utils.number_types):
+        if largest.operands[0] > 1e308:
+            C = C.operands[1]
+            N = N.operands[1]
+            invN = invN.operands[1]
+        elif largest.operands[0] > 1e38:
+            C = C.operands[2].operands[1]
+            N = N.operands[2].operands[1]
+            invN = invN.operands[2].operands[1]
+        else:
+            C = C.operands[2].operands[2]
+            N = N.operands[2].operands[2]
+            invN = invN.operands[2].operands[2]
     if hasattr(C, "reference"):
         C = C.reference("veltkamp_C", force=True)
         N = N.reference("veltkamp_N", force=True)
@@ -129,12 +190,16 @@ def get_is_power_of_two_constants(ctx, largest: float):
     fp64 = ctx.constant(1 << (53 - 1), largest)
     fp32 = ctx.constant(1 << (24 - 1), largest)
     fp16 = ctx.constant(1 << (11 - 1), largest)
-    Q = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Qispowof2", force=True)
+    Q = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
 
     fp64 = ctx.constant(1 << (53 - 1) + 1, largest)
     fp32 = ctx.constant(1 << (24 - 1) + 1, largest)
     fp16 = ctx.constant(1 << (11 - 1) + 1, largest)
-    P = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16)).reference("Pispowof2", force=True)
+    P = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+
+    if hasattr(Q, "reference"):
+        Q = Q.reference("Qispowof2", force=True)
+        P = P.reference("Pispowof2", force=True)
     return Q, P
 
 
@@ -172,7 +237,20 @@ def nextdown(ctx, x: float):
     return next(ctx, x, up=False)
 
 
-def split_veltkamp(ctx, x, C=None, scale=False):
+def _split_veltkamp(ctx, x, C, N):
+    if N is not None:
+        x_orig = x
+        x = x / N
+    g = C * x
+    d = g - x
+    xh = g - d
+    xl = x - xh
+    if N is not None:
+        xh, xl = xh * N, xl * N
+    return xh, xl
+
+
+def split_veltkamp(ctx, x, C=None, scale=None):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -185,7 +263,7 @@ def split_veltkamp(ctx, x, C=None, scale=False):
     where p is the precision of the floating point system, xh and xl
     significant parts fit into p / 2 bits.
 
-    It is assumed that the aritmetical operations use rounding to
+    It is assumed that the arithmetical operations use rounding to
     nearest and C * x does not overflow. If scale is True, large
     abs(x) values are normalized with `(C - 1)` to increase the domain
     of appicability.
@@ -196,28 +274,82 @@ def split_veltkamp(ctx, x, C=None, scale=False):
       abs(x) <= largest / C            otherwise
 
     """
+    import numpy
+
+    largest = get_largest(ctx, x)
     if C is None:
-        C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
-    elif scale:
-        one = ctx.constant(1, x)
-        N = C - one
-        invN = one / N
+        C, N, _ = get_veltkamp_splitter_constants(ctx, largest)
+    else:
+        if ctx is None:
+            N = C - type(C)(1)
+        else:
+            N = C - ctx.constant(1, x)
 
-    if scale:
-        N = ctx.select(abs(x) < one, one, N)
-        invN = ctx.select(abs(x) < one, one, invN)
+    x_ = get_number(ctx, x)
+    largest_ = get_number(ctx, largest)
 
-    x_n = x * invN if scale else x
+    if x_ is not None and largest_ is not None:
+        C_ = get_number(ctx, C)
+        N_ = C_ - type(C_)(1)
+        assert C_ is not None
+        assert N_ is not None
+        if scale is None:
+            scale = abs(x_) * C_ > largest_
+        elif abs(x_) <= 1:
+            scale = False
+        if not numpy.isfinite(x_):
+            xh_, xl_ = x_, 0
+        else:
+            one = type(C_)(1)
+            xh_, xl_ = _split_veltkamp(ctx, x_, C_, (N_ if scale else None))
+            if not numpy.isfinite(xh_):
+                import functional_algorithms as fa
 
-    g = C * x_n
-    d = g - x_n
-    xh = g - d
-    xl = x_n - xh
+                # Warning: result is not a Veltkamp split!
+                fa.utils.warn_once(f"split_veltkamp({x_}) not finite: returning ({x_}, 0)")
+                xh_, xl_ = x_, 0
+        if ctx is None:
+            return xh_, xl_
+        return ctx.constant(xh_, x), ctx.constant(xl_, x)
 
-    return (xh * N, xl * N) if scale else (xh, xl)
+    return _split_veltkamp(ctx, x, C, ctx.select(abs(x) < 1, ctx.constant(1, x), N) if scale else None)
 
 
-def mul_dw(ctx, x, y, xh, xl, yh, yl):
+def split_veltkamp2(ctx, x):
+    """2nd Veltkamp splitter:
+
+      x = xh + xl + xh
+
+    Different from split_veltkamp, 2nd Veltkamp splitter can be used
+    for large inputs.
+
+    Note that for large x, `xh + xh` may overflow but `xh + xl + xh`
+    will never overflow.
+
+    Domain of applicability:
+
+      smallest_normal * (2 * C - 2) <= abs(x) <= largest
+
+    where
+
+      C = 1 + 2 ** ceil(p / 2)
+
+    and p is the precision of the floating point system.
+    """
+    C, _, _ = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
+    S = C - ctx.constant(1, x)
+    S2 = S + S
+    # S is power of 2, so is S2, hence x / S2 is exact when it does
+    # not underflow:
+    xh, xl = split_veltkamp(ctx, x / S2, C=C, scale=False)
+    return xh * S, xl * S2
+
+
+def mul_veltkamp(ctx, x, y, xh, xl, yh, yl):
+    """Veltkamp's multiplication
+
+    mul_veltkamp and mul12 are equivalent accuracy-wise.
+    """
     xyh = x * y
     t1 = (-xyh) + xh * yh
     t2 = t1 + xh * yl
@@ -226,8 +358,34 @@ def mul_dw(ctx, x, y, xh, xl, yh, yl):
     return xyh, xyl
 
 
+def mul_dw(ctx, xh, xl, yh, yl):
+    """Dekker's multiplication
+
+    mul_veltkamp and mul12 are equivalent accuracy-wise.
+
+    References:
+      http://resolver.sub.uni-goettingen.de/purl?GDZPPN001170007
+      https://gdz.sub.uni-goettingen.de/download/pdf/PPN362160546_0018/PPN362160546_0018.pdf
+    """
+    p = xh * yh
+    q = xh * yl + xl * yh
+    rh = p + q
+    rl = p - rh + q + xl * yl
+    return rh, rl
+
+
+def div_dw(ctx, xh, xl, yh, yl):
+    """Dekker's division"""
+    q = xh / yh
+    th, tl = mul_dekker(ctx, q, yh)
+    l = ((((xh - th) - tl) + xl) - q * yl) / yh
+    rh = q + l
+    rl = q - rh + l
+    return rh, rl
+
+
 def mul_dekker(ctx, x, y, C=None):
-    """Dekker product:
+    """Dekker's product:
 
       x * y = xyh + xyl
 
@@ -259,7 +417,260 @@ def mul_dekker(ctx, x, y, C=None):
         C = get_veltkamp_splitter_constant(ctx, largest)
     xh, xl = split_veltkamp(ctx, x, C)
     yh, yl = split_veltkamp(ctx, y, C)
-    return mul_dw(ctx, x, y, xh, xl, yh, yl)
+    if 1:
+        return mul_dw(ctx, xh, xl, yh, yl)
+    return mul_veltkamp(ctx, x, y, xh, xl, yh, yl)
+
+
+def div_dekker(ctx, x, y, C=None):
+    """Dekker's divison:
+
+    x / y = xyh + xyl
+    """
+    if C is None:
+        largest = get_largest(ctx, x)
+        C = get_veltkamp_splitter_constant(ctx, largest)
+    xh, xl = split_veltkamp(ctx, x, C)
+    yh, yl = split_veltkamp(ctx, y, C)
+
+    if yh.kind == "constant":
+        import numpy
+
+        if numpy.isinf(yh.operands[0]):
+            # Warning: x / inf -> 0
+            return ctx.constant(0, x), ctx.constant(0, x)
+
+    xyh, xyl = div_dw(ctx, xh, xl, yh, yl)
+    return xyh, xyl
+
+
+# TODO: sqrt_dekker
+
+
+def _div_series_scalar(ctx, x, y):
+    assert type(y) is not tuple
+
+    terms = []
+    (index1, sexp1), terms1 = x[0], x[1:]
+    for n in range(len(terms1)):
+        if ctx.parameters.get("series_uses_dekker"):
+            _terms_add(ctx, terms, n, *div_dekker(ctx, terms1[n], y))
+        else:
+            _terms_add(ctx, terms, n, terms1[n] / y)
+    return ctx._series(tuple(terms), dict(unit_index=index1, scaling_exp=sexp1))
+
+
+def _mul_series_series(ctx, x, y):
+    (index1, sexp1), terms1 = x[0], x[1:]
+    (index2, sexp2), terms2 = y[0], y[1:]
+    assert sexp1 == sexp2, (sexp1, sexp2)
+
+    terms = []
+    for n in range(len(terms1) + len(terms2) - 1):
+        for i, x in enumerate(terms1):
+            for j, y in enumerate(terms2):
+                if i + j == n:
+                    if ctx.parameters.get("series_uses_dekker"):
+                        _terms_add(ctx, terms, n, *mul_dekker(ctx, x, y))
+                    else:
+                        _terms_add(ctx, terms, n, x * y)
+
+    return ctx._series(tuple(terms), dict(unit_index=index1 + index2, scaling_exp=sexp1))
+
+
+def mul_series(ctx, x, y):
+    """Multiply x and y which may be series."""
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _mul_series_series(ctx, x, y)
+        return _mul_series_series(ctx, x, ((0, 0), y))
+    elif type(y) is tuple:
+        return _mul_series_series(ctx, ((0, 0), x), y)
+    return _mul_series_series(ctx, ((0, 0), x), ((0, 0), y))
+
+
+def div_series(ctx, x, y):
+    """Divide x by y where x may be series."""
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+    if type(x) is tuple:
+        if type(y) is tuple:
+            assert 0  # not impl
+        return _div_series_scalar(ctx, x, y)
+    elif type(y) is tuple:
+        assert 0  # not impl
+    return x / y
+
+
+def _terms_add(ctx, terms, index, *operands):
+    for i, v in enumerate(operands):
+        if index + i < len(terms):
+            if 1:
+                terms[index + i] += v
+            else:
+                h, l = add_2sum(ctx, terms[index + i], v)
+                terms[index + i] = h
+                if index + i <= len(terms):
+                    terms.append(l)
+                else:
+                    terms[index + i + 1] += l
+        else:
+            assert index + i == len(terms)
+            terms.append(v)
+
+
+def _add_series_series(ctx, x, y):
+
+    def op(x, y):
+        if x is None:
+            return y
+        if y is None:
+            return x
+        if ctx.parameters.get("series_uses_2sum"):
+            return add_2sum(ctx, x, y)
+        return x + y
+
+    return _binaryop_series_series(ctx, x, y, op)
+
+
+def _subtract_series_series(ctx, x, y):
+
+    def op(x, y):
+        if x is None:
+            return -y
+        if y is None:
+            return x
+        if ctx.parameters.get("series_uses_2sum"):
+            return add_2sum(ctx, x, -y)
+        return x - y
+
+    return _binaryop_series_series(ctx, x, y, op)
+
+
+def _binaryop_series_series(ctx, x, y, op):
+    swapped = False
+    if x[0][0] < y[0][0]:
+        x, y = y, x
+        swapped = True
+
+    (index1, sexp1), terms1 = x[0], x[1:]
+    (index2, sexp2), terms2 = y[0], y[1:]
+    assert sexp1 == sexp2, (sexp1, sexp2)
+
+    terms = []
+    for n in range(max(len(terms1), index1 - index2 + len(terms2))):
+        k = n - (index1 - index2)
+        if n < len(terms1):
+            if k >= 0 and k < len(terms2):
+                if swapped:
+                    r = op(terms2[k], terms1[n])
+                else:
+                    r = op(terms1[n], terms2[k])
+            else:
+                if swapped:
+                    r = op(None, terms1[n])
+                else:
+                    r = op(terms1[n], None)
+        elif k >= 0 and k < len(terms2):
+            if swapped:
+                r = op(terms2[k], None)
+            else:
+                r = op(None, terms2[k])
+        else:
+            r = ctx.constant(0, terms1[0])
+        if type(r) is tuple:
+            _terms_add(ctx, terms, n, *r)
+        else:
+            _terms_add(ctx, terms, n, r)
+    return ctx._series(tuple(terms), dict(unit_index=index1, scaling_exp=sexp1))
+
+
+def add_series(ctx, x, y):
+    """Add x and y which may be series."""
+
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _add_series_series(ctx, x, y)
+        return _add_series_series(ctx, x, ((0, 0), y))
+    elif type(y) is tuple:
+        return _add_series_series(ctx, ((0, 0), x), y)
+    return _add_series_series(ctx, ((0, 0), x), ((0, 0), y))
+
+
+def subtract_series(ctx, x, y):
+    """Subtract y from x which may be series."""
+
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+
+    if type(x) is tuple:
+        if type(y) is tuple:
+            return _subtract_series_series(ctx, x, y)
+        return _subtract_series_series(ctx, x, ((0, 0), y))
+    elif type(y) is tuple:
+        return _subtract_series_series(ctx, ((0, 0), x), y)
+    return _subtract_series_series(ctx, ((0, 0), x), ((0, 0), y))
+
+
+def mul_series_dekker(ctx, x, y, C=None):
+    """Dekker's product on series:
+
+        sum(x) * sum(y) = sum(xy)
+
+    Series are represented by a tuple
+
+      ((index, sexp), term1, term2, ..., termN)
+    """
+    x = ctx._get_series_operands(x)
+    y = ctx._get_series_operands(y)
+
+    offset = 10000
+
+    if type(x) is tuple:
+        if type(y) is tuple:
+            assert x[0][1] == y[0][1]
+            # (x1, x2, ...) * (y1, y2, ...)
+            #  x11h, x11l = mul_dekker(x1, y1)
+            #  x12h, x12l = mul_dekker(x1, y2)
+            #  ...
+            #  xijh == xjih, xijl == xjil
+            # = (x11h, x11h * x12l + x11l * x12h + x21h * x12h + ..., ...)
+            # = (..., ... + x[i,j]h, ... + x[i,j]l + x[i+1,j]h + x[i, j+1]h, ... + x[i+1,j]l + x[i,j+1]l + x[i+1,j+1]h, ... + x[i+1,j+1]l, ...)
+            terms = []
+            for i, x_ in enumerate(x[1:]):
+                for j, y_ in enumerate(y[1:]):
+                    if i + j >= offset:
+                        _terms_add(ctx, terms, i + j, x_ * y_)
+                    else:
+                        _terms_add(ctx, terms, i + j, *mul_dekker(ctx, x_, y_, C=C))
+            return ctx._series(tuple(terms), dict(unit_index=x[0][0] + y[0][0], scaling_exp=x[0][1]))
+        else:
+            # (x1, x2, ...) * y
+            #   x1h, x1l = mul_dekker(x1, y)
+            #   x2h, x2l = mul_dekker(x2, y)
+            #   ...
+            # = (x1h, x1l + x2h, x2l + x3h, ..., xNl)
+            terms = []
+            for i, x_ in enumerate(x[1:]):
+                if i >= offset:
+                    _terms_add(ctx, terms, i, x_ * y)
+                else:
+                    _terms_add(ctx, terms, i, *mul_dekker(ctx, x_, y, C=C))
+            return ctx._series(tuple(terms), dict(unit_index=x[0][0], scaling_exp=x[0][1]))
+    elif type(y) is tuple:
+        terms = []
+        for i, y_ in enumerate(y[1:]):
+            if i >= offset:
+                _terms_add(ctx, terms, i, x * y_)
+            else:
+                _terms_add(ctx, terms, i, *mul_dekker(ctx, x, y_, C=C))
+        return ctx._series(tuple(terms), dict(unit_index=y[0][0], scaling_exp=y[0][1]))
+    return ctx._series(mul_dekker(ctx, x, y, C=C), dict(unit_index=0, scaling_exp=0))
 
 
 def add_2sum(ctx, x, y, fast=False):
@@ -365,11 +776,15 @@ def add_3sum(ctx, x, y, z, Q, P, three_over_two):
     return s, e, t
 
 
-def add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two):
+def add_dw(ctx, xh, xl, yh, yl, Q=None, P=None, three_over_two=None):
     """Add two double-word numbers:
 
     xh + xl + yh + yl = s
     """
+    if Q is None:
+        largest = get_largest(ctx, xh)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     sh, sl = add_2sum(ctx, xh, yh)
     th, tl = add_2sum(ctx, xl, yl)
     gh, gl = add_2sum(ctx, sl, th)
@@ -389,7 +804,7 @@ def add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two):
     )
 
 
-def add_4sum(ctx, x, y, z, w, Q, P, three_over_two):
+def add_4sum(ctx, x, y, z, w, Q=None, P=None, three_over_two=None):
     """Add four numbers:
 
     x + y + z + w = s
@@ -402,6 +817,10 @@ def add_4sum(ctx, x, y, z, w, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x + y + z + w`.
     """
+    if Q is None:
+        largest = get_largest(ctx, x)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     xh, xl = add_2sum(ctx, x, y)
     yh, yl = add_2sum(ctx, z, w)
     return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)
@@ -427,7 +846,7 @@ def dot2(ctx, x, y, z, w, C, Q, P, three_over_two):
     return add_dw(ctx, xh, xl, yh, yl, Q, P, three_over_two)
 
 
-def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
+def mul_add(ctx, x, y, z, C=None, Q=None, P=None, three_over_two=None):
     """Multiply and add:
 
     x * y + z = s
@@ -443,6 +862,11 @@ def mul_add(ctx, x, y, z, C, Q, P, three_over_two):
     Note:
       The accuracy of `s` is higher than that of `x * y + z`.
     """
+    if C is None:
+        largest = get_largest(ctx, x)
+        C, _, _ = get_veltkamp_splitter_constants(ctx, largest)
+        Q, P = get_is_power_of_two_constants(ctx, largest)
+        three_over_two = ctx.constant(1.5, largest)
     xh, xl = mul_dekker(ctx, x, y, C)
 
     # Inlined code of add_dw(xh, xl, c, 0):
@@ -638,17 +1062,45 @@ def compensated_horner(ctx, x, coeffs, reverse=True):
 
 def fast_exponent_by_squaring(ctx, x, n):
     """Evaluate x ** n by squaring."""
+    zero = ctx.constant(0, x)
     if n == 0:
         return ctx.constant(1, x)
-    if n == 1:
+    elif n == 1:
         return x
-    if n == 2:
-        return x * x
+    elif n == 2:
+        return ctx.fma(x, x, zero)
     assert n > 0
     r = fast_exponent_by_squaring(ctx, x, n // 2)
     if n % 2 == 0:
-        return r * r
-    return r * r * x
+        return ctx.fma(r, r, zero)
+    return ctx.fma(ctx.fma(r, r, zero), x, zero)
+
+
+def fast_exponent_by_squaring_dekker(ctx, x, n: int, depth=0):
+    """Evaluate x ** n by squaring using Dekker's product."""
+    if n == 0:
+        return ctx.constant(1, x)
+    elif n == 1:
+        return x
+    elif n == 2:
+        if depth == 0:
+            # `sum(mul_dekker(x, x))` is less accurate than `x * x`.
+            # However, `sum(mul_dekker(x, mul_dekker(x, x)))` is more
+            # accurate that `x * x * x`.
+            return x * x
+        return mul_series_dekker(ctx, x, x)
+    else:
+        # TODO: introduce dekker_inverse and use
+        #   return inverse_dekker(ctx, fast_exponent_by_squaring_dekker(ctx, x, -n))
+        # or
+        #   return fast_exponent_by_squaring_dekker(ctx, inverse_dekker(ctx, x), -n)
+        # which ever has better accuracy properties
+        assert n > 0, n  # unreachable
+    r = fast_exponent_by_squaring_dekker(ctx, x, n // 2, depth=depth + 1)
+    y = fast_exponent_by_squaring_dekker(ctx, r, 2, depth=depth + 1)
+    if n % 2 == 0:
+        return y
+    return mul_series_dekker(ctx, x, y)
 
 
 def canonical_scheme(k, N):
@@ -674,7 +1126,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
 
      P(x) = coeffs[N] + coeffs[N - 1] * x + ... + coeffs[0] * x ** N
 
-    when reverse is True, otherwise evaluate a polynomial
+    when reverse is True, otherwise, evaluate a polynomial
 
       P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
 
@@ -693,7 +1145,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     """
 
     if reverse:
-        return fast_polynomial(ctx, x, reversed(coeffs), reverse=False, scheme=scheme)
+        return fast_polynomial(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
 
     if scheme is None:
         scheme = balanced_dac_scheme
@@ -702,19 +1154,24 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     if _N is None:
         _N = N
 
+    def w(c):
+        if isinstance(c, type(x)):
+            return c
+        return ctx.constant(c, x)
+
     if N == 0:
-        return ctx.constant(coeffs[0], x)
+        return w(coeffs[0])
 
     if N == 1:
-        return ctx.constant(coeffs[0], x) + ctx.constant(coeffs[1], x) * x
+        return ctx.fma(w(coeffs[1]), x, w(coeffs[0]))
 
     d = scheme(N, _N)
 
     if d == 0:
         # evaluate reduced polynomial as it is
-        s = ctx.constant(coeffs[0], x)
+        s = w(coeffs[0])
         for i in range(1, N):
-            s += coeffs[i] * fast_exponent_by_squaring(ctx, x, i)
+            s = ctx.fma(w(coeffs[i]), fast_exponent_by_squaring(ctx, x, i), s)
         return s
 
     # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
@@ -726,7 +1183,117 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     a = fast_polynomial(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
-    return a * xd + b
+    return ctx.fma(a, xd, b)
+
+
+def fast_polynomial2(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
+    """Evaluate a polynomial
+
+     P(x) = coeffs[N] + coeffs[N - 1] * (x**2) + ... + coeffs[0] * (x**2) ** N
+
+    when reverse is True, otherwise, evaluate a polynomial
+
+      P(x) = coeffs[0] + coeffs[1] * (x**2) + ... + coeffs[N] * (x**2) ** N
+
+    where `N = len(coeffs) - 1`.
+
+    See also fast_polynomial2.
+    """
+
+    if reverse:
+        return fast_polynomial2(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
+
+    if scheme is None:
+        scheme = balanced_dac_scheme
+
+    N = len(coeffs) - 1
+    if _N is None:
+        _N = N
+
+    def w(c):
+        if isinstance(c, type(x)):
+            return c
+        return ctx.constant(c, x)
+
+    if N == 0:
+        return w(coeffs[0])
+
+    if N == 1:
+        return w(coeffs[0]) + x * w(coeffs[1]) * x
+
+    d = scheme(N, _N)
+
+    if d == 0:
+        # evaluate reduced polynomial as it is
+        s = w(coeffs[0])
+        for i in range(1, N):
+            c = fast_exponent_by_squaring(ctx, x, i)
+            s += c * w(coeffs[i]) * c
+        return s
+
+    # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+    #      = A(x) * x ** d + B(x)
+    # where
+    #   A(x) = coeffs[d] + coeffs[d + 1] * x + ... + coeffs[N] * x ** (N - d)
+    #   B(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[d - 1] * x ** (d - 1)
+
+    a = fast_polynomial2(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
+    b = fast_polynomial2(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
+    xd = fast_exponent_by_squaring(ctx, x, d)
+    return xd * a * xd + b
+
+
+def fast_polynomial_dekker(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
+    """Evaluate a polynomial using Dekker's product.
+
+    See also fast_polynomial.
+    """
+    if reverse:
+        return fast_polynomial_dekker(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
+
+    if scheme is None:
+        scheme = balanced_dac_scheme
+
+    N = len(coeffs) - 1
+    if _N is None:
+        _N = N
+
+    def w(c):
+        if type(c) is tuple:  # c is series
+            return c
+        if type(x) is tuple:  # x is series
+            x_ = x[1]
+        else:
+            x_ = x
+        if isinstance(c, type(x_)):
+            return c
+        return ctx.constant(c, x_)
+
+    if N == 0:
+        return w(coeffs[0])
+
+    if N == 1:
+        return add_series(ctx, w(coeffs[0]), mul_series_dekker(ctx, w(coeffs[1]), x))
+
+    d = scheme(N, _N)
+
+    if d == 0:
+        # evaluate reduced polynomial as it is
+        s = w(coeffs[0])
+        for i in range(1, N):
+            s = add_series(ctx, s, mul_series_dekker(ctx, w(coeffs[i]), fast_exponent_by_squaring_dekker(ctx, x, i)))
+        return s
+
+    # P(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[N] * x ** N
+    #      = A(x) * x ** d + B(x)
+    # where
+    #   A(x) = coeffs[d] + coeffs[d + 1] * x + ... + coeffs[N] * x ** (N - d)
+    #   B(x) = coeffs[0] + coeffs[1] * x + ... + coeffs[d - 1] * x ** (d - 1)
+
+    a = fast_polynomial_dekker(ctx, x, coeffs[d:], reverse=reverse, scheme=scheme, _N=_N)
+    b = fast_polynomial_dekker(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
+    xd = fast_exponent_by_squaring_dekker(ctx, x, d)
+    return add_series(ctx, b, mul_series_dekker(ctx, a, xd))
 
 
 def split_tripleword(ctx, x, scale=False):
@@ -769,38 +1336,6 @@ def mul_mw(ctx, x, y):
     return lst
 
 
-def mul_mw_mod4(ctx, x, y):
-    zero = ctx.constant(0, x[0])
-    one = ctx.constant(1, x[0])
-    four = ctx.constant(4, x[0])
-
-    def rem4(v):
-        return ctx.trunc(v / four) * four
-
-    total = zero
-    rest = zero
-    ss = 0
-    for k in reversed(range(len(x) + len(y) - 1)):
-        s = zero
-        acc = zero
-        for i in reversed(range(len(x))):
-            j = k - i
-            if j < 0 or j >= len(y):
-                continue
-            xy = x[i] * y[j]
-            xy = xy - rem4(xy)
-            ss += float(x[i]) * float(y[j])
-            s, t = add_2sum(ctx, s, xy, fast=True)
-            acc += t
-        rest += acc
-        total, t = add_2sum(ctx, s, total, fast=True)
-        total = total - rem4(total)
-        rest += t
-    k = ctx.round(total)  # % four
-    r = total - k  # % one
-    return k % four, r, rest
-
-
 def mw2dw(ctx, x):
     """Return multiword as a double-word.
 
@@ -816,10 +1351,97 @@ def mw2dw(ctx, x):
     return y, t
 
 
+def argument_reduction_trigonometric_stage1(ctx, x):
+    """Return y, t such that
+
+    x * (2 / pi) = 4 * N + y + t
+
+    where N is some integral, 0 <= y <= 4, and abs(t) < 1.
+    """
+    import numpy
+
+    if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
+        return argument_reduction_trigonometric_stage1_impl(ctx, type(x), x)
+
+    largest = get_largest(ctx, x)
+    fp64_y, fp64_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float64, x)
+    fp32_y, fp32_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float32, x)
+    fp16_y, fp16_t = argument_reduction_trigonometric_stage1_impl(ctx, numpy.float16, x)
+    y = ctx.select(largest > 1e308, fp64_y, ctx.select(largest > 1e38, fp32_y, fp16_y))
+    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
+    return y, t
+
+
+def argument_reduction_trigonometric_stage1_impl(ctx, dtype, x):
+    import functional_algorithms as fa
+
+    zero = ctx.constant(0, x)
+    two = ctx.constant(2, x)
+    four = ctx.constant(4, x)
+
+    two_over_pi_max_length = None
+    two_over_pi_mw = fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)
+    xh, xl = split_veltkamp2(ctx, x)
+    r_mw_h = [v * xh for v in two_over_pi_mw]
+    r_mw_l = [v * xl for v in two_over_pi_mw]
+    r_mw_h_m4_r = [v - ctx.round(v / two) * two for v in r_mw_h]
+    r_mw_l_m4_r = [v - ctx.round(v / four) * four for v in r_mw_l]
+
+    y = None
+    t = None
+    for zh, zl in zip(reversed(r_mw_h_m4_r), reversed(r_mw_l_m4_r)):
+        if y is None:
+            y, t = add_2sum(ctx, zh + zh, zl)
+        else:
+            y, th = add_2sum(ctx, y, zh + zh)
+            y, tl = add_2sum(ctx, y, zl)
+            t += th + tl
+
+    n1 = ctx.round(y / four) * four
+    y1 = y - n1
+    y = ctx.select(y1 + two < -t, y - (n1 - four), ctx.select(y1 - two > -t, y - (n1 + four), y1))
+    return y, t
+
+
+def argument_reduction_trigonometric_stage2_impl(ctx, dtype, y, t):
+    import functional_algorithms as fa
+
+    k = ctx.round(y)
+    rmk = y - k
+    k = ctx.select(k == ctx.constant(4, k), ctx.constant(0, k), k)
+
+    pi2h, pi2l = fa.utils.get_pi_over_two_multiword(dtype)
+    pi2h = ctx.constant(pi2h, y)
+    pi2l = ctx.constant(pi2l, y)
+
+    r1h, r1l = mul_dekker(ctx, rmk, pi2h)
+    r2h, r2l = mul_dekker(ctx, rmk, pi2l)
+    r3h, r3l = mul_dekker(ctx, t, pi2h)
+    r4 = t * pi2l
+
+    r, rrl1 = add_2sum(ctx, r1h, r2h, fast=True)
+    r, rrl2 = add_2sum(ctx, r, r3h, fast=False)
+    r, rrl3 = add_2sum(ctx, r, r4, fast=True)
+    s = rrl3 + r3l + rrl2 + r2l + rrl1 + r1l
+
+    return k, r, s
+
+
+def argument_reduction_trigonometric_stages_impl(ctx, dtype, x):
+    y, t = argument_reduction_trigonometric_stage1_impl(ctx, dtype, x)
+    k, r, s = argument_reduction_trigonometric_stage2_impl(ctx, dtype, y, t)
+
+    f = abs(x) > ctx.constant("pi", x) / ctx.constant(4, x)
+    k = ctx.select(f, ctx.select(k < ctx.constant(-0.5, k), k + ctx.constant(4, x), k), ctx.constant(0, x))
+    r = ctx.select(f, r, x)
+    s = ctx.select(f, s, ctx.constant(0, x))
+    return k, r, s
+
+
 def argument_reduction_trigonometric(ctx, x):
     """Return k, r, t such that
 
-      x = 2 * pi * N + k * pi / 2 + r + t
+      x = 2 * pi * N + k * pi / 2 + r + s
 
     where N is some integral, k is in {0, 1, 2, 3}, and abs(r) < pi / 4.
 
@@ -829,40 +1451,302 @@ def argument_reduction_trigonometric(ctx, x):
     import numpy
 
     if isinstance(x, (numpy.float64, numpy.float32, numpy.float16)):
-        return argument_reduction_trigonometric_impl(ctx, type(x), x)
+        return argument_reduction_trigonometric_stages_impl(ctx, type(x), x)
 
     largest = get_largest(ctx, x)
-    fp64_k, fp64_r, fp64_t = argument_reduction_trigonometric_impl(ctx, numpy.float64, x)
-    fp32_k, fp32_r, fp32_t = argument_reduction_trigonometric_impl(ctx, numpy.float32, x)
-    fp16_k, fp16_r, fp16_t = argument_reduction_trigonometric_impl(ctx, numpy.float16, x)
+    fp64_k, fp64_r, fp64_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float64, x)
+    fp32_k, fp32_r, fp32_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float32, x)
+    fp16_k, fp16_r, fp16_s = argument_reduction_trigonometric_stages_impl(ctx, numpy.float16, x)
     k = ctx.select(largest > 1e308, fp64_k, ctx.select(largest > 1e38, fp32_k, fp16_k))
     r = ctx.select(largest > 1e308, fp64_r, ctx.select(largest > 1e38, fp32_r, fp16_r))
-    t = ctx.select(largest > 1e308, fp64_t, ctx.select(largest > 1e38, fp32_t, fp16_t))
-    return k, r, t
+    s = ctx.select(largest > 1e308, fp64_s, ctx.select(largest > 1e38, fp32_s, fp16_s))
+    return k, r, s
 
 
-def argument_reduction_trigonometric_impl(ctx, dtype, x):
+def sin_kernel(ctx, k, r, t):
+    sn = sine_dw(ctx, r, t)
+    cs = cosine_dw(ctx, r, t)
+    if k == 0:
+        return sn
+    if k == 1:
+        return cs
+    if k == 2:
+        return -sn
+    if k == 3:
+        return -cs
+    assert 0, k  # unreachable
 
-    import numpy
-    import functional_algorithms as fa
 
-    def make_constant(v):
-        return ctx.constant(v, x)
+def sine_taylor(ctx, x, order=7, split=False):
+    """Return sine of x using Taylor series approximation:
 
-    two = ctx.constant(2, x)
-    two_over_pi_max_length = {numpy.float16: None, numpy.float32: None, numpy.float64: None}[dtype]
-    two_over_pi_mw = list(map(make_constant, fa.utils.get_two_over_pi_multiword(dtype, max_length=two_over_pi_max_length)))
-    pi_over_two_prec = {numpy.float16: 4, numpy.float32: 20, numpy.float64: 40}[dtype]
-    pi_over_two, pi_over_two_lo = map(
-        make_constant, fa.utils.get_pi_over_two_multiword(dtype, prec=pi_over_two_prec, max_length=2)
+    S(x) = x - x ** 3 / 6 + ... + O(x ** (order + 2))
+
+    If split is True, return `sh, sl` such that
+
+      S(x) = sh + sl
+
+    where the high and low values are obtained from Dekker's split of
+    `x ** 2`.
+
+    For best accuracy, use the order argument according to the
+    following table [assuming abs(x) <= p / 4]:
+
+    dtype   | order | mean ULP error   | numpy comparsion
+    --------+-------+------------------+-----------------
+    float16 |  7    |  91 / 14921      |  72 / 14921
+    float32 |  9    | 356 / 1_000_000  | 276 / 1_000_000
+    float64 |  15   |  56 / 1_000_000  |   5 / 1_000_000
+
+    For the corresponding order choices, we have
+
+      sine_taylor(x, order, split=False) == sum(*sine_taylor(x, order, split=True))
+    """
+
+    """
+    For float16, consider
+      S(x) = x - x ** 3 / 6 + x ** 5 / 120
+    We write
+      S(x) = P(x * x, C=[x, -x/6, x/120])
+    where
+      P(y, C) = C[0] + C[1] * y + C[2] * y ** 2
+    """
+    if not split:
+        zero = ctx.constant(0, x)
+        C, f = [x], 1
+        for i in range(3, order + 1, 2):
+            f *= -i * (i - 1)
+            if i >= 5:
+                C.append(ctx.fma(x, ctx.constant(1 / f, x), zero))
+            else:
+                # The following is required for float16 and float32 when f is
+                # small and early evaluation of 1/f leads to accuracy loss.
+                # For float64, there is a very minor accuracy loss.
+                #
+                # fh, fl = split_veltkamp(f)
+                # 1 / f = 1 / (fh + fl) = 1 / fh - fl / fh ** 2 + fl ** 2 / fh ** 3 - ...
+                #                       = [a = fl/fh] = 1 / fh - a / fh + a ** 2 / fh - ...
+                #                       ~ fma(-a, 1 / fh, 1 / fh)
+                fh, fl = split_veltkamp(ctx, ctx.constant(f, x))
+                a = fl / fh
+                C.append(ctx.fma(-a, x / fh, x / fh))
+        # Horner's scheme is most accurate
+        xx = ctx.fma(x, x, zero)
+        return fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    """
+    For float16, consider
+      x * x = xxh + xxl
+    which is an exact representation of the square x ** 2.
+    Let's find
+      P(xxh + xxl, C) ~ P(xxh, C) + P'(xxh, C) * xxl
+        = C[0] + C[1] * xxh + C[2] * xxh ** 2 +
+                 (C[1] + 2 * C[2] * xxh) * xxl
+        = P(xxh, C=C0) + P(xxh, C=C1) * xxl
+    where
+      C1 = [i * c for i, c in enumerate(C0) if i > 0]
+    """
+    xxh, xxl = mul_dekker(ctx, x, x)
+    C0 = [x]
+    C1 = []
+    f = 1
+    for i in range(3, order + 1, 2):
+        C1.append(x / ctx.constant(f * (i + 1), x))
+        f *= -i * (i - 1)
+        C0.append(x / ctx.constant(f, x))
+    # Horner's scheme is most accurate
+    p0 = fast_polynomial(ctx, xxh, C0, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    p1 = fast_polynomial(ctx, xxh, C1, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    return p0, p1 * xxl
+
+
+def cosine_taylor(ctx, x, order=6, split=False, drop_leading_term=False):
+    """Return sine of x using Taylor series approximation:
+
+    C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
+         = 1 + x**2 * P(x**2, C=[-1/2!, 1/4!, -1/6!, ...])
+
+    If split is True, return `ch, cl` such that
+
+      C(x) = ch + cl
+
+    where the high and low values are obtained from Dekker's split of
+    `x ** 2`.
+
+    For best accuracy, use the order argument according to the
+    following table [assuming abs(x) <= p / 4]:
+
+    dtype   | order | mean ULP error    | numpy comparsion
+    --------+-------+-------------------+-----------------
+    float16 |  7    |  174 / 14921      |  80 / 14921
+    float32 |  9    | 1382 / 1_000_000  | 725 / 1_000_000
+    float64 |  19   |  146 / 1_000_000  |   0 / 1_000_000
+
+    For the corresponding order choices, we have
+
+      cosine_taylor(x, order, split=False) == sum(*cosine_taylor(x, order, split=True))
+
+    To compute cosm1(x), use drop_leading_term=True.
+    """
+    """
+    An alternative evaluation scheme:
+
+    C(x) = 1 - x ** 2 / 2 + x ** 4 / 24 - ... + O(x ** (order + 2))
+         = 1 + x ** 4 / 4! + ... + - (x ** 2 / 2 + x ** 6 / 6! + x ** 10 / 10!)
+         = P1(x ** 4, C=C1) - x**2 * P(x**4, C=C2)
+
+    where
+
+      C1 = [1, 1/4!, 1/8!, ...]
+      C2 = [1/2!, 1/6!, 1/10!, ...]
+    """
+    if not split:
+        zero = ctx.constant(0, x)
+        one = ctx.constant(1, x)
+        if 0:
+            f = 1
+            iC1 = [1]
+            iC2 = []
+            for i in range(2, order, 2):
+                f *= i * (i - 1)
+                if i % 4 == 0:
+                    iC1.append(f)
+                else:
+                    iC2.append(f)
+            s1 = iC1[-1]
+            s2 = iC2[-1]
+            C1 = [s1 // c for c in iC1]
+            C2 = [s2 // c for c in iC2]
+            assert len(C1) == len(C2), (C1, C2)
+            xx = x * x
+            xxxx = xx * xx
+            C = [c1 / s1 - x * (c2 / s2) * x for c1, c2 in zip(C1, C2)]
+            return fast_polynomial(
+                ctx, xxxx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+            )
+
+        f = 1
+        xx = ctx.fma(x, x, zero)
+        C = []
+        for i in range(2, order, 2):
+            f *= -i * (i - 1)
+            C.append(ctx.fma(xx, ctx.constant(1 / f, x), zero))
+        # Horner's scheme is most accurate
+        p = fast_polynomial(ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+        if drop_leading_term:
+            return p
+        return ctx.fma(one, one, p)
+
+    xxh, xxl = mul_dekker(ctx, x, x)
+    C0 = []
+    C1 = []
+    f = 1
+    xx = x * x
+    for i in range(2, order, 2):
+        C1.append(xx * ctx.constant(1 / (f * (i + 1)), x))
+        f *= -i * (i - 1)
+        C0.append(xx / ctx.constant(f, x))
+    # Horner's scheme is most accurate
+    p0 = fast_polynomial(ctx, xxh, C0, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    p1 = fast_polynomial(ctx, xxh, C1, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1])
+    if drop_leading_term:
+        return p0, p1 * xxl
+    return ctx.constant(1, x) + p0, p1 * xxl
+
+
+def sine_taylor_dekker(ctx, x, order=7):
+    """Return sine of x using Taylor series approximation and Dekker's product.
+
+    See also sine_taylor.
+    """
+    C, f = [x], 1
+    for i in range(3, order + 1, 2):
+        f *= -i * (i - 1)
+        C.append(div_series(ctx, x, ctx.constant(f, x)))
+    xx = mul_series(ctx, x, x)
+    # Horner's scheme is most accurate
+    return fast_polynomial_dekker(
+        ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
     )
-    x_tw = split_tripleword(ctx, x, scale=True)
-    k, y, t = mul_mw_mod4(ctx, x_tw, two_over_pi_mw)
-    r_hi, tt = add_2sum(ctx, y * pi_over_two, y * pi_over_two_lo + t * pi_over_two, fast=True)
-    r_lo = t * pi_over_two_lo + tt
-    r = ctx.select(abs(x) < pi_over_two / two, x, r_hi)
-    t = ctx.select(abs(x) < pi_over_two / two, ctx.constant(0, x), r_lo)
-    return k, r, t
+
+
+def cosine_taylor_dekker(ctx, x, order=7, drop_leading_term=False):
+    """Return cosine of x using Taylor series approximation and Dekker's product.
+
+    See also cosine_taylor.
+    """
+    one = ctx.constant(1, x)
+    xx = mul_series(ctx, x, x)
+    if not drop_leading_term:
+        # P(x**2, Ce=[1, -1/2!, 1/4!, -1/6!, ...])
+        C, f = [one], 1
+        for i in range(2, order + 1, 2):
+            f *= -i * (i - 1)
+            C.append(div_series(ctx, one, ctx.constant(f, x)))
+            # Horner's scheme is most accurate
+        return fast_polynomial_dekker(
+            ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+        )
+    else:
+        # x**2 * P(x**2, C=[-1/2!, 1/4!, -1/6!, ...])
+        C, f = [], 1
+        for i in range(2, order + 1 - 2, 2):
+            f *= -i * (i - 1)
+            C.append(div_series(ctx, xx, ctx.constant(f, x)))
+            # Horner's scheme is most accurate
+        return fast_polynomial_dekker(
+            ctx, xx, C, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme, canonical_scheme][1]
+        )
+
+
+def sine_pade(ctx, x, variant=None):
+    # See https://math.stackexchange.com/questions/2196371/how-to-approximate-sinx-using-pad%C3%A9-approximation
+
+    if variant is None:
+        variant = 13, 4
+
+    P, Q = {
+        # k=2 : p/q = (-1/12096*x^7 + 13/2160*x^5 - 11/72*x^3 + x)/(1/72*x^2 + 1)
+        (11, 2): ([1, -11 / 72, 13 / 2160, -1 / 12096], [1, 1 / 72]),
+        # k=3 : p/q = (551/166320*x^5 - 53/396*x^3 + x)/(5/11088*x^4 + 13/396*x^2 + 1)
+        (11, 3): ([1, -53 / 396, 551 / 166320], [1, 13 / 396, 5 / 11088]),
+        # k=4 : p/q = (-127/1240*x^3 + x)/(551/9374400*x^6 + 53/22320*x^4 + 239/3720*x^2 + 1)
+        (11, 4): ([1, -127 / 1240], [1, 239 / 3720, 53 / 22320, 551 / 9374400]),
+        # k=5 : p/q = (x)/(127/604800*x^8 + 31/15120*x^6 + 7/360*x^4 + 1/6*x^2 + 1)
+        (11, 5): ([1], [1, 1 / 6, 7 / 360, 31 / 15120, 127 / 604800]),
+        # k=2 : p/q = (19/19958400*x^9 - 17/138600*x^7 + 3/440*x^5 - 26/165*x^3 + x)/(1/110*x^2 + 1)
+        (13, 2): ([1, -26 / 165, 3 / 440, -17 / 138600, 19 / 19958400], [1, 1 / 110]),
+        # k=3 : p/q = (-121/2268000*x^7 + 601/118800*x^5 - 241/1650*x^3 + x)/(19/118800*x^4 + 17/825*x^2 + 1)
+        (13, 3): ([1, -241 / 1650, 601 / 118800, -121 / 2268000], [1, 17 / 825, 19 / 118800]),
+        # k=4 : p/q = (12671/4363920*x^5 - 2363/18183*x^3 + x)/(121/16662240*x^6 + 601/872784*x^4 + 445/12122*x^2 + 1)
+        (13, 4): ([1, -2363 / 18183, 12671 / 4363920], [1, 445 / 12122, 601 / 872784, 121 / 16662240]),
+        # k=5 : p/q = (-2555/25146*x^3 + x)/(12671/7604150400*x^8 + 2363/31683960*x^6 + 3787/1508760*x^4 + 818/12573*x^2 + 1)
+        (13, 5): ([1, -2555 / 25146], [1, 818 / 12573, 3787 / 1508760, 2363 / 31683960, 12671 / 7604150400]),
+        # k=6 : p/q = (x)/(73/3421440*x^10 + 127/604800*x^8 + 31/15120*x^6 + 7/360*x^4 + 1/6*x^2 + 1)
+        (13, 6): ([1], [1, 1 / 6, 7 / 360, 31 / 15120, 127 / 604800, 73 / 3421440]),
+        # k=2 : p/q = (1/24216192000*x^13 - 1/83825280*x^11 + 23/12700800*x^9 - 1/6300*x^7 + 19/2520*x^5 - 17/105*x^3 + x)/(1/210*x^2 + 1)
+        (17, 2): ([1, -17 / 105, 19 / 2520, -1 / 6300, 23 / 12700800, -1 / 83825280, 1 / 24216192000], [1, 1 / 210]),
+        # k=3 : p/q = (-911/250637587200*x^11 + 3799/3797539200*x^9 - 89/753480*x^7 + 2503/376740*x^5 - 151/966*x^3 + x)/(3/83720*x^4 + 5/483*x^2 + 1)
+        (17, 3): (
+            [1, -151 / 966, 2503 / 376740, -89 / 753480, 3799 / 3797539200, -911 / 250637587200],
+            [1, 5 / 483, 3 / 83720],
+        ),
+        # k=4 : p/q = (1768969/4763930371200*x^9 - 36317/472612140*x^7 + 80231/14321580*x^5 - 8234/55083*x^3 + x)/(911/1890448560*x^6 + 3799/28643160*x^4 + 631/36722*x^2 + 1)
+        (17, 4): (
+            [1, -8234 / 55083, 80231 / 14321580, -36317 / 472612140, 1768969 / 4763930371200],
+            [1, 631 / 36722, 3799 / 28643160, 911 / 1890448560],
+        ),
+        # k=5 : p/q = (-62077121/1727021696400*x^7 + 9713777/2242885320*x^5 - 2020961/14377470*x^3 + x)/(1768969/124345562140800*x^8 + 36317/12335869260*x^6 + 26015/74762844*x^4 + 187642/7188735*x^2 + 1)
+        (17, 5): (
+            [1, -2020961 / 14377470, 9713777 / 2242885320, -62077121 / 1727021696400],
+            [1, 187642 / 7188735, 26015 / 74762844, 36317 / 12335869260, 1768969 / 124345562140800],
+        ),
+        # k=6 : p/q = (1074305779/407195104680*x^5 - 4749115/37288929*x^3 + x)/(62077121/45149793206918400*x^10 + 9713777/58636095073920*x^8 + 5513233/407195104680*x^6 + 3873323/4524390052*x^4 + 2931413/74577858*x^2 + 1)
+        # k=7 : p/q = (-286685/2828954*x^3 + x)/(1074305779/924837658512768000*x^12 + 135689/2419774093440*x^10 + 210431/95052854400*x^8 + 426523/5346723060*x^6 + 1300789/509211720*x^4 + 277211/4243431*x^2 + 1)
+    }[variant]
+
+    p = fast_polynomial(ctx, x * x, P, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme][1]) * x
+    q = fast_polynomial(ctx, x * x, Q, reverse=False, scheme=[None, horner_scheme, estrin_dac_scheme][1])
+    return p / q
 
 
 def sine_dw(ctx, x, y):
@@ -907,3 +1791,37 @@ def cosine_dw(ctx, x, y):
     hz = half * z
     w = one - hz
     return w + (((one - w) - hz) + ((z * r) - (x * y)))
+
+
+def sine_cosine_kernel(ctx, r, t):
+    import numpy
+
+    if isinstance(r, (numpy.float64, numpy.float32, numpy.float16)):
+        return sine_cosine_kernel_impl(ctx, type(r), r, t)
+
+    largest = get_largest(ctx, r)
+    fp64_sn, fp64_cs = sine_cosine_kernel_impl(ctx, numpy.float64, r, t)
+    fp32_sn, fp32_cs = sine_cosine_kernel_impl(ctx, numpy.float32, r, t)
+    fp16_sn, fp16_cs = sine_cosine_kernel_impl(ctx, numpy.float16, r, t)
+    sn = ctx.select(largest > 1e308, fp64_sn, ctx.select(largest > 1e38, fp32_sn, fp16_sn))
+    cs = ctx.select(largest > 1e308, fp64_cs, ctx.select(largest > 1e38, fp32_cs, fp16_cs))
+    return sn, cs
+
+
+def sine_cosine_kernel_impl(ctx, dtype, r, t):
+    import functional_algorithms as fa
+    import numpy
+
+    order = {numpy.float16: 9, numpy.float32: 13, numpy.float64: 19}[dtype]
+    # order = {numpy.float16: 7, numpy.float32: 9, numpy.float64: 15}[dtype]
+    x = ctx.series(r, t)
+    with ctx.parameters(series_uses_dekker=True, series_uses_2sum=True, type=fa.Type.fromobject(ctx, dtype)):
+        sn = sine_taylor_dekker(ctx, x, order=order)
+        cs = cosine_taylor_dekker(ctx, x, order=order)
+    return sn, cs
+
+
+def sine(ctx, x):
+    k, r, t = argument_reduction_trigonometric(ctx, x)
+    sn, cs = sine_cosine_kernel(ctx, r, t)
+    return ctx.select(k == 0, sn, ctx.select(k == 1, cs, ctx.select(k == 2, -sn, -cs)))

@@ -66,6 +66,15 @@ def downcast_func(target, expr):
     return f"{t_new}({s})"
 
 
+def fma_func(target, expr):
+    assert expr.kind == "fma", expr.kind
+    (x, y, z) = expr.operands
+    xs = target.tostring(x)
+    ys = target.tostring(y)
+    zs = target.tostring(z)
+    return f"(({xs}) * ({ys}) + ({zs}))"
+
+
 trace_arguments = dict(
     absolute=[(":complex128",), (":complex64",)],
     asin_acos_kernel=[(":complex128",), (":complex64",)],
@@ -116,7 +125,7 @@ kind_to_target = dict(
     subtract="({0}) - ({1})",
     multiply="({0}) * ({1})",
     divide="({0}) / ({1})",
-    remainder="({0}) %% ({1})",
+    remainder="({0}) % ({1})",
     floor_divide="({0}) // ({1})",
     pow="({0}) ** ({1})",
     logical_and="({0}) and ({1})",
@@ -154,7 +163,7 @@ kind_to_target = dict(
     ceil="numpy.ceil({0})",
     floor="numpy.floor({0})",
     copysign="numpy.copysign({0}, {1})",
-    round=NotImplemented,
+    round="numpy.round({0})",
     sign="numpy.sign({0})",
     truncate="numpy.trunc({0})",
     conjugate="({0}).conjugate()",
@@ -175,6 +184,7 @@ kind_to_target = dict(
     upcast=upcast_func,
     downcast=downcast_func,
     is_finite="numpy.isfinite({0})",
+    fma=fma_func,
 )
 
 constant_to_target = dict(
@@ -194,6 +204,7 @@ type_to_target = dict(
     integer32="numpy.int32",
     integer64="numpy.int64",
     integer="numpy.int64",
+    float16="numpy.float16",
     float32="numpy.float32",
     float64="numpy.float64",
     float="numpy.float64",
@@ -217,7 +228,7 @@ def as_function(graph, debug=0, numpy=numpy):
         warnings=warnings,
     )
     np = graph.tostring(this_module, debug=debug)
-    if debug >= 2:
+    if debug >= 1.5:
         print(np)
     exec(np, d)
     return d[graph.operands[0].operands[0]]
@@ -272,3 +283,25 @@ class Printer(PrinterBase):
             lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
         lines.append(f"{tab}    return result")
         return utils.format_python("\n".join(lines))
+
+
+def jit(**params):
+
+    import functional_algorithms as fa
+
+    rewrite_parameters = params.get("rewrite_parameters", {})
+
+    def jit_decor(func):
+        assert "parameters" not in params  # use `with ctx.parameters(...)` instead
+        ctx = fa.Context(paths=params.get("paths"), parameters=params.get("parameters"))
+        dtype = params.get("dtype", numpy.float32)
+        graph = ctx.trace(func, dtype)
+        graph2 = graph.rewrite(
+            fa.rewrite.ReplaceSeries(),
+            fa.rewrite.ReplaceFma(backend=rewrite_parameters.get("fma_backend", "native")),
+            this_module,
+            fa.rewrite.RewriteWithParameters(**rewrite_parameters),
+        )
+        return as_function(graph2, debug=params.get("debug", 0))
+
+    return jit_decor

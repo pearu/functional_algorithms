@@ -2,7 +2,7 @@ import math
 import numpy
 from collections import defaultdict
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types, boolean_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types, warn_once
 
 
 class Printer:
@@ -382,8 +382,9 @@ def op_unflatten(operands, kind):
 
 class Rewriter:
 
-    def __init__(self):
+    def __init__(self, parameters=None):
         self._printer = Printer()
+        self._parameters = parameters or {}
 
     def __call__(self, expr):
         result = getattr(self, expr.kind, self._notimpl)(expr)
@@ -477,6 +478,8 @@ class Rewriter:
             yvalue, ylike = y.operands
             if isinstance(xvalue, number_types) and isinstance(yvalue, number_types):
                 r = op(xvalue, yvalue)
+                if numpy.isfinite(xvalue) and numpy.isfinite(yvalue) and not numpy.isfinite(r):
+                    warn_once(f"{expr} evaluation resulted a non-finite value `{r}`")
                 return expr.context.constant(r, xlike)
 
     def add(self, expr):
@@ -491,6 +494,11 @@ class Rewriter:
                 if isinstance(value, number_types) and value == 0:
                     return y_
 
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.add_series(expr.context, x, y)
+
     def subtract(self, expr):
         result = self._binary_op(expr, lambda x, y: x - y)
 
@@ -498,11 +506,17 @@ class Rewriter:
             return result
 
         x, y = expr.operands
+
         for x_, y_, s in [(x, y, -1), (y, x, 1)]:
             if x_.kind == "constant":
                 value, like = x_.operands
                 if isinstance(value, number_types) and value == 0:
                     return -y_ if s == -1 else y_
+
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.subtract_series(expr.context, x, y)
 
     def multiply(self, expr):
         result = self._binary_op(expr, lambda x, y: x * y)
@@ -514,8 +528,16 @@ class Rewriter:
         for x_, y_ in [(x, y), (y, x)]:
             if x_.kind == "constant":
                 value, like = x_.operands
-                if isinstance(value, number_types) and value == 1:
-                    return y_
+                if isinstance(value, number_types):
+                    if value == 1:
+                        return y_
+                    if value == 0 and self._parameters.get("eliminate_zero_factors"):
+                        return x_
+
+        if x.kind == "series" or y.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.mul_series(expr.context, x, y)
 
     def minimum(self, expr):
         return self._binary_op(expr, lambda x, y: min(x, y))
@@ -527,8 +549,20 @@ class Rewriter:
         x, y = expr.operands
         if y.kind == "constant":
             value, like = y.operands
-            if isinstance(value, number_types) and value == 1:
-                return x
+            if isinstance(value, number_types):
+                if value == 1:
+                    return x
+
+        if x.kind == "constant":
+            value, like = x.operands
+            if isinstance(value, number_types):
+                if value == 0 and self._parameters.get("eliminate_zero_factors"):
+                    return x
+
+        if x.kind == "series" and y.kind != "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.div_series(expr.context, x, y)
 
     def complex(self, expr):
         pass
@@ -576,12 +610,12 @@ class Rewriter:
 
     def upcast(self, expr):
         (x,) = expr.operands
-        if x.kind == "downcast":
+        if x.kind == "downcast" and self._parameters.get("optimize_cast", True):
             return x.operands[0]
 
     def downcast(self, expr):
         (x,) = expr.operands
-        if x.kind == "upcast":
+        if x.kind == "upcast" and self._parameters.get("optimize_cast", True):
             return x.operands[0]
 
     def log(self, expr):
@@ -653,6 +687,9 @@ class Rewriter:
         if x.kind == "negative":
             return x.operands[0]
 
+        if x.kind == "series":
+            return _expr.make_series(expr.context, *x.operands[0], tuple(-x_ for x_ in x.operands[1:]))
+
     def conjugate(self, expr):
 
         (x,) = expr.operands
@@ -671,6 +708,9 @@ class Rewriter:
         if x.kind == "conjugate":
             return x
 
+        if x.kind == "series":
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.conjugate(x_) for x_ in x.operands[1:]))
+
     def real(self, expr):
 
         (x,) = expr.operands
@@ -681,6 +721,9 @@ class Rewriter:
         if x.kind == "complex":
             return x.operands[0]
 
+        if x.kind == "series":
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.real(x_) for x_ in x.operands[1:]))
+
     def imag(self, expr):
 
         (x,) = expr.operands
@@ -690,6 +733,9 @@ class Rewriter:
 
         if x.kind == "complex":
             return x.operands[1]
+
+        if x.kind == "series":
+            return _expr.make_series(expr.context, *x.operands[0], tuple(expr.context.imag(x_) for x_ in x.operands[1:]))
 
     def _compare(self, expr, relop, relop_index, swap_relop_index):
         x, y = expr.operands
@@ -810,6 +856,18 @@ class Rewriter:
             if isinstance(value, number_types):
                 return self._eval(like, "square", value)
 
+        if x.kind == "series":
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.mul_series(expr.context, x, x)
+
+    def pow(self, expr):
+        base, exp = expr.operands
+        if base.kind == "series" and exp.kind == "constant" and isinstance(exp.operands[0], int) and exp.operands[0] >= 0:
+            import functional_algorithms.floating_point_algorithms as fpa
+
+            return fpa.fast_exponent_by_squaring(expr.context, base, exp.operands[0])
+
     def symbol(self, expr):
         pass
 
@@ -819,11 +877,26 @@ class Rewriter:
     def is_finite(self, expr):
         pass
 
+    def series(self, expr):
+        pass
 
-def rewrite(expr):
+    def fma(self, expr):
+        pass
+
+    def truncate(self, expr):
+        pass
+
+    def remainder(self, expr):
+        pass
+
+    def round(self, expr):
+        pass
+
+
+def rewrite(expr, parameters=None):
     """Return rewritten expression, otherwise return None."""
 
-    rewriter = Rewriter()
+    rewriter = Rewriter(parameters=parameters)
 
     last_result = None
     result = expr
@@ -840,6 +913,16 @@ def rewrite(expr):
 def __rewrite_modifier__(expr):
     result = rewrite(expr)
     return expr if result is None else result
+
+
+class RewriteWithParameters:
+
+    def __init__(self, **parameters):
+        self._parameters = parameters
+
+    def __rewrite_modifier__(self, expr):
+        result = rewrite(expr, self._parameters)
+        return expr if result is None else result
 
 
 class RewriteContext:
@@ -907,4 +990,41 @@ class Substitute:
                     return expr.context.symbol(replacement, typ=typ)
                 else:
                     raise NotImplementedError(f"{type(replacement)=}")
+        return expr
+
+
+class ReplaceSeries:
+
+    def __rewrite_modifier__(self, expr):
+        if expr.kind == "series":
+            from functional_algorithms import floating_point_algorithms as fpa
+
+            index, sexp = expr.operands[0]
+            S = expr.context.constant(2 ** (-sexp), expr)
+            if sexp == 0:
+                return sum(reversed(expr.operands[1:-1]), expr.operands[-1])
+            return fpa.fast_polynomial(expr.context, S, expr.operands[1:], reverse=False, scheme=[None, fpa.horner_scheme][1])
+        return expr
+
+
+class ReplaceFma:
+
+    def __init__(self, backend="native"):
+        assert backend in {"native", "upcast", "mul_add", None}, backend
+        self.backend = backend
+
+    def __rewrite_modifier__(self, expr):
+        if expr.kind == "fma":
+            from functional_algorithms import floating_point_algorithms as fpa
+
+            if self.backend == "upcast":
+                return fpa.fma_upcast(expr.context, *expr.operands)
+            elif self.backend == "native":
+                return fpa.fma_native(expr.context, *expr.operands)
+            elif self.backend == "mul_add":
+                return fpa.mul_add(expr.context, *expr.operands)
+            elif self.backend is None:
+                pass  # skip fma replace
+            else:
+                raise NotImplementedError(f"replace fma using backend={self.backend}")
         return expr

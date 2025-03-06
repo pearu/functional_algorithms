@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import fractions
 import numpy
 import math
 import mpmath
@@ -70,9 +71,11 @@ def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """
     ctx = x.context
     if ctx.isfinite(x):
-        prec_rounding = ctx._prec_rounding
+        prec_rounding = ctx._prec_rounding[:]
         if prec is not None:
             prec_rounding[0] = prec
+        else:
+            prec_rounding[0] = get_precision(dtype)
         if rounding is not None:
             prec_rounding[1] = rounding
         sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
@@ -204,6 +207,161 @@ def float2bin(f):
     return f"{sign}1p{e:+01d}"
 
 
+def float2fraction(f):
+    """Convert floating-point number to Fraction.
+
+    The conversion is exact.
+    """
+    if isinstance(f, numpy.floating):
+        dtype = type(f)
+        fi = numpy.finfo(dtype)
+        itype = {numpy.float16: numpy.uint16, numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
+        i = f.view(itype)
+        one = itype(1)
+        ssz = 1  # bit-size of sign part
+        esz = itype(fi.nexp)  # bit-size of exponential part
+        fsz = itype(-1 - fi.negep)  # bit-size of fractional part
+        fmask = itype((one << fsz) - one)
+        emask = itype((one << esz) - one)
+        umask = itype((one << (esz + fsz)) - one)
+        mxu = int(one << fsz)
+
+        u = i & umask
+
+        fpart = int(u & fmask)
+        epart = int((u >> fsz) & emask)
+        s = 1 if f < 0 else 0
+        e = epart + fi.minexp - 1
+
+        if epart == 0 and fpart == 0:
+            # signed zero
+            num = 0
+            denom = 1 - 2 * s
+        elif epart == 0:
+            # subnormals
+            num = (1 - 2 * s) * (fpart)
+            denom = mxu * (1 << (-e - 1))
+        elif epart == emask and fpart == 0:
+            # infinity
+            num = (1 - 2 * s) * (1 << fi.maxexp)
+            denom = 1
+        elif e < 0:
+            num = (1 - 2 * s) * (mxu + fpart)
+            denom = mxu * (1 << (-e))
+        else:
+            num = (1 - 2 * s) * (mxu + fpart) * (1 << e)
+            denom = mxu
+        return fractions.Fraction(num, denom)
+    elif isinstance(f, float):
+        return float2fraction(numpy.float64(f))
+    raise TypeError(f"float to fraction conversion requires floating-point input, got {type(f).__name__}")
+
+
+def fraction2float(dtype, q):
+    """Convert Fraction to a floating-point number.
+
+    The conversion may be inexact.
+    """
+    fi = numpy.finfo(dtype)
+    num, denom = q.numerator, q.denominator
+    unum = abs(num)
+    if num == 0:
+        return dtype(0) if denom == 1 else -dtype(0)
+    elif denom == 1 and unum >= (1 << fi.maxexp):
+        return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
+    else:
+        return dtype(num / denom)
+
+
+def heron(x, niter=7):
+    """Find square root of an input as fraction using Heron's method.
+
+    Consider sqrt(10005). Then the number of correct bits in the
+    returned value when converted to floating-point number, is:
+
+    prec    | niter
+    --------+------
+      23    | 1
+      51    | 2
+     102    | 3
+     206    | 4
+     412    | 5
+     828    | 6
+    1658    | 7
+
+    """
+    num, denom = int(x**0.5), 1
+    for i in range(niter):
+        num, denom = (num * num + x * denom * denom, 2 * denom * num)
+    return fractions.Fraction(num, denom)
+
+
+def pi2fraction(n=3, niter=7):
+    """Return a fractional approximation of pi.
+
+    Using Chudnovsky algorithm, see
+
+      https://en.wikipedia.org/wiki/Chudnovsky_algorithm
+
+    with Heron's method to compute sqrt(10005).
+
+    The number of correct bits in the returned value of pi when
+    converted to a floating-point number, is:
+
+    prec |  n | niter
+    -----+----+------
+      91 |  2 | 3
+     139 |  3 | 4
+     187 |  4 | 4
+     235 |  5 | 5
+     281 |  6 | 5
+     330 |  7 | 5
+     376 |  8 | 5
+     424 |  9 | 6
+     470 | 10 | 6
+     518 | 11 | 6
+     564 | 12 | 6
+     612 | 13 | 6
+     658 | 14 | 6
+     706 | 15 | 6
+     752 | 16 | 6
+     801 | 17 | 6
+     846 | 18 | 7
+     894 | 19 | 7
+     940 | 20 | 7
+     987 | 21 | 7
+    1037 | 22 | 7
+    1082 | 23 | 7
+    1130 | 24 | 7
+    1178 | 25 | 7
+    1225 | 26 | 7
+    1272 | 27 | 7
+    1320 | 28 | 7
+    ...
+
+    """
+    assert n >= 2
+
+    def bsplit(a, b):
+        if b == a + 1:
+            p = -(6 * a - 5) * (2 * a - 1) * (6 * a - 1)
+            q = 10939058860032000 * a**3
+            r = p * (545140134 * a + 13591409)
+        else:
+            m = (a + b) // 2
+            pa, qa, ra = bsplit(a, m)
+            pb, qb, rb = bsplit(m, b)
+            p = pa * pb
+            q = qa * qb
+            r = qb * ra + pa * rb
+        return p, q, r
+
+    _, q, r = bsplit(1, n)
+    f = fractions.Fraction(426880 * q, 13591409 * q + r)
+    sq = heron(10005, niter=niter)
+    return sq * f
+
+
 def get_precision(x):
     if isinstance(x, numpy.ndarray):
         x = x.dtype.type
@@ -255,8 +413,8 @@ def split_veltkamp(x, s=None, C=None):
         assert s >= 2 and s <= p - 2
         C = type(x)(2**s + 1)
     g = C * x  # for large x and s, this will overflow!
-    d = x - g
-    xh = g + d
+    d = g - x
+    xh = g - d
     xl = x - xh
     return xh, xl
 
@@ -2064,10 +2222,10 @@ def multiword2mpf(ctx, mw):
     return s
 
 
-def mpf2multiword(dtype, x, p=None, max_length=None):
+def mpf2multiword(dtype, x, p=None, max_length=None, sexp=0):
     """Return a list of fixed-width floating point numbers such that
 
-      x == sum([float2mpf(mpmath.mp, v) for v in result]) + O(smallest subnormal of dtype)
+      x == sum([float2mpf(mpmath.mp, v) / (2 ** (i * sexp)) for i, v in enumerate(result)]) + O(...)
 
     where x is a mpmath mpf instance.
 
@@ -2096,6 +2254,69 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
       len(result) <= max_length
 
     holds.
+
+    The truncation from the limited exponent size can be avoided by
+    specifying positive value to the scaling exponent argument sexp:
+
+    Take x = pi:
+    p       | sexp        | maximal x precision in bits
+    --------+-------------+----------------------------
+    float16
+    2       | 0,1,...     | 11,11,...
+    3       | 0,1,...[4]  | 26,38,49,49,[49],40,25,18,17,11,...
+    4       | 0,1,...[5]  | 26,33,42,65,105,[105],63,34,24,20,...
+    5       | 0,1,...[6]  | 26,33,38,47,78,105,[105],69,33,29,...
+    6       | 0,1,...[7]  | 26,30,38,44,59,82,105,[105],73,38,
+    7       | 0,1,...[8]  | 26,30,34,42,54,61,87,150,[800],109,44,...
+    8       | 0,1,...[9]  | 26,29,33,38,42,53,63,76,122,[2978],187,...
+    9       | 0,1,...[11] | ...,99,106,135,208,[357],99,...
+    10      | 0,1,...[11] | ...,155,[1096],249,99,...
+    11      | 0,1,...[13] | ...,99,114,208,451,150,...
+    float32
+    4       | 0,1,...[10] | ...,105,105,...,[105],103,99,...
+    5       | 0,1,...[13] | ...,105,105,...,[105],93,...
+    6       | 0,1,...[16] | ...,105,105,...,[105],92,...
+    7       | 0,1,...[9]  | ...,299,396,602,912,[912],871,...
+    8       | 0,1,...[9]  | ...,676,1343,[4280],1061,....
+    9       | 0,1,...[10] | ...,1205,[3726],1600,...
+    10      | 0,1,...[11] | ...,1851,[16429],1182
+    11      | 0,1,...[12]   | ...,1462,[>44000],1797
+    12      | 0,1,...[13]   | ...,1823,[>50000],...
+    13      | 0,1,...[14]   | ...,1609,[>50000],1987,...
+    ...
+    24      | 0,1,...[25]   | ...,1738,3202,[>50000],...
+    float64
+    8       | 0,1,...[11]     | ...,3188,4280,4280,4280,4280,[4280],3129,...
+    12      | 0,1,...[13]     | ...,13847,[>50000],13356,...
+    ...
+    53      | 0,1,...,53,[..] | ...,55030,[...],...
+
+    From the above table follows a relation
+
+      sexp == p + 1
+
+    that maximizes the precision of x that can be represented exactly
+    as a multiword.
+
+    The maximal bit-size of the multiword representation depends on
+    the value of x. For example, take sexp = p + 1, then for
+    p=1,...,11 the maximal bit-size sequence is as follows [float16]:
+
+      pi    : 4,4, 49,105,105,105,800,2978, 208,1096, 208
+      log(2): 6,6,101, 19,101,139,101, 107,1345, 830, 596
+      2 / pi: 5,6,  6,129,127,322,324,2299,1093,1127,1339
+
+    that is, the optimal value for p also depends on the value of x.
+
+    The dtype dependence of the maximal bit-size sequence is as
+    follows [2 / pi]:
+
+      float16: 5,6,6,129,127,322,324,2299,1093,1127,1339
+      float32: 5,6,6,129,127,322,324,2299,2835,[>5000]
+      float64: 5,6,6,129,127,322,324,2299,[>5000]
+
+    that is, the optimal value for p increases with increasing dtype
+    bitsize.
     """
     sign, man, exp, bc = x._mpf_
     mpf = x.context.mpf
@@ -2109,7 +2330,7 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
     result = []
     offset = max(bl - p, 0)
     if max_length is not None and max_length == 1:
-        result.append(mpf2float(dtype, x))
+        result.append(mpf2float(dtype, x, prec=x.context.prec))
         offset = 0
     while True:
         man1 = (man & (mask << offset)) >> offset
@@ -2122,9 +2343,10 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
             offset -= d
             man1 = (man & (mask << offset)) >> offset
             bl1 = man1.bit_length()
-        exp1 = exp + offset
-        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)))
-        if x1 == dtype(0):
+        exp1 = exp + offset + len(result) * sexp
+
+        x1 = mpf2float(dtype, mpf((sign, man1, exp1, bl1)), prec=x.context.prec)
+        if x1 == dtype(0) and offset == 0:
             # result represents truncated x
             break
         result.append(x1)
@@ -2144,8 +2366,43 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
     return result
 
 
+def mpf2multiword_split(dtype, x, p=None, max_length=None):
+    """Return a list of fixed-width floating point numbers such that
+
+      x == sum([float2mpf(mpmath.mp, v) for i, v in enumerate(result)]) + O(...)
+
+    where x is a mpmath mpf instance. The result values mantissa fits into p bits.
+
+    Different from mpf2multiword, the result may not be a monotonic sequence.
+    """
+    tp = get_precision(dtype)
+    fi = numpy.finfo(dtype)
+    if p is None:
+        p = (tp + 1) // 2
+    result = []
+    ctx = x.context
+
+    C = dtype(2**p + 1)
+    f = mpf2float(dtype, x)
+    while f != 0:
+        if max_length is not None and len(result) == max_length - 1:
+            result.append(f)
+            break
+        fh, fl = split_veltkamp(f, C=C)
+        result.append(fh)
+        assert split_veltkamp(fh, C=C)[1] == 0
+        x = x - float2mpf(ctx, fh)
+        f = mpf2float(dtype, x)
+
+    return result
+
+
 class NumpyContext:
     """A light-weight context for evaluating select with numpy inputs."""
+
+    @property
+    def parameters(self):
+        return {}
 
     def select(self, cond, x, y):
         assert isinstance(cond, (bool, numpy.bool_))
@@ -2168,7 +2425,12 @@ class NumpyContext:
             return numpy.floor(value)
         assert 0, (value, type(value))  # unreachable
 
-    def trunc(self, value):
+    def ceil(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.ceil(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def truncate(self, value):
         if isinstance(value, numpy.floating):
             return numpy.trunc(value)
         assert 0, (value, type(value))  # unreachable
@@ -2178,20 +2440,100 @@ class NumpyContext:
             return numpy.round(value)
         assert 0, (value, type(value))  # unreachable
 
+    def rint(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.rint(value)
+        assert 0, (value, type(value))  # unreachable
 
-def get_pi_over_two_multiword(dtype, prec=None, max_length=None):
-    if prec is None:
-        prec = {numpy.float16: 4, numpy.float32: 11, numpy.float64: 20}[dtype]
+    def remainder(self, value, other):
+        if isinstance(value, numpy.floating):
+            return numpy.remainder(value, other)
+        assert 0, (value, type(value))  # unreachable
+
+    def fmod(self, value, other):
+        if isinstance(value, numpy.floating):
+            return numpy.fmod(value, other)
+        assert 0, (value, type(value))  # unreachable
+
+    def sqrt(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.sqrt(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def _series(self, terms, params):
+        unit_index = params.get("unit_index", 0)
+        scaling_exp = params.get("scaling_exp", 0)
+        return ((unit_index, scaling_exp), *terms)
+
+    def _get_series_operands(self, expr):
+        return expr
+
+    def fma(self, x, y, z):
+        return x * y + z
+
+    def upcast(self, x):
+        t = type(x).__name__
+        return dict(
+            float16=numpy.float32,
+            float32=numpy.float64,
+            float64=numpy.float128,
+        )[
+            t
+        ](x)
+
+    def downcast(self, x):
+        t = type(x).__name__
+        return dict(
+            float32=numpy.float16,
+            float64=numpy.float32,
+            longdouble=numpy.float64,
+        )[
+            t
+        ](x)
+
+    def upcast2(self, x):
+        t = type(x).__name__
+        return dict(
+            float16=numpy.float64,
+            float32=numpy.float128,
+        )[
+            t
+        ](x)
+
+    def downcast2(self, x):
+        t = type(x).__name__
+        return dict(
+            float64=numpy.float16,
+            longdouble=numpy.float32,
+        )[
+            t
+        ](x)
+
+    def logical_or(self, x, y):
+        return x or y
+
+    def logical_and(self, x, y):
+        return x and y
+
+
+def get_pi_over_two_multiword(dtype):
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
     ctx = mpmath.mp
     with ctx.workprec(max_prec):
-        return mpf2multiword(dtype, ctx.pi / 2, p=prec, max_length=max_length)
+        r_mp = ctx.pi / 2
+        pi2h = mpf2float(dtype, r_mp)
+        pi2l = mpf2float(dtype, r_mp - float2mpf(ctx, pi2h))
+        return pi2h, pi2l
 
 
 def get_two_over_pi_multiword(dtype, prec=None, max_length=None):
     if prec is None:
-        prec = {numpy.float16: 4, numpy.float32: 10, numpy.float64: 20}[dtype]
+        prec = {numpy.float16: 6, numpy.float32: 10, numpy.float64: 20}[dtype]
+        prec = {numpy.float16: 6, numpy.float32: 12, numpy.float64: 27}[dtype]
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
     ctx = mpmath.mp
     with ctx.workprec(max_prec):
-        return mpf2multiword(dtype, 2 / ctx.pi, p=prec, max_length=max_length)
+        r_mp = 2 / ctx.pi
+        if 0:
+            return mpf2multiword(dtype, r_mp, p=prec, max_length=max_length)
+        return mpf2multiword_split(dtype, r_mp, p=prec, max_length=max_length)
