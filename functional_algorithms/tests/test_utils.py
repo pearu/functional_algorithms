@@ -682,3 +682,38 @@ def test_float2fraction(real_dtype):
         q = utils.float2fraction(x)
         r = utils.fraction2float(real_dtype, q)
         assert x == r
+
+
+def test_heron_10005():
+    import mpmath
+
+    x = 10005
+
+    for niter in range(1, 8):
+        q = utils.heron(x, niter=niter)
+        num, denom = q.numerator, q.denominator
+        last_prec_with_zero_err = 0
+        for prec in range(10, 2000):
+            with mpmath.workprec(prec):
+                ctx = mpmath.mp
+                expected = ctx.sqrt(x)
+                result = ctx.mpf(num) / denom
+                if result - expected == 0:
+                    last_prec_with_zero_err = prec
+        # print(niter, last_prec_with_zero_err, q)
+
+
+def test_pi2fraction():
+    import mpmath
+
+    for n in range(2, 10):
+        for niter in range(2, 5):
+            q = utils.pi2fraction(n, niter=niter)
+            num, denom = q.numerator, q.denominator
+            last_prec_with_zero_err = 0
+            for prec in range(10, 2000):
+                with mpmath.workprec(prec):
+                    ctx = mpmath.mp
+                    result = ctx.mpf(num) / denom
+                    if result - ctx.pi == 0:
+                        last_prec_with_zero_err = prec

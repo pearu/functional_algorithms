@@ -273,6 +273,95 @@ def fraction2float(dtype, q):
         return dtype(num / denom)
 
 
+def heron(x, niter=7):
+    """Find square root of an input as fraction using Heron's method.
+
+    Consider sqrt(10005). Then the number of correct bits in the
+    returned value when converted to floating-point number, is:
+
+    prec    | niter
+    --------+------
+      23    | 1
+      51    | 2
+     102    | 3
+     206    | 4
+     412    | 5
+     828    | 6
+    1658    | 7
+
+    """
+    num, denom = int(x**0.5), 1
+    for i in range(niter):
+        num, denom = (num * num + x * denom * denom, 2 * denom * num)
+    return fractions.Fraction(num, denom)
+
+
+def pi2fraction(n=3, niter=7):
+    """Return a fractional approximation of pi.
+
+    Using Chudnovsky algorithm, see
+
+      https://en.wikipedia.org/wiki/Chudnovsky_algorithm
+
+    with Heron's method to compute sqrt(10005).
+
+    The number of correct bits in the returned value of pi when
+    converted to a floating-point number, is:
+
+    prec |  n | niter
+    -----+----+------
+      91 |  2 | 3
+     139 |  3 | 4
+     187 |  4 | 4
+     235 |  5 | 5
+     281 |  6 | 5
+     330 |  7 | 5
+     376 |  8 | 5
+     424 |  9 | 6
+     470 | 10 | 6
+     518 | 11 | 6
+     564 | 12 | 6
+     612 | 13 | 6
+     658 | 14 | 6
+     706 | 15 | 6
+     752 | 16 | 6
+     801 | 17 | 6
+     846 | 18 | 7
+     894 | 19 | 7
+     940 | 20 | 7
+     987 | 21 | 7
+    1037 | 22 | 7
+    1082 | 23 | 7
+    1130 | 24 | 7
+    1178 | 25 | 7
+    1225 | 26 | 7
+    1272 | 27 | 7
+    1320 | 28 | 7
+    ...
+
+    """
+    assert n >= 2
+
+    def bsplit(a, b):
+        if b == a + 1:
+            p = -(6 * a - 5) * (2 * a - 1) * (6 * a - 1)
+            q = 10939058860032000 * a**3
+            r = p * (545140134 * a + 13591409)
+        else:
+            m = (a + b) // 2
+            pa, qa, ra = bsplit(a, m)
+            pb, qb, rb = bsplit(m, b)
+            p = pa * pb
+            q = qa * qb
+            r = qb * ra + pa * rb
+        return p, q, r
+
+    _, q, r = bsplit(1, n)
+    f = fractions.Fraction(426880 * q, 13591409 * q + r)
+    sq = heron(10005, niter=niter)
+    return sq * f
+
+
 def get_precision(x):
     if isinstance(x, numpy.ndarray):
         x = x.dtype.type
