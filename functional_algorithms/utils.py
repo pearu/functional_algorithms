@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import fractions
 import numpy
 import math
 import mpmath
@@ -204,6 +205,72 @@ def float2bin(f):
     if significant_bits:
         return f"{sign}1.{significant_bits}p{e:+01d}"
     return f"{sign}1p{e:+01d}"
+
+
+def float2fraction(f):
+    """Convert floating-point number to Fraction.
+
+    The conversion is exact.
+    """
+    if isinstance(f, numpy.floating):
+        dtype = type(f)
+        fi = numpy.finfo(dtype)
+        itype = {numpy.float16: numpy.uint16, numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
+        i = f.view(itype)
+        one = itype(1)
+        ssz = 1  # bit-size of sign part
+        esz = itype(fi.nexp)  # bit-size of exponential part
+        fsz = itype(-1 - fi.negep)  # bit-size of fractional part
+        fmask = itype((one << fsz) - one)
+        emask = itype((one << esz) - one)
+        umask = itype((one << (esz + fsz)) - one)
+        mxu = int(one << fsz)
+
+        u = i & umask
+
+        fpart = int(u & fmask)
+        epart = int((u >> fsz) & emask)
+        s = 1 if f < 0 else 0
+        e = epart + fi.minexp - 1
+
+        if epart == 0 and fpart == 0:
+            # signed zero
+            num = 0
+            denom = 1 - 2 * s
+        elif epart == 0:
+            # subnormals
+            num = (1 - 2 * s) * (fpart)
+            denom = mxu * (1 << (-e - 1))
+        elif epart == emask and fpart == 0:
+            # infinity
+            num = (1 - 2 * s) * (1 << fi.maxexp)
+            denom = 1
+        elif e < 0:
+            num = (1 - 2 * s) * (mxu + fpart)
+            denom = mxu * (1 << (-e))
+        else:
+            num = (1 - 2 * s) * (mxu + fpart) * (1 << e)
+            denom = mxu
+        return fractions.Fraction(num, denom)
+    elif isinstance(f, float):
+        return float2fraction(numpy.float64(f))
+    raise TypeError(f"float to fraction conversion requires floating-point input, got {type(f).__name__}")
+
+
+def fraction2float(dtype, q):
+    """Convert Fraction to a floating-point number.
+
+    The conversion may be inexact.
+    """
+    fi = numpy.finfo(dtype)
+    num, denom = q.numerator, q.denominator
+    unum = abs(num)
+    if num == 0:
+        return dtype(0) if denom == 1 else -dtype(0)
+    elif denom == 1 and unum >= (1 << fi.maxexp):
+        return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
+    else:
+        return dtype(num / denom)
 
 
 def get_precision(x):

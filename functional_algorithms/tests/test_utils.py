@@ -670,3 +670,15 @@ def test_mpf2multiword_log2(real_dtype):
                         stats["redundant"] += 1
                     break
         assert stats["non_redundant"] > 0
+
+
+def test_float2fraction(real_dtype):
+    import mpmath
+
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+
+    for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True):
+        q = utils.float2fraction(x)
+        r = utils.fraction2float(real_dtype, q)
+        assert x == r
