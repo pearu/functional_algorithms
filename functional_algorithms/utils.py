@@ -2195,3 +2195,20 @@ def get_two_over_pi_multiword(dtype, prec=None, max_length=None):
     ctx = mpmath.mp
     with ctx.workprec(max_prec):
         return mpf2multiword(dtype, 2 / ctx.pi, p=prec, max_length=max_length)
+
+
+def show_ulp(ulp, title=None):
+    rest = 0
+    u5 = None
+    if ulp and title is not None:
+        print(f"{title}:")
+    for i, u in enumerate(sorted(ulp)):
+        if i < 5:
+            print(f"  ULP difference {u}: {ulp[u]}")
+        else:
+            if u5 is None:
+                u5 = u
+            rest += ulp[u]
+    else:
+        if rest:
+            print(f"  ULP difference in [{u5}..{max(ulp)}]: {rest}")
