@@ -1,7 +1,7 @@
 import numpy
 import pytest
 import itertools
-
+import warnings
 from functional_algorithms import utils
 
 
@@ -667,3 +667,53 @@ def test_mpf2multiword_log2(real_dtype):
                         stats["redundant"] += 1
                     break
         assert stats["non_redundant"] > 0
+
+
+def test_ulp(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import math
+
+    size = 10000
+    for x in utils.real_samples(size, dtype=real_dtype, include_huge=True):
+        if real_dtype == numpy.float64:
+            assert math.ulp(float(x)) == utils.ulp(x), (x, numpy.frexp(x))
+        if numpy.isfinite(x):
+            with warnings.catch_warnings(action="ignore"):
+                if x > 0:
+                    y = numpy.nextafter(x, real_dtype("inf"))
+                    y1 = x + utils.ulp(x)
+                    assert y == y1, (x, y, y1, utils.ulp(x))
+                else:
+                    y = numpy.nextafter(x, real_dtype("-inf"))
+                    y1 = x - utils.ulp(x)
+                    assert y == y1, (x, y, y1, utils.ulp(x))
+        elif numpy.isposinf(x):
+            assert utils.ulp(x) == real_dtype("inf")
+        elif numpy.isneginf(x):
+            assert utils.ulp(x) == real_dtype("inf")
+        else:
+            assert 0  # unreachable
+
+    nan = real_dtype("nan")
+    assert numpy.isnan(utils.ulp(nan))
+
+
+def test_overlapping(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    fi = numpy.finfo(real_dtype)
+    size = 10000
+    C = numpy.ldexp(real_dtype(1), numpy.finfo(real_dtype).negep)
+    for x in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
+        x1 = x / real_dtype(7)
+        y1 = x + x1
+        y2 = x1 - (y1 - x)
+        if not numpy.isfinite(y1) or y1 == 0:
+            continue
+        assert utils.overlapping(x, x1)
+        assert not utils.overlapping(y1, y2)
+        assert utils.overlapping(y1, x)
+        assert utils.overlapping(y1, x1)
+        assert y1 + y2 == y1
+        assert x + x1 == y1
