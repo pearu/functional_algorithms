@@ -2212,3 +2212,37 @@ def show_ulp(ulp, title=None):
     else:
         if rest:
             print(f"  ULP difference in [{u5}..{max(ulp)}]: {rest}")
+
+
+def ulp(x):
+    """Return the unit in the last place of x.
+
+    For finite x = m * 2 ** e, `ulp(x) == 2 ** e`.
+
+    Invariants:
+      ulp(inf) == inf
+      ulp(-inf) == inf
+      ulp(nan) == nan
+      ulp(-x) == ulp(x)
+      x + ulp(x) == nextafter(x, inf)  if x >= 0
+      x - ulp(x) == nextafter(x, -inf)  if x < 0
+    """
+    dtype = type(x)
+    if x == 0:
+        return numpy.finfo(dtype).smallest_subnormal
+    if numpy.isinf(x):
+        return dtype("inf")
+    if numpy.isnan(x):
+        return dtype("nan")
+    if x < 0:
+        return ulp(-x)
+    return numpy.ldexp(dtype(1), numpy.frexp(x)[1] + numpy.finfo(dtype).negep)
+
+
+def overlapping(x, y):
+    """Check if floating-point numbers are overlapping."""
+    if x == y:
+        return True
+    if x == 0 or y == 0 or numpy.isnan(x) or numpy.isnan(y) or numpy.isnan(x):
+        return False
+    return abs(x) >= ulp(y) and abs(y) >= ulp(x)
