@@ -8,6 +8,7 @@ __all__ = [
     "rewrite",
     "filter_signatures",
     "restrict",
+    "apmath",
     "special",
 ]
 
@@ -31,4 +32,5 @@ from . import rewrite
 from .restrict import restrict
 from .signatures import filter_signatures
 from . import fpu
+from . import apmath
 from . import special

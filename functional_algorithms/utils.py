@@ -2147,6 +2147,11 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
 class NumpyContext:
     """A light-weight context for evaluating select with numpy inputs."""
 
+    def _is_nonzero(self, value):
+        if isinstance(value, numpy.floating):
+            return not (value == 0)
+        assert 0, (value, type(value))  # unreachable
+
     def select(self, cond, x, y):
         assert isinstance(cond, (bool, numpy.bool_))
         return x if cond else y
@@ -2162,6 +2167,11 @@ class NumpyContext:
                 assert 0, (value, dtype)  # not implemented
             return dtype(value)
         assert 0, (value, like, type(like))  # unreachable
+
+    def ne(self, x, y):
+        if isinstance(x, numpy.floating) or isinstance(y, numpy.floating):
+            return x != y
+        assert 0, (x, y, type(x))  # unreachable
 
     def floor(self, value):
         if isinstance(value, numpy.floating):
