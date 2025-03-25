@@ -1,4 +1,5 @@
 import contextlib
+import fractions
 import itertools
 import numpy
 import math
@@ -53,8 +54,12 @@ def float2mpf(ctx, x):
     elif numpy.isfinite(x):
         prec, rounding = ctx._prec_rounding
         mantissa, exponent = numpy.frexp(x)
-        man = int(mpmath.ldexp(mantissa, prec))
-        exp = int(exponent - prec)
+        man_ = ctx.ldexp(mantissa, prec)
+        man = int(man_)
+        assert man == man_
+        exp_ = exponent - prec
+        exp = int(exp_)
+        assert exp == exp_
         r = ctx.make_mpf(mpmath.libmp.from_man_exp(man, exp, prec, rounding))
         assert ctx.isfinite(r), r._mpf_
         return r
@@ -70,11 +75,14 @@ def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """
     ctx = x.context
     if ctx.isfinite(x):
-        prec_rounding = ctx._prec_rounding
+        prec_rounding = ctx._prec_rounding[:]
         if prec is not None:
             prec_rounding[0] = prec
+        else:
+            prec_rounding[0] = get_precision(dtype)
         if rounding is not None:
             prec_rounding[1] = rounding
+
         sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
         assert bc >= 0, (sign, man, exp, bc, x._mpf_)
         fp_format = dtype.__name__
@@ -202,6 +210,92 @@ def float2bin(f):
     if significant_bits:
         return f"{sign}1.{significant_bits}p{e:+01d}"
     return f"{sign}1p{e:+01d}"
+
+
+def float2fraction(f):
+    """Convert floating-point number to Fraction.
+    The conversion is exact.
+    """
+    if isinstance(f, list):
+        return sum(map(float2fraction, f))
+    elif isinstance(f, numpy.floating):
+        dtype = type(f)
+        fi = numpy.finfo(dtype)
+        itype = {numpy.float16: numpy.uint16, numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
+        i = f.view(itype)
+        one = itype(1)
+        ssz = 1  # bit-size of sign part
+        esz = itype(fi.nexp)  # bit-size of exponential part
+        fsz = itype(-1 - fi.negep)  # bit-size of fractional part
+        fmask = itype((one << fsz) - one)
+        emask = itype((one << esz) - one)
+        umask = itype((one << (esz + fsz)) - one)
+        mxu = int(one << fsz)
+
+        u = i & umask
+
+        fpart = int(u & fmask)
+        epart = int((u >> fsz) & emask)
+        s = 1 if f < 0 else 0
+        e = epart + fi.minexp - 1
+
+        if epart == 0 and fpart == 0:
+            # signed zero
+            num = 0
+            denom = 1 - 2 * s
+        elif epart == 0:
+            # subnormals
+            num = (1 - 2 * s) * (fpart)
+            denom = mxu * (1 << (-e - 1))
+        elif epart == emask and fpart == 0:
+            # infinity
+            num = (1 - 2 * s) * (1 << fi.maxexp)
+            denom = 1
+        elif e < 0:
+            num = (1 - 2 * s) * (mxu + fpart)
+            denom = mxu * (1 << (-e))
+        else:
+            num = (1 - 2 * s) * (mxu + fpart) * (1 << e)
+            denom = mxu
+        return fractions.Fraction(num, denom)
+    elif isinstance(f, float):
+        return float2fraction(numpy.float64(f))
+    elif isinstance(f, mpmath.mpf):
+        sign, man, exp, bc = f._mpf_
+        if man == 0 and exp == 0:
+            num = (1 - 2 * sign) * 0
+            denom = 1
+        elif man == 0:
+            # infinity
+            k = 1
+            while 2**k < f.context.prec:
+                k += 1
+            maxexp = 2 ** (3 * k - 8)  # k=4->16, 5->128, 6->1024
+            num = (1 - 2 * sign) * (2**maxexp)
+            denom = 1
+        elif exp < 0:
+            num = man * (1 - 2 * sign)
+            denom = 2 ** (-exp)
+        else:
+            num = man * 2 ** (exp) * (1 - 2 * sign)
+            denom = 1
+        return fractions.Fraction(num, denom)
+    raise TypeError(f"float to fraction conversion requires floating-point input, got {type(f).__name__}")
+
+
+def fraction2float(dtype, q):
+    """Convert Fraction to a floating-point number.
+    The conversion may be inexact.
+    """
+    fi = numpy.finfo(dtype)
+    num, denom = q.numerator, q.denominator
+    unum = abs(num)
+    if num == 0:
+        return dtype(0) if denom == 1 else -dtype(0)
+    elif denom == 1 and unum >= (1 << fi.maxexp):
+        return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
+    else:
+        return dtype(num / denom)
 
 
 def get_precision(x):
@@ -1326,33 +1420,70 @@ def real_samples(
     else:
         max_value = dtype(max_value)
 
+    if not include_subnormal:
+        if min_value != 0 and abs(min_value) < min_pos_value:
+            if min_value < 0:
+                min_value = -dtype(min_pos_value)
+            else:
+                min_value = dtype(0)
+
+        if max_value != 0 and abs(max_value) < min_pos_value:
+            if max_value < 0:
+                max_value = -dtype(0)
+            else:
+                max_value = dtype(min_pos_value)
+
+    if min_value == max_value:
+        return numpy.array([min_value], dtype=dtype)
+
     if min_value >= max_value:
         raise ValueError(f"minimal value (={min_value}) cannot be greater than maximal value (={max_value})")
 
     if user_specified_bounds:
-        if min_value >= 0:
+        if min_value >= dtype(0):
             start, end = min_value.view(utype), max_value.view(utype)
             step = int(end - start)
             r = (start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)).view(dtype)
             assert r.size == num
-            return numpy.unique(r) if unique else r
-        if max_value < 0:
+        elif max_value <= -dtype(0):
             start, end = max_value.view(utype), min_value.view(utype)
             step = int(end - start)
             r = (start + numpy.array([i // (num - 1) for i in range(0, num * step, step)], dtype=utype)).view(dtype)
             assert r.size == num
-            return numpy.unique(r[::-1]) if unique else r[::-1]
-        neg_diff = diff_ulp(abs(min_value), min_pos_value)
-        pos_diff = diff_ulp(abs(max_value), min_pos_value)
-        neg_num = int(neg_diff * num / (neg_diff + pos_diff))
-        pos_num = num - neg_num - int(bool(include_zero))
-
-        neg_part = real_samples(size=neg_num, dtype=dtype, min_value=min_value, max_value=-min_pos_value)
-        pos_part = real_samples(size=pos_num, dtype=dtype, min_value=min_pos_value, max_value=max_value)
-        if include_zero:
-            r = numpy.concatenate([neg_part, numpy.array([0], dtype=dtype), pos_part])
+            r = r[::-1]
         else:
-            r = numpy.concatenate([neg_part, pos_part])
+            neg_diff = diff_ulp(abs(min_value), min_pos_value)
+            pos_diff = diff_ulp(abs(max_value), min_pos_value)
+            neg_num = int(neg_diff * num / max(1, neg_diff + pos_diff))
+            pos_num = num - neg_num - int(bool(include_zero))
+
+            neg_part = real_samples(
+                size=neg_num,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+                min_value=min_value,
+                max_value=-min_pos_value if min_value < -min_pos_value else -dtype(0),
+            )
+            pos_part = real_samples(
+                size=pos_num,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+                min_value=min_pos_value if min_pos_value < max_value else dtype(0),
+                max_value=max_value,
+            )
+            if include_zero:
+                r = numpy.concatenate([neg_part, numpy.array([0], dtype=dtype), pos_part])
+            else:
+                r = numpy.concatenate([neg_part, pos_part])
+        if not include_subnormal:
+            for i in range(len(r)):
+                if r[i] == 0:
+                    continue
+                if abs(r[i]) < fi.smallest_normal:
+                    if r[i] < 0:
+                        r[i] = -dtype(0)
+                    else:
+                        r[i] = dtype(0)
         return numpy.unique(r) if unique else r
     if 1:
         # The following method gives a sample distibution that is
@@ -1603,6 +1734,110 @@ def complex_pair_samples(
     return s1, s2
 
 
+def expansion_samples(
+    size=None,
+    length=2,
+    overlapping=False,
+    dtype=numpy.float32,
+    min_value=None,
+    max_value=None,
+    include_subnormal=False,
+    nonnegative=False,
+):
+    """Return a list of FP expansion samples.
+
+    A FP expansion is a list of floating-point values with specified
+    overlapping property.
+
+    Parameters
+    ----------
+    size : int
+      Initial size of the samples array. A minimum value is 6 ** length.
+    length : int
+      The length of an FP expansion.
+    dtype:
+      Floating-point type: float16, float32, float64.
+    include_subnormal: bool
+      When True, samples include subnormal numbers.
+    nonnegative: bool
+      When True, finite samples are all non-negative.
+
+    """
+    if size is None:
+        size = 6**length
+    assert length > 0
+    if length == 1:
+        return [
+            [x_]
+            for x_ in real_samples(
+                size,
+                dtype=dtype,
+                include_infinity=False,
+                include_huge=False,
+                include_subnormal=include_subnormal,
+                nonnegative=nonnegative,
+                min_value=min_value,
+                max_value=max_value,
+            )
+        ]
+
+    size1 = max(6, 2 ** int(math.log2(size) / length))
+    size2 = max(6 ** (length - 1), int(size // size1 + 1))
+    fi = numpy.finfo(dtype)
+    c1 = numpy.ldexp(dtype(1), fi.negep + 1)
+    c6 = numpy.ldexp(dtype(1), fi.negep + 6)
+    c = numpy.ldexp(dtype(1), fi.negep)
+    lst = []
+    for x in expansion_samples(
+        size=size1,
+        length=1,
+        overlapping=overlapping,
+        dtype=dtype,
+        include_subnormal=include_subnormal,
+        nonnegative=nonnegative,
+        min_value=min_value,
+        max_value=max_value,
+    ):
+        if overlapping:
+            inner_lst = expansion_samples(
+                size=size2 // 2 + 1,
+                length=length - 1,
+                overlapping=overlapping,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+                nonnegative=nonnegative,
+                min_value=-abs(x[0]) * c6,
+                max_value=-abs(x[0]) * c1,
+            ) + expansion_samples(
+                size=size2 // 2 + 1,
+                length=length - 1,
+                overlapping=overlapping,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+                nonnegative=nonnegative,
+                min_value=abs(x[0]) * c1,
+                max_value=abs(x[0]) * c6,
+            )
+        else:
+            inner_lst = expansion_samples(
+                size=size2,
+                length=length - 1,
+                overlapping=overlapping,
+                dtype=dtype,
+                include_subnormal=include_subnormal,
+                nonnegative=nonnegative,
+                min_value=-abs(x[0]) * c,
+                max_value=abs(x[0]) * c,
+            )
+        for y in inner_lst:
+            e = x + y
+            with warnings.catch_warnings(action="ignore"):
+                s = sum(e[:1], e[-1])
+            if numpy.isfinite(s):
+                lst.append(e)
+    return lst
+
+
 def iscomplex(value):
     return isinstance(value, (complex, numpy.complexfloating))
 
@@ -1632,6 +1867,15 @@ def diff_ulp(x, y, flush_subnormals=UNSPECIFIED, equal_nan=False) -> int:
     When equal_nan is set to True, ULP difference between nan values
     of both quiet and signaling kinds is defined as 0.
     """
+    if isinstance(x, list) and isinstance(y, list):
+        if len(x) < len(y):
+            x = x + [type(x[0])(0)] * (len(y) - len(x))
+        elif len(x) > len(y):
+            y = y + [type(y[0])(0)] * (len(x) - len(y))
+        u = 0
+        for x_, y_ in zip(x, y):
+            u += diff_ulp(x_, y_, flush_subnormals=flush_subnormals, equal_nan=equal_nan)
+        return u
     if isinstance(x, numpy.floating):
         uint = {numpy.float64: numpy.uint64, numpy.float32: numpy.uint32, numpy.float16: numpy.uint16}[x.dtype.type]
         sx = -1 if x < 0 else (1 if x > 0 else 0)
@@ -2056,6 +2300,42 @@ class Clusters:
         return result
 
 
+def expansion2mpf(ctx, e):
+    """Transform FP expansion to mpf instance."""
+    return sum([float2mpf(ctx, e_) for e_ in reversed(e[:-1])], float2mpf(ctx, e[-1]))
+
+
+def mpf2expansion(dtype, x):
+    """Transform mpf instance to an FP expansion."""
+    lst = []
+    prev_x = 0
+    while True:
+        y = mpf2float(dtype, x)
+        if y == 0:
+            break
+        lst.append(y)
+        x = x - float2mpf(x.context, y)
+    return lst or [dtype(0)]
+
+
+def fraction2expansion(dtype, q, length=2):
+    """Transform a fraction to an FP expansion.
+
+    If the length of output is smaller than the specified length then
+    the conversion is exact.
+
+    The output may require renormalization.
+    """
+    lst = []
+    for i in range(length):
+        f = fraction2float(dtype, q)
+        if f == dtype(0):
+            break
+        lst.append(f)
+        q = q - float2fraction(f)
+    return lst
+
+
 def multiword2mpf(ctx, mw):
     """Transform multiword to mpf instance."""
     s = float2mpf(ctx, mw[-1])
@@ -2171,6 +2451,11 @@ class NumpyContext:
     def ne(self, x, y):
         if isinstance(x, numpy.floating) or isinstance(y, numpy.floating):
             return x != y
+        assert 0, (x, y, type(x))  # unreachable
+
+    def lt(self, x, y):
+        if isinstance(x, numpy.floating) or isinstance(y, numpy.floating):
+            return x < y
         assert 0, (x, y, type(x))  # unreachable
 
     def floor(self, value):

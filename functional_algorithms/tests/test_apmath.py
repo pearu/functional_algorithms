@@ -1,12 +1,40 @@
 import numpy
 import pytest
 import warnings
+from collections import defaultdict
 import functional_algorithms as fa
 
 
 @pytest.fixture(scope="function", params=[numpy.float16, numpy.float32, numpy.float64, numpy.float128])
 def dtype(request):
     return request.param
+
+
+@pytest.mark.parametrize(
+    "overlapping,length",
+    [
+        ("non-overlapping", 2),
+        ("non-overlapping", 3),
+        ("non-overlapping", 4),
+        ("overlapping", 2),
+        ("overlapping", 3),
+        ("overlapping", 4),
+    ],
+)
+def test_expansion_samples(dtype, overlapping, length):
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    fi = numpy.finfo(dtype)
+    size = 4000
+    for x in fa.utils.expansion_samples(size, length, overlapping=overlapping, dtype=dtype):
+        for i in range(len(x) - 1):
+            if not overlapping:
+                assert not fa.utils.overlapping(x[i], x[i + 1]) or (x[i] == 0 and x[i + 1] == 0)
+            else:
+                assert fa.utils.overlapping(x[i], x[i + 1]) or x[i + 1] == 0
+
+        for i in range(len(x)):
+            assert x[i] == 0 or abs(x[i]) >= fi.smallest_normal, (x, i)
 
 
 @pytest.mark.parametrize(
@@ -82,3 +110,112 @@ def test_renormalize(dtype, functional, fast):
                 e2_mp = sum([fa.utils.float2mpf(mp_ctx, e) for e in e2], fa.utils.float2mpf(mp_ctx, dtype(0)))
 
                 assert e1_mp == e2_mp
+
+
+@pytest.mark.parametrize(
+    "functional,overlapping",
+    [
+        ("non-functional", "non-overlapping"),
+        ("non-functional", "overlapping"),
+        ("functional", "non-overlapping"),
+        ("functional", "overlapping"),
+    ],
+)
+def test_multiply(dtype, functional, overlapping):
+    """Consider a multiplication of a two 64-bit FP expansions, for instance, of
+
+      e1 = [1e130, 1e-110]
+      e2 = [1e120, 1e-150]
+
+    The expected result of multiply(e1, e2) is [1e250, 1e-10, 1e-20, 1e-160]
+    that represents a value of
+
+      1e250 + 1e-10 + 1e-20 + 1e-160
+
+    with precision approximately 1362 bits. That is, to verify a
+    product of two FP expansions using mpmath mpf object, its
+    precision must be at least 2097 bits (in the extreme case, the
+    square of sqrt(largest) + sqrt(smallest_subnormal) is
+    approximately 2 ** 1024 + 2 **-49 + 2 ** -1073).
+
+    If the mpmath precision is less than the precision of an exact
+    value, false-positive mismatches will be reported.
+
+    An alternative to using mpmath mpf is using Fraction that
+    arithmetics is always exact. However, not all resulting fractions
+    can be converted to the used dtype (e.g. when numerator or
+    denomerator is too large to be converted to Python
+    float). Therefore, we still have to use mpmath in conversion from
+    Fraction to float.
+
+    Performance-wise, using Fraction is twice faster than using mpmath
+    mpf.
+    """
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import mpmath
+
+    use_mpf = False  # disabled by default as mpmath mpf is twice
+    # slower than using Fraction
+    use_Fraction = True
+
+    length = 2
+    # Renormalize inputs as expansion_samples may not be normalized
+    # even when overlapping is False
+    renormalize = False
+    # Enabling overlapping allows more samples:
+    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
+    # Functional means that the size of outputs from apmath functions is constant.
+    functional = {"non-functional": False, "functional": True}[functional]
+
+    fi = numpy.finfo(dtype)
+    if use_mpf:
+        max_prec = fi.maxexp - numpy.frexp(fi.smallest_subnormal)[1] + 20
+    else:
+        max_prec = 53
+
+    size = 20
+    ctx = fa.utils.NumpyContext()
+
+    mp_ctx = mpmath.mp
+    ulps_fraction = defaultdict(int)
+    ulps_mp = defaultdict(int)
+    with mp_ctx.workprec(max_prec):
+        for e1 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+            if renormalize:
+                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
+            if use_mpf:
+                e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
+            for e2 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+                if renormalize:
+                    e2 = fa.apmath.renormalize(ctx, e2, functional=functional) or [dtype(0)]
+
+                e = fa.apmath.multiply(ctx, e1, e2, functional=functional) or [dtype(0)]
+
+                # e = fa.apmath.mergesort(ctx, e, mth="a>a")[:length+1]
+
+                # skip samples that result overflow to infinity
+                s = sum(e[:-1], e[-1])
+                if not numpy.isfinite(s):
+                    continue
+
+                if use_mpf:
+                    e2_mp = fa.utils.expansion2mpf(mp_ctx, e2)
+                    result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+                    expected_mp = e1_mp * e2_mp
+                    err_mp = result_mp - expected_mp
+                    u_mp = fa.utils.diff_ulp(fa.utils.mpf2float(dtype, err_mp), dtype(0))
+                    ulps_mp[u_mp] += 1
+
+                if use_Fraction:
+                    result_fraction = fa.utils.float2fraction(e)
+                    expected_fraction = fa.utils.float2fraction(e1) * fa.utils.float2fraction(e2)
+                    err_fraction = result_fraction - expected_fraction
+                    err_fraction_mp = mp_ctx.mpf(err_fraction.numerator) / err_fraction.denominator
+                    u_fraction = fa.utils.diff_ulp(fa.utils.mpf2float(dtype, err_fraction_mp), dtype(0))
+                    ulps_fraction[u_fraction] += 1
+
+                    if u_fraction > 2:
+                        print(f"{e1=} {e2=} {e=}")
+    fa.utils.show_ulp(ulps_fraction, title="using Fraction")
+    fa.utils.show_ulp(ulps_mp, title="using mpmath mpf")

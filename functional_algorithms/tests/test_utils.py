@@ -717,3 +717,22 @@ def test_overlapping(real_dtype):
         assert utils.overlapping(y1, x1)
         assert y1 + y2 == y1
         assert x + x1 == y1
+
+
+def test_float2fraction(real_dtype):
+    import mpmath
+
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+
+    prec = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53}[real_dtype]
+
+    mp_ctx = mpmath.mp
+    for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True):
+        q = utils.float2fraction(x)
+        r = utils.fraction2float(real_dtype, q)
+        assert x == r
+        with mp_ctx.workprec(prec):
+            m = utils.float2mpf(mp_ctx, x)
+            f = utils.float2fraction(m)
+        assert f == q
