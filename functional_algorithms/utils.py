@@ -2564,8 +2564,13 @@ def show_prec(prec, title=None):
             print(f"  precision {u}: {prec[u]}")
         elif i == len(lst) - 5:
             rest += prec[u]
-            print(f"  precision in [{u}..{u5}]: {rest}")
-            rest = []
+            if u5 is None:
+                u5 = u
+            if u5 == u:
+                print(f"  precision {u}: {rest}")
+            else:
+                print(f"  precision in [{u}..{u5}]: {rest}")
+            rest = 0
         elif i > len(lst) - 5:
             print(f"  precision {u}: {prec[u]}")
         else:

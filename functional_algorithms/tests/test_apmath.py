@@ -380,3 +380,61 @@ def test_sqrt(dtype, functional, overlapping):
                 assert prec > -fi.negep - 2
 
     fa.utils.show_prec(precs)
+
+
+@pytest.mark.parametrize(
+    "functional,overlapping",
+    [
+        ("non-functional", "non-overlapping"),
+        ("non-functional", "overlapping"),
+        ("functional", "non-overlapping"),
+        ("functional", "overlapping"),
+    ],
+)
+def test_add(dtype, functional, overlapping):
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import mpmath
+
+    length = 2
+    # Renormalize inputs as expansion_samples may not be normalized
+    # even when overlapping is False
+    renormalize = False
+    # Enabling overlapping allows more samples:
+    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
+    # Functional means that the size of outputs from apmath functions is constant.
+    functional = {"non-functional": False, "functional": True}[functional]
+
+    fi = numpy.finfo(dtype)
+    max_prec = fi.maxexp - numpy.frexp(fi.smallest_subnormal)[1] + 20
+
+    size = 50
+    ctx = fa.utils.NumpyContext()
+
+    mp_ctx = mpmath.mp
+    precs = defaultdict(int)
+    with mp_ctx.workprec(max_prec):
+        for e1 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+            if renormalize:
+                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
+            e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
+            for e2 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+                if renormalize:
+                    e2 = fa.apmath.renormalize(ctx, e2, functional=functional) or [dtype(0)]
+
+                e = fa.apmath.add(ctx, e1, e2, functional=functional, size=length + 1) or [dtype(0)]
+
+                # skip samples that result overflow to infinity
+                s = sum(e[:-1], e[-1])
+                if not numpy.isfinite(s):
+                    continue
+
+                result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+                e2_mp = fa.utils.expansion2mpf(mp_ctx, e2)
+                expected_mp = e1_mp + e2_mp
+                prec = fa.utils.diff_prec(result_mp, expected_mp)
+                precs[prec] += 1
+
+                assert prec > (-fi.negep) * length
+
+    fa.utils.show_prec(precs)
