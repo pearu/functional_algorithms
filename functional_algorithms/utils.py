@@ -161,6 +161,24 @@ def mpf2bin(s):
     return f"{sign}{digits}p{exponent:+01d}"
 
 
+def diff_prec(x, y):
+    if isinstance(x, mpmath.mp.mpf) and isinstance(y, mpmath.mp.mpf):
+        if x == y:
+            return x.context._prec_rounding[0]
+        d = x - y
+        xsign, xman, xexp, xbc = x._mpf_
+        _, dman, dexp, _ = d._mpf_
+        xe = xexp + xman.bit_length() - 1
+        de = dexp + dman.bit_length() - 1
+        return xe - de
+    elif isinstance(x, numpy.floating) and isinstance(y, type(x)):
+        xf, xe = numpy.frexp(x)
+        df, de = numpy.frexp(x - y)
+        return xe - de
+    else:
+        raise NotImplementedError(f"matching digits of {type(x).__name__} and {type(y).__name__}")
+
+
 def float2bin(f):
 
     total_bits, exponent_width, integer_part_width, significant_width, uint = {
@@ -296,6 +314,11 @@ def fraction2float(dtype, q):
         return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
     else:
         return dtype(num / denom)
+
+
+def fraction2mpf(ctx, q):
+    num, denom = q.numerator, q.denominator
+    return ctx.mpf(num) / denom
 
 
 def get_precision(x):
@@ -2124,7 +2147,7 @@ def function_validation_parameters(func_name, dtype, device=None):
         min_real_value=-numpy.inf, max_real_value=numpy.inf, min_imag_value=-numpy.inf, max_imag_value=numpy.inf
     )
 
-    # ulp_diff(func(sample), reference(sample)) <= max_valid_ulp_count
+    # diff_ulp(func(sample), reference(sample)) <= max_valid_ulp_count
     max_valid_ulp_count = 3
 
     # func(sample) is within interval [lower, upper] where
@@ -2445,12 +2468,18 @@ class NumpyContext:
                 if value == "pi":
                     return numpy.pi
                 assert 0, (value, dtype)  # not implemented
-            return dtype(value)
+            with warnings.catch_warnings(action="ignore"):
+                return dtype(value)
         assert 0, (value, like, type(like))  # unreachable
 
     def ne(self, x, y):
         if isinstance(x, numpy.floating) or isinstance(y, numpy.floating):
             return x != y
+        assert 0, (x, y, type(x))  # unreachable
+
+    def eq(self, x, y):
+        if isinstance(x, numpy.floating) or isinstance(y, numpy.floating):
+            return x == y
         assert 0, (x, y, type(x))  # unreachable
 
     def lt(self, x, y):
@@ -2471,6 +2500,21 @@ class NumpyContext:
     def round(self, value):
         if isinstance(value, numpy.floating):
             return numpy.round(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def reciprocal(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.reciprocal(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def sqrt(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.sqrt(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def square(self, value):
+        if isinstance(value, numpy.floating):
+            return numpy.square(value)
         assert 0, (value, type(value))  # unreachable
 
 
@@ -2507,6 +2551,30 @@ def show_ulp(ulp, title=None):
     else:
         if rest:
             print(f"  ULP difference in [{u5}..{max(ulp)}]: {rest}")
+
+
+def show_prec(prec, title=None):
+    rest = 0
+    u5 = None
+    if prec and title is not None:
+        print(f"{title}:")
+    lst = list(reversed(sorted(prec)))
+    for i, u in enumerate(lst):
+        if i < 4:
+            print(f"  precision {u}: {prec[u]}")
+        elif i == len(lst) - 5:
+            rest += prec[u]
+            print(f"  precision in [{u}..{u5}]: {rest}")
+            rest = []
+        elif i > len(lst) - 5:
+            print(f"  precision {u}: {prec[u]}")
+        else:
+            if u5 is None:
+                u5 = u
+            rest += prec[u]
+    else:
+        if rest:
+            print(f"  precision in [{min(prec)}..{u5}]: {rest}")
 
 
 def ulp(x):

@@ -44,6 +44,7 @@ https://hal.science/hal-04474530v3
 
 """
 
+import warnings
 from . import floating_point_algorithms as fpa
 
 
@@ -81,11 +82,13 @@ def mergesort(ctx, lst, mth="<"):
 
 
 def two_sum(ctx, a, b):
-    return fpa.add_2sum(ctx, a, b, fast=False)
+    with warnings.catch_warnings(action="ignore"):
+        return fpa.add_2sum(ctx, a, b, fast=False)
 
 
 def quick_two_sum(ctx, a, b):
-    return fpa.add_2sum(ctx, a, b, fast=True)
+    with warnings.catch_warnings(action="ignore"):
+        return fpa.add_2sum(ctx, a, b, fast=True)
 
 
 def split(ctx, a):
@@ -93,7 +96,8 @@ def split(ctx, a):
 
 
 def two_prod(ctx, a, b):
-    return fpa.mul_dekker(ctx, a, b)
+    with warnings.catch_warnings(action="ignore"):
+        return fpa.mul_dekker(ctx, a, b)
 
 
 def vecsum(ctx, seq, fast=False):
@@ -178,9 +182,37 @@ def renormalize(ctx, seq, functional=False, fast=False, size=None):
         f_lst.append(ctx.select(p, eps_i, zero))
     elif ctx._is_nonzero(eps_i):
         f_lst.append(eps_i)
+    if functional:
+        return move_zeros_to_right(ctx, f_lst, size=size)
     if size is not None:
-        return f_lst[:size]
+        f_lst = f_lst[:size]
     return f_lst
+
+
+def move_zeros_to_right(ctx, seq, size=None):
+    """Move zeros in a sequence of unequal items to the end.
+
+    Using a functional friendly algorithm.
+    """
+    if size == 0 or len(seq) == 0:
+        return []
+    if len(seq) == 1:
+        return seq
+
+    zero = ctx.constant(0, seq[0])
+    first = seq[-1]
+    for i in reversed(range(len(seq) - 1)):
+        first = ctx.select(seq[i] != zero, seq[i], first)
+
+    rest = []
+    for i in range(1, len(seq)):
+        item = seq[i - 1]
+        for j in reversed(range(i)):
+            item = ctx.select(seq[j] == first, seq[i], item)
+        rest.append(item)
+    result = [first] + move_zeros_to_right(ctx, rest, size=size - 1 if size is not None else None)
+
+    return result[:size] if size is not None else result
 
 
 def negate(ctx, seq):
@@ -236,64 +268,83 @@ def square(ctx, seq, functional=False, fast=False, size=None):
         ne_lst = []
         for i1 in range(len(seq)):
             i2 = n - i1
-            if i1 > i2:
+            if i1 > i2 or i2 >= len(seq):
                 continue
             elif i1 < i2:
                 p_i, e_i = two_prod(ctx, seq[i1], seq[i2])
-                p_i += p_i
-                e_i += e_i
+                with warnings.catch_warnings(action="ignore"):
+                    p_i += p_i
+                    e_i += e_i
             else:
                 p_i, e_i = two_prod(ctx, seq[i1], seq[i1])
             p_lst.append(p_i)
             ne_lst.append(e_i)
-        lst = vecsum(ctx, p_lst + e_lst, fast=fast)  # should fast be always False?
+        lst = vecsum(ctx, p_lst + e_lst, fast=fast)
         r_lst.append(lst[0])
         e_lst = lst[1:] + ne_lst
-    return renormalize(ctx, r_lst + e_lst, functional=functional, fast=fast, size=size)
+    lst = r_lst + e_lst
+    return renormalize(ctx, lst, functional=functional, fast=fast, size=size)
 
 
-def reciprocal(ctx, seq, functional=False, size=None):
-    """Reciprocal of an FP expansion.
-
-    The size of the output FP expansion must be a power of two.
-    """
-    if size is None:
-        size = len(seq)
-
-    q = size.bit_length() - 1
-    assert 2**q == size
-
+def reciprocal(ctx, seq, functional=False, size=None, niter=None):
+    """Reciprocal of an FP expansion."""
+    q = len(seq).bit_length() - 1
+    if niter is None:
+        niter = q
     two = ctx.constant(2, seq[0])
     x_lst = [ctx.reciprocal(seq[0])]
-    for i in range(0, q):
+    for i in range(niter):
         v_lst = multiply(ctx, x_lst, seq[: 2 ** (i + 1)], functional=functional, size=2 ** (i + 1))
-        w_lst = subtract(ctx, [two], v_lst, functional=functional, size=2 ** (i + 1))
+        if v_lst:
+            w_lst = subtract(ctx, [two], v_lst, functional=functional, size=2 ** (i + 1))
+        else:
+            w_lst = [two]
         x_lst = multiply(ctx, x_lst, w_lst, functional=functional, size=2 ** (i + 1))
 
-    assert len(x_lst) == size
-    return x_lst
+    if size is None:
+        if functional:
+            assert len(x_lst) == len(seq)
+        return x_lst
+
+    if functional:
+        assert len(x_lst) == size, (len(x_lst), size)
+
+    return x_lst[:size]
 
 
-def sqrt(ctx, seq, functional=False, size=None):
-    """Square root of an FP expansion.
-
-    The size of the output FP expansion must be a power of two.
-    """
+def rsqrt(ctx, seq, functional=False, size=None, niter=None):
+    """Reciprocal square root of an FP expansion."""
+    three = ctx.constant(3, seq[0])
+    half = ctx.constant(0.5, seq[0])
+    q = len(seq).bit_length() - 1
+    if niter is None:
+        niter = q
     if size is None:
         size = len(seq)
 
-    q = size.bit_length() - 1
-    assert 2**q == size
-
-    three = ctx.constant(3, seq[0])
-    half = ctx.constant(0.5, seq[0])
-    x_lst = [ctx.sqrt(seq[0])]
-    for i in range(0, q):
+    x_lst = [ctx.reciprocal(ctx.sqrt(seq[0]))]
+    for i in range(q):
         v_lst = multiply(ctx, x_lst, seq[: 2 ** (i + 1)], functional=functional, size=2 ** (i + 1))
-        w_lst = multiply(ctx, x_lst, v_lst, functional=functional, size=2 ** (i + 1))
-        y_lst = subtract(ctx, [three], v_lst, functional=functional, size=2 ** (i + 1))
+        if v_lst:
+            w_lst = multiply(ctx, x_lst, v_lst, functional=functional, size=2 ** (i + 1))
+            y_lst = subtract(ctx, [three], w_lst, functional=functional, size=2 ** (i + 1))
+        else:
+            w_lst = []
+            y_lst = [three]
         z_lst = multiply(ctx, x_lst, y_lst, functional=functional, size=2 ** (i + 1))
         x_lst = [z * half for z in z_lst]
 
-    assert len(x_lst) == size
-    return x_lst
+    if size is None:
+        if functional:
+            assert len(x_lst) == len(seq)
+        return x_lst
+
+    if functional:
+        assert len(x_lst) == size, (len(x_lst), size)
+
+    return x_lst[:size]
+
+
+def sqrt(ctx, seq, functional=False, size=None):
+    """Square root of an FP expansion."""
+    return multiply(ctx, seq, rsqrt(ctx, seq, functional=functional, size=size), functional=functional, size=size)

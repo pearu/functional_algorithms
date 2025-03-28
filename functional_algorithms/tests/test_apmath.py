@@ -219,3 +219,164 @@ def test_multiply(dtype, functional, overlapping):
                         print(f"{e1=} {e2=} {e=}")
     fa.utils.show_ulp(ulps_fraction, title="using Fraction")
     fa.utils.show_ulp(ulps_mp, title="using mpmath mpf")
+
+
+@pytest.mark.parametrize(
+    "functional,overlapping",
+    [
+        ("non-functional", "non-overlapping"),
+        ("non-functional", "overlapping"),
+        ("functional", "non-overlapping"),
+        ("functional", "overlapping"),
+    ],
+)
+def test_square(dtype, functional, overlapping):
+    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
+    functional = {"non-functional": False, "functional": True}[functional]
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import mpmath
+
+    fi = numpy.finfo(dtype)
+    max_prec = -fi.negep * 10
+    size = 1000
+    length = 2
+    renormalize = False
+    ctx = fa.utils.NumpyContext()
+    mp_ctx = mpmath.mp
+    precs = defaultdict(int)
+    with mp_ctx.workprec(max_prec):
+        for e1 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+            e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
+            if renormalize:
+                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
+
+            e = fa.apmath.square(ctx, e1, functional=functional) or [dtype(0)]
+
+            # skip samples that result overflow to infinity
+            s = sum(e[:-1], e[-1])
+            if not numpy.isfinite(s):
+                continue
+
+            result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+            expected_mp = e1_mp * e1_mp
+            err_mp = result_mp - expected_mp
+            prec = fa.utils.diff_prec(result_mp, expected_mp)
+            precs[prec] += 1
+            if prec <= -fi.negep and 0:
+                print(
+                    f"{prec=} {e1=} {e=} {result_mp=} {expected_mp=} {fa.apmath.multiply(ctx, e1, e1, functional=functional)=}"
+                )
+
+            if not overlapping:
+                if s < fi.smallest_normal:
+                    min_prec = min(0, fa.utils.diff_prec(s, fi.smallest_normal)) - 2 - fi.negep
+                else:
+                    min_prec = -fi.negep
+                assert prec >= min_prec
+
+    fa.utils.show_prec(precs)
+
+
+@pytest.mark.parametrize(
+    "functional,overlapping",
+    [
+        ("non-functional", "non-overlapping"),
+        ("non-functional", "overlapping"),
+        ("functional", "non-overlapping"),
+        ("functional", "overlapping"),
+    ],
+)
+def test_reciprocal(dtype, functional, overlapping):
+    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
+    functional = {"non-functional": False, "functional": True}[functional]
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+
+    import mpmath
+
+    fi = numpy.finfo(dtype)
+    max_prec = -fi.negep * 10
+    size = 1000
+    length = 2
+    renormalize = False
+    ctx = fa.utils.NumpyContext()
+    mp_ctx = mpmath.mp
+    precs = defaultdict(int)
+    with mp_ctx.workprec(max_prec):
+        for e1 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+            e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
+            if renormalize:
+                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
+
+            e = fa.apmath.reciprocal(ctx, e1, functional=functional) or [dtype(0)]
+
+            # skip samples that result overflow to infinity
+            s = sum(e[:-1], e[-1])
+            if not numpy.isfinite(s):
+                continue
+
+            result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+            expected_mp = 1 / e1_mp
+            err_mp = result_mp - expected_mp
+            prec = fa.utils.diff_prec(result_mp, expected_mp)
+            precs[prec] += 1
+            if prec <= -fi.negep and 0:
+                print(f"{prec=} {e1=} {e=} {result_mp=} {expected_mp=}")
+
+            if not overlapping:
+                assert prec > -fi.negep - 3
+
+    fa.utils.show_prec(precs)
+
+
+@pytest.mark.parametrize(
+    "functional,overlapping",
+    [
+        ("non-functional", "non-overlapping"),
+        ("non-functional", "overlapping"),
+        ("functional", "non-overlapping"),
+        ("functional", "overlapping"),
+    ],
+)
+def test_sqrt(dtype, functional, overlapping):
+    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
+    functional = {"non-functional": False, "functional": True}[functional]
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+
+    import mpmath
+
+    fi = numpy.finfo(dtype)
+    max_prec = fi.maxexp - numpy.frexp(fi.smallest_subnormal)[1] + 20
+    size = 500
+    length = 2
+    renormalize = False
+    ctx = fa.utils.NumpyContext()
+    mp_ctx = mpmath.mp
+    precs = defaultdict(int)
+    with mp_ctx.workprec(max_prec):
+        for e1 in fa.utils.expansion_samples(size=size, length=length, overlapping=overlapping, dtype=dtype):
+            e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
+            if renormalize:
+                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
+
+            e = fa.apmath.sqrt(ctx, e1, functional=functional) or [dtype(0)]
+
+            # skip samples that result overflow to infinity
+            s = sum(e[:-1], e[-1])
+            if not numpy.isfinite(s):
+                continue
+
+            result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+            expected_mp = mp_ctx.sqrt(e1_mp)
+            err_mp = result_mp - expected_mp
+            prec = fa.utils.diff_prec(result_mp, expected_mp)
+            precs[prec] += 1
+            if prec <= -fi.negep and 0:
+                print(f"{prec=} {e1=} {e=} {result_mp=} {expected_mp=}")
+
+            if not overlapping:
+                assert prec > -fi.negep - 2
+
+    fa.utils.show_prec(precs)
