@@ -348,3 +348,140 @@ def rsqrt(ctx, seq, functional=False, size=None, niter=None):
 def sqrt(ctx, seq, functional=False, size=None):
     """Square root of an FP expansion."""
     return multiply(ctx, seq, rsqrt(ctx, seq, functional=functional, size=size), functional=functional, size=size)
+
+
+def power(ctx, seq, n, functional=False, size=None):
+    """
+    n-th power of an FP expansion.
+    """
+    if n == 0:
+        return [ctx.constant(1, seq[0])]
+    if n == 1:
+        assert size is None or len(seq) == size  # not impl
+        return seq
+    if n == 2:
+        return square(ctx, seq, functional=functional, size=size)
+    assert isinstance(n, int) and n > 0, n  # not impl
+    r = power(ctx, seq, n // 2, functional=functional, size=size)
+    sq = square(ctx, r, functional=functional, size=size)
+    if n % 2 == 0:
+        return sq
+    return multiply(ctx, sq, seq, functional=functional, size=size)
+
+
+def hypergeometric(ctx, a, b, seq, niter, functional=False, size=None):
+    """
+    Generalized hypergeometic series on an FP expansion:
+
+      sum(prod((a[i])_n, i=0..p) / prod((b[i])_n), i=0..q * z**n / n!, n=0,1,...,niter-1)
+
+    where
+      p = len(a) - 1
+      p = len(b) - 1
+      (k)_n = 1 if n == 0 else (k)_{n-1} * (k + n - 1)
+      n! = 1 if n == 0 else (n-1)! * n
+      a and b are lists of integers or Fraction instances.
+    """
+    import numpy
+
+    if isinstance(seq[0], (numpy.float64, numpy.float32, numpy.float16)):
+        return hypergeometric_impl(ctx, type(seq[0]), a, b, seq, niter, functional=functional, size=size)
+
+    largest = fpa.get_largest(ctx, seq[0])
+    r_fp64 = hypergeometric_impl(ctx, numpy.float64, a, b, seq, niter, functional=functional, size=size)
+    r_fp32 = hypergeometric_impl(ctx, numpy.float32, a, b, seq, niter, functional=functional, size=size)
+    r_fp16 = hypergeometric_impl(ctx, numpy.float16, a, b, seq, niter, functional=functional, size=size)
+
+    return ctx.select(largest > 1e308, r_fp64, ctx.select(largest > 1e38, r_fp32, r_fp16))
+
+
+def hypergeometric_minus_one(ctx, a, b, seq, niter, functional=False, size=None):
+    """
+    Generalized hypergeometic series on an FP expansion minus one:
+
+      sum(prod((a[i])_n, i=0..p) / prod((b[i])_n), i=0..q * z**n / n!, n=1,...,niter-1)
+
+    where
+      p = len(a) - 1
+      p = len(b) - 1
+      (k)_n = 1 if n == 0 else (k)_{n-1} * (k + n - 1)
+      n! = 1 if n == 0 else (n-1)! * n
+      a and b are lists of integers or Fraction instances.
+    """
+    import numpy
+
+    if isinstance(seq[0], (numpy.float64, numpy.float32, numpy.float16)):
+        return hypergeometric_minus_one_impl(ctx, type(seq[0]), a, b, seq, niter, functional=functional, size=size)
+
+    largest = fpa.get_largest(ctx, seq[0])
+    r_fp64 = hypergeometric_minus_one_impl(ctx, numpy.float64, a, b, seq, niter, functional=functional, size=size)
+    r_fp32 = hypergeometric_minus_one_impl(ctx, numpy.float32, a, b, seq, niter, functional=functional, size=size)
+    r_fp16 = hypergeometric_minus_one_impl(ctx, numpy.float16, a, b, seq, niter, functional=functional, size=size)
+
+    return ctx.select(largest > 1e308, r_fp64, ctx.select(largest > 1e38, r_fp32, r_fp16))
+
+
+def hypergeometric_impl(ctx, dtype, a, b, seq, niter, functional=False, size=None):
+    r = hypergeometric_minus_one_impl(ctx, dtype, a, b, seq, niter, functional=functional, size=size)
+    return add(ctx, [dtype(1)], r, functional=functional, size=size)
+
+
+def hypergeometric_minus_one_impl(ctx, dtype, a, b, seq, niter, functional=False, size=None):
+    import fractions
+    import functional_algorithms as fa
+
+    rcoeffs = []
+    for n in range(1, niter):
+        numer_ = 1
+        denom_ = 1
+        for a_ in a:
+            numer_ *= a_ + n - 1
+        for b_ in b:
+            denom_ *= b_ + n - 1
+        denom_ *= n
+
+        if not numer_:
+            break
+
+        rc = fa.utils.fraction2expansion(dtype, fractions.Fraction(numer_, denom_))
+        if not rc:
+            break
+        rcoeffs.append(renormalize(ctx, rc, functional=False))
+
+    # hypergeometric series evaluation using Horner' scheme as
+    #
+    #   sum(c[n] * z ** n, n=0..niter-1)
+    #   = c[0] + c[1] * z + c[2] * z ** 2 + c[3] * z ** 3 + ...
+    #   = c[0] + (c[1] + (c[2] + (c[3] + ...) * z) * z) * z
+    #   = fma(fma(fma(fma(..., z, c[3]), z, c[2]), z, c[1]), z, c[0])
+    #
+    # is inaccurate because c[n] is a rapidly decreasing sequence and
+    # the given dtype may not have enough exponent range to represent
+    # very small coefficients.
+    #
+    # In the following, we'll use the property of geometric series that
+    # the ratio of neighboring coefficients is a rational number so
+    # that we have
+    #
+    #   c[n] * z ** n == (c[n-1] * z ** (n-1)) * z * R(n)
+    #   c[0] = 1
+    #
+    # Hence
+    #
+    #   sum(c[n] * z ** n, n=0..niter-1)
+    #   = c[0] + c[0] * z * R(1) + c[0] * z * R(1) * z * R(2) + ...
+    #   = c[0] * (1 + z * R(1) * (1 + z * R(2) * (1 + z * R(3) * (1 + ...))))
+    #   = 1 + z * R(1) * (1 + z * R(2) * (1 + z * R(3) * (1 + ...)))
+    #
+    # where R(n) is a slowly varying sequence in n. For instance, for
+    # float16 hypergeometric([], [], z), R(n) = 1 / n is nonzero for n
+    # over 2 ** 24, that is, the maximal value for user-specified
+    # niter is practically unlimited.
+    def rhorner(rcoeffs, z):
+        r = multiply(ctx, rcoeffs[0], z, functional=functional, size=size) or [dtype(0)]
+        if len(rcoeffs) > 1:
+            h = add(ctx, [dtype(1)], rhorner(rcoeffs[1:], z), functional=functional, size=size)
+            r = multiply(ctx, r, h, functional=functional, size=size)
+        return r
+
+    return rhorner(rcoeffs, seq)

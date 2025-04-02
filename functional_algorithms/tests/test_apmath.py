@@ -438,3 +438,116 @@ def test_add(dtype, functional, overlapping):
                 assert prec > (-fi.negep) * length
 
     fa.utils.show_prec(precs)
+
+
+@pytest.mark.parametrize(
+    "function,functional",
+    [
+        ("exp", "non-functional"),
+        ("exp", "functional"),
+        ("cos", "non-functional"),
+        ("j0", "non-functional"),
+        ("j1", "non-functional"),
+    ],
+)
+def test_hypergeometric(dtype, function, functional):
+    if dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    import mpmath
+    import fractions
+
+    size = 100
+    functional = {"non-functional": False, "functional": True}[functional]
+    ctx = fa.utils.NumpyContext()
+    mp_ctx = mpmath.mp
+    fi = numpy.finfo(dtype)
+    min_prec = -fi.negep
+    max_prec = fi.maxexp - numpy.frexp(fi.smallest_subnormal)[1] + 20
+
+    min_value = 1
+    max_value = 20
+    niter = 20
+    length = 2
+    if function == "exp":
+        a, b = [], []  # exp(z)
+        sample_func = lambda z: z
+        length = 2
+        min_value = 0
+        max_value = 9
+        niter = {
+            numpy.float16: 22,  # max z == 9
+            numpy.float32: 30,  # max z == 9
+            numpy.float64: 45,  # max z == 9
+        }.get(dtype, niter)
+    elif function == "cos":
+        a, b = [], [fractions.Fraction(1, 2)]  # cos(-4 * sqrt(z))
+        sample_func = lambda z: -z
+        min_value = 0
+        max_value = 10
+        length = 2
+        niter = {
+            numpy.float16: 11,  # max z == 5.516
+            numpy.float32: 28,  # max z == 49.94
+            numpy.float64: 66,  # max z == 326.0
+        }.get(dtype, niter)
+        niter = {
+            numpy.float16: 14,  # max z == 15
+            numpy.float32: 19,  # max z == 22
+            numpy.float64: 25,  # max z == 21
+        }.get(dtype, niter)
+        niter = {
+            numpy.float16: 14,  # max z == 10
+            numpy.float32: 15,  # max z == 10
+            numpy.float64: 21,  # max z == 11
+        }.get(dtype, niter)
+    elif function == "j0":
+        a, b = [], [1]  # J0(-4 * sqrt(z)) * 2 / z
+        sample_func = lambda z: -z
+        min_value = 0
+        max_value = 10
+        length = 2
+        niter = {
+            numpy.float16: 13,  # max z == 10
+            numpy.float32: 15,  # max z == 10
+            numpy.float64: 21,  # max z == 11
+        }.get(dtype, niter)
+    elif function == "j1":
+        a, b = [], [2]  # J1(-4 * sqrt(z)) * (2 / z) ** 2 * 2
+        sample_func = lambda z: -z
+        min_value = 0
+        max_value = 10
+        length = 3
+        niter = {
+            # numpy.float16: 13,  # max z == 3.68 [length==2]
+            numpy.float16: 11,  # max z == 10 [length==3]
+            numpy.float32: 14,  # max z == 10 [length==2 or 3]
+            numpy.float64: 20,  # max z == 11
+        }.get(dtype, niter)
+    else:
+        assert 0, function  # not implemented
+
+    with mp_ctx.workprec(max_prec):
+        for z in map(sample_func, fa.utils.real_samples(size=size, dtype=dtype, min_value=min_value, max_value=max_value)):
+            e = fa.apmath.hypergeometric(ctx, a, b, [z], niter=niter, functional=functional, size=length)
+
+            # skip samples that result overflow to infinity
+            s = sum(e[:-1], e[-1])
+            if not numpy.isfinite(s):
+                print(f"{z=} {e=}")
+                break
+
+            result_mp = fa.utils.expansion2mpf(mp_ctx, e)
+
+            z_mp = fa.utils.float2mpf(mp_ctx, z)
+
+            expected_mp = mp_ctx.hyper(a, b, z_mp)
+
+            prec = fa.utils.diff_prec(result_mp, expected_mp)
+
+            # print(f'{prec=} {z=} {e=}')
+
+            if size <= 1000:
+                assert prec > min_prec
+
+            if prec <= min_prec:
+                break
