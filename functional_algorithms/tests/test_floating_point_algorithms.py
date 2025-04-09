@@ -746,6 +746,9 @@ def test_laurent():
     for m in [0, 1, 2, 10, len(C), -1, -2, -len(C) + 1, -len(C), -10]:
         for x in samples:
             result = fpa.laurent(ctx, x, C, m)
-            expected = dtype(reference(x, C, m))
 
+            expected = dtype(reference(x, C, m))
+            assert numpy.isclose(result, expected)
+
+            result = fpa.laurent(ctx, x, C[::-1], m, reverse=True)
             assert numpy.isclose(result, expected)
