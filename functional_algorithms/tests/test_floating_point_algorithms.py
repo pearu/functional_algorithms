@@ -728,3 +728,27 @@ def test_argument_reduction_trigonometric(dtype):
 
     for u in sorted(ulp_counts):
         print(f"ULP difference {u}: {ulp_counts[u]}")
+
+
+def test_laurent():
+    dtype = numpy.float64
+    ctx = NumpyContext()
+    size = 1000
+    samples = utils.real_samples(size, dtype=dtype, min_value=0.1, max_value=10)
+
+    def reference(z, C, m):
+        s = 0
+        for j, c in enumerate(C):
+            s += c * z ** (j + m)
+        return s
+
+    C = list(range(-2, 4))
+    for m in [0, 1, 2, 10, len(C), -1, -2, -len(C) + 1, -len(C), -10]:
+        for x in samples:
+            result = fpa.laurent(ctx, x, C, m)
+
+            expected = dtype(reference(x, C, m))
+            assert numpy.isclose(result, expected)
+
+            result = fpa.laurent(ctx, x, C[::-1], m, reverse=True)
+            assert numpy.isclose(result, expected)
