@@ -693,7 +693,7 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     """
 
     if reverse:
-        return fast_polynomial(ctx, x, reversed(coeffs), reverse=False, scheme=scheme)
+        return fast_polynomial(ctx, x, list(reversed(coeffs)), reverse=False, scheme=scheme)
 
     if scheme is None:
         scheme = balanced_dac_scheme
@@ -727,6 +727,29 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
     return a * xd + b
+
+
+def laurent(ctx, z, C, m, scheme=None):
+    """Compute Laurent polynomial
+
+      sum(C[j] * z ** (j + m), j=0..len(C) - 1)
+
+    where m is the exponent of the first term, it could be negative.
+    """
+    if m == 0:
+        return fast_polynomial(ctx, z, C, reverse=False, scheme=scheme)
+    elif m > 0:
+        return fast_polynomial(ctx, z, C, reverse=False, scheme=scheme) * fast_exponent_by_squaring(ctx, z, m)
+    elif -m < len(C):
+        N = C[:-m] + [ctx.constant(0, z)]
+        P = C[-m:]
+        rz = ctx.reciprocal(z)
+        return fast_polynomial(ctx, rz, N, reverse=True, scheme=scheme) + fast_polynomial(
+            ctx, z, P, reverse=False, scheme=scheme
+        )
+    else:
+        rz = ctx.reciprocal(z)
+        return fast_polynomial(ctx, rz, C, reverse=True, scheme=scheme) * fast_exponent_by_squaring(ctx, rz, -m - len(C) + 1)
 
 
 def split_tripleword(ctx, x, scale=False):
