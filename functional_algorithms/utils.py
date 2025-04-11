@@ -2550,7 +2550,10 @@ def show_ulp(ulp, title=None):
             rest += ulp[u]
     else:
         if rest:
-            print(f"  ULP difference in [{u5}..{max(ulp)}]: {rest}")
+            if u5 == max(ulp):
+                print(f"  ULP difference {u5}: {rest}")
+            else:
+                print(f"  ULP difference in [{u5}..{max(ulp)}]: {rest}")
 
 
 def show_prec(prec, title=None):
