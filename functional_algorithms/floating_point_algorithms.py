@@ -5,12 +5,224 @@
   Jean-Michel Muller. https://hal.science/hal-04624238/
 """
 
+import functools
+import warnings
 
-def get_largest(ctx, x: float):
+
+def make_api(mp_func=None):
+    """Decorator generator for floating-point math functions.
+
+    Example:
+
+      @_make_api(mp_func)
+      def func_impl(ctx, dtype, seq, ...):
+          ...
+          return result
+
+    defines a function with the following signature:
+
+      def func(ctx, seq, ..., mp_ctx=None):
+          ...
+          return result
+
+    that is, the resulting function func has the same signature as
+    func_impl but without dtype argument and with extra keyword
+    argument mp_ctx.
+
+    If both mp_func and mp_ctx are specified, the result will be the
+    output of
+
+      mp_func(mp_ctx, seq_mp, ...)
+
+    converted to FP expansion. Otherwise, the result is the output of
+    the func_impl function.
+
+    The original function func_impl can be accessed as
+
+      func.impl
+
+    or via calling
+
+      func(..., dtype=dtype)
+
+    The call
+
+      func.mp(...)
+
+    is equivalent to
+
+      func(..., mp_ctx=mp_ctx)
+
+    where mp_ctx is provided by ctx instance.
+
+    Motivation
+    ----------
+
+    In algorithms, some their internal parameters may depend on the
+    dtype of inputs. Since at the stage of generating source code of
+    such algorithms the dtype is unknown (e.g. StableHLO target), we
+    use the value of largest constant to detect a particular dtype and
+    it is assumed that compilers will remove the code that
+    corrersponds to other dtypes. On the other hand, when testing
+    algorithms using NumpyContext, the algorithm implementations are
+    executed as they are, that is, dtype-depended code would be run
+    for all supported dtypes (float16, float32, float64) which
+    involves unnecessary operations that correspond to dtypes that is
+    not the dtype of inputs. To avoid such overhead, the
+    implementations of algorithms have explicit dtype argument that
+    corresponds to input dtype (in the case of NumpyContext) or a
+    dtype of the branch that is generated when producing source code
+    to a dtype-agnostic target.
+    """
+
+    def _make_api(impl):
+
+        def api(ctx, *args, **kwargs):
+            import numpy
+            import functional_algorithms as fa
+
+            dtype = kwargs.pop("dtype", None)
+            largest = get_largest(ctx)
+            if isinstance(largest, numpy.floating) and dtype is None:
+                dtype = type(largest)
+
+            mp_ctx = kwargs.pop("mp_ctx", None)
+            if mp_func is None:
+                if mp_ctx is not None:
+                    fa.utils.warn_once(
+                        f"{impl.__name__} is called with mp_ctx argument but no mp_func defined. mp_ctx will be ignored."
+                    )
+            elif mp_ctx is not None:
+                # Ignore impl and use mpmath method for computing
+                # the result. Useful for testing the limitations
+                # of impl.
+
+                # valid arguments to impl are
+                # - scalars
+                # - lists of scalars (expansions)
+                # - lists of arrays (vectorized expansions)
+                # - lists of scalars and arrays (vectorized expansions with broadcasting)
+
+                def isscalar(a):
+                    return isinstance(a, (int, float, numpy.floating))
+
+                def apply(func, args):
+                    arr_args = sum(
+                        [[a for a in arg if isinstance(a, numpy.ndarray)] for arg in args if isinstance(arg, list)], []
+                    )
+                    if not arr_args:
+                        return func(args)
+
+                    # assuming that func is a point-wise function
+                    # with respect to all its inputs when one of
+                    # these is passed as an array
+                    n = None
+                    for a in arr_args:
+                        if n is None:
+                            n = len(a)
+                        else:
+                            assert n == len(a)
+
+                    result = None
+                    for i in range(n):
+                        a_args = tuple(
+                            ([(a[i] if isinstance(a, numpy.ndarray) else a) for a in arg] if isinstance(arg, list) else [arg])
+                            for arg in args
+                        )
+
+                        r = func(a_args)
+                        if result is None:
+                            if isinstance(r, tuple):
+                                result = tuple([r_] for r_ in r)
+                            else:
+                                result = [r]
+                        elif isinstance(result, tuple):
+                            assert isinstance(r, tuple) and len(r) == len(result)
+                            for i, r_ in enumerate(r):
+                                result[i].append(r_)
+                        else:
+                            assert not isinstance(r, tuple)
+                            result.append(r)
+
+                    if isinstance(result, tuple):
+                        return tuple(list(numpy.array(r).T) for r in result)
+                    return list(numpy.array(result).T)
+
+                def make_return(dtype_, r):
+                    if isinstance(r, tuple):
+                        return type(r)(make_return(dtype_, r_) for r_ in r)
+                    if kwargs.get("asmp"):
+                        return r
+                    assert isinstance(r, mp_ctx.mpf), r
+                    return fa.utils.mpf2expansion(dtype_, r, functional=kwargs.get("functional"), length=kwargs.get("size"))
+
+                def func(args):
+                    args_mp = []
+                    for a in args:
+                        if isinstance(a, list):
+                            a = fa.utils.expansion2mpf(mp_ctx, a)
+                        else:
+                            assert isscalar(a)
+                        args_mp.append(a)
+
+                    return make_return(dtype, mp_func(mp_ctx, *args_mp))
+
+                return apply(func, args)
+            # else
+
+            def impl_(dtype_):
+                return impl(ctx, dtype_, *args, **kwargs)
+
+            if dtype is not None:
+                max_size = {numpy.float16: 4, numpy.float32: 12, numpy.float64: 40}[dtype]
+
+                # Note that impl_ may return a non-scalar value:
+                def make_return(r):
+                    if isinstance(r, (tuple, list)):
+                        assert len(r) <= max_size, (len(r), max_size)
+                        return type(r)(map(make_return, r))
+
+                    return ctx.constant(r)
+
+                with warnings.catch_warnings(action="ignore"):
+                    return make_return(impl_(dtype))
+
+            # Note that impl_ must return a scalar value as
+            # ctx.select(...)  is a scalar expression:
+            with warnings.catch_warnings(action="ignore"):
+                f64 = ctx.constant(impl_(numpy.float64), largest)
+                f32 = ctx.constant(impl_(numpy.float32), largest)
+                f16 = ctx.constant(impl_(numpy.float16), largest)
+
+            return ctx.select(largest > 1e308, f64, ctx.select(largest > 1e38, f32, f16))
+
+        def api_mp(ctx, *args, **kwargs):
+            mp_ctx = ctx._mpmath_context
+            assert mp_ctx is not None
+            kwargs.update(mp_ctx=mp_ctx)
+            return api(ctx, *args, **kwargs)
+
+        api.mp = api_mp
+
+        # api.impl = impl  # likely unused
+
+        return api
+
+    return _make_api
+
+
+def get_largest(ctx, x: float = None):
     largest = ctx.constant("largest", x)
     if hasattr(largest, "reference"):
         largest = largest.reference("largest")
     return largest
+
+
+def get_smallest(ctx, x: float = None):
+    smallest = ctx.constant("smallest", x)
+    if hasattr(smallest, "reference"):
+        smallest = smallest.reference("smallest")
+    return smallest
 
 
 def get_largest_log(ctx, x: float):
@@ -54,40 +266,82 @@ def get_veltkamp_splitter_constant(ctx, largest: float):  # deprecate
     Using `largest` to detect the floating point type: float16,
     float32, or float64.
     """
-    return get_veltkamp_splitter_constants(ctx, largest)[0]
+    return get_veltkamp_splitter_parameters(ctx, largest)["C"]
 
 
-def get_veltkamp_splitter_constants(ctx, largest: float):
-    """Return Veltkamp splitter constants:
+def switch_largest(ctx, largest: float, case_func):
+    """Select case based on the dtype of largest.
 
-      V = 2 ** s + 1
-      N = 2 ** s
-      invN = 2 ** -s
-
-    where s = ceil(p / 2) and s is the precision of the floating point
-    number system.
-
-    Using `largest` to detect the floating point type: float16,
-    float32, or float64.
+    case_func is callable with signature
+      (dtype) -> value
     """
+    import numpy
 
-    fp64 = ctx.constant(2 ** (54 // 2) + 1, largest)
-    fp32 = ctx.constant(2 ** (24 // 2) + 1, largest)
-    fp16 = ctx.constant(2 ** (12 // 2) + 1, largest)
-    C = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
-    fp64 = ctx.constant(2 ** (54 // 2), largest)
-    fp32 = ctx.constant(2 ** (24 // 2), largest)
-    fp16 = ctx.constant(2 ** (12 // 2), largest)
-    N = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
-    fp64 = ctx.constant(0.5 ** (54 // 2), largest)
-    fp32 = ctx.constant(0.5 ** (24 // 2), largest)
-    fp16 = ctx.constant(0.5 ** (12 // 2), largest)
-    invN = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    if isinstance(largest, numpy.floating):
+
+        def make_return(r):
+            if isinstance(r, (list, tuple)):
+                return type(r)(map(make_return, r))
+            return ctx.constant(r, largest)
+
+        return make_return(case_func(type(largest)))
+
+    # Note that case_func must return a scalar value.
+    f64 = ctx.constant(case_func(numpy.float64), largest)
+    f32 = ctx.constant(case_func(numpy.float32), largest)
+    f16 = ctx.constant(case_func(numpy.float16), largest)
+    return ctx.select(largest > 1e308, f64, ctx.select(largest > 1e38, f32, f16))
+
+
+@functools.lru_cache(typed=True)
+def get_veltkamp_splitter_parameters(ctx, largest: float):
+    """Return a dictionary of Veltkamp splitter parameters:
+
+    C = 2 ** ((p + 1) // 2) + 1
+    N = 2 ** ((p + 1) // 2)
+    invN = 2 ** -((p + 1) // 2)
+    x_max = 2 ** (maxexp - p // 2) * (2 ** (p // 2) - 1)
+
+    that are used in split_veltkamp.
+    """
+    import functional_algorithms as fa
+
+    def calc_x_max(dtype):
+        p = fa.utils.get_precision(dtype)
+        maxexp = fa.utils.get_maxexp(dtype)
+        return 2 ** (maxexp - p // 2) * (2 ** (p // 2) - 1)
+
+    def calc_C(dtype):
+        p = fa.utils.get_precision(dtype)
+        return 2 ** ((p + 1) // 2) + 1
+
+    def calc_N(dtype):
+        p = fa.utils.get_precision(dtype)
+        return 2 ** ((p + 1) // 2)
+
+    def calc_invN(dtype):
+        p = fa.utils.get_precision(dtype)
+        return 0.5 ** ((p + 1) // 2)
+
+    def calc_S(dtype):
+        p = fa.utils.get_precision(dtype)
+        return (2 ** (p - 1) + 1) / 2 ** (2 * p - 1)
+
+    C = switch_largest(ctx, largest, calc_C)
+    N = switch_largest(ctx, largest, calc_N)
+    invN = switch_largest(ctx, largest, calc_invN)
+    x_max = switch_largest(ctx, largest, calc_x_max)
+
+    S = switch_largest(ctx, largest, calc_S)
+
     if hasattr(C, "reference"):
         C = C.reference("veltkamp_C", force=True)
         N = N.reference("veltkamp_N", force=True)
         invN = invN.reference("veltkamp_invN", force=True)
-    return C, N, invN
+        x_max = x_max.reference("veltkamp_x_max", force=True)
+        S = S.reference("veltkamp_S", force=True)
+
+    return dict(x_max=x_max, C=C, N=N, invN=invN, S=S)
 
 
 def get_tripleword_splitter_constants(ctx, largest: float):
@@ -138,7 +392,8 @@ def get_is_power_of_two_constants(ctx, largest: float):
     return Q, P
 
 
-def next(ctx, x: float, up=True):
+@make_api()
+def next(ctx, dtype, x, up=True):
     """Return
 
       nextafter(x, (1 if up else -1) * inf)
@@ -149,30 +404,42 @@ def next(ctx, x: float, up=True):
     - x is normal, finite, and positive.
     - division/multiplication rounds to nearest.
     """
-    largest = ctx.constant("largest", x)
-    if hasattr(largest, "reference"):
-        largest = largest.reference("largest")
+    import numpy
 
-    fp64 = ctx.constant(1 - 1 / (1 << 53), largest)
-    fp32 = ctx.constant(1 - 1 / (1 << 24), largest)
-    fp16 = ctx.constant(1 - 1 / (1 << 11), largest)
-    c = ctx.select(largest > 1e308, fp64, ctx.select(largest > 1e38, fp32, fp16))
+    p = -numpy.finfo(dtype).negep
+    c = ctx.constant(1 - 1 / (1 << p))
     if hasattr(c, "reference"):
         c = c.reference("Cnextup", force=True)
-
-    result = ctx.select(x > 0, x / c, x * c) if up else ctx.select(x < 0, x / c, x * c)
-    return result
+    return ctx.select(x > 0, x / c, x * c) if up else ctx.select(x < 0, x / c, x * c)
 
 
-def nextup(ctx, x: float):
-    return next(ctx, x, up=True)
+@make_api()
+def nextup(ctx, dtype, x: float):
+    return next(ctx, x, up=True, dtype=dtype)
 
 
-def nextdown(ctx, x: float):
-    return next(ctx, x, up=False)
+@make_api()
+def nextdown(ctx, dtype, x: float):
+    return next(ctx, x, up=False, dtype=dtype)
 
 
-def split_veltkamp(ctx, x, C=None, scale=False):
+@functools.lru_cache(typed=True)
+def split_veltkamp_parameters(dtype):
+    import functional_algorithms as fa
+
+    p = fa.utils.get_precision(dtype)
+    maxexp = fa.utils.get_maxexp(dtype)
+    params = dict(
+        C=dtype(2 ** ((p + 1) // 2) + 1),
+        N=dtype(2 ** ((p + 1) // 2)),
+        invN=dtype(0.5 ** ((p + 1) // 2)),
+        x_max=dtype(2 ** (maxexp - p // 2) * (2 ** (p // 2) - 1)),
+    )
+    return params
+
+
+@make_api()
+def split_veltkamp(ctx, dtype, x, C=None, scale=False):
     """Veltkamp splitter:
 
       x = xh + xl
@@ -185,36 +452,62 @@ def split_veltkamp(ctx, x, C=None, scale=False):
     where p is the precision of the floating point system, xh and xl
     significant parts fit into p / 2 bits.
 
-    It is assumed that the aritmetical operations use rounding to
-    nearest and C * x does not overflow. If scale is True, large
-    abs(x) values are normalized with `(C - 1)` to increase the domain
-    of appicability.
+    Aritmetical operations must use rounding to nearest.
+
+    By default, it is assumed that C * x does not overflow.
+
+    When C * x overflows and abs(x) > 1, then specifying scale=True
+    normalizes abs(x) using the scaling factor `1 / (C - 1)` that
+    extends the domain of applicability of the Veltkamp splitter up to
+
+      abs(x) <= 2 ** (maxexp - p // 2) * (2 ** (p // 2) - 1)
+
+    For the case when `abs(x) / (C - 1) * C` overflows, we define
+
+      xh = 2 ** (maxexp - p // 2) * (2 ** (p // 2) - 1)
+      xl = x - xh
 
     Domain of applicability:
 
-      abs(x) <= largest * (1 - 1 / C)  if scale is True
-      abs(x) <= largest / C            otherwise
+      abs(x) <= inf           if scale is True
+      abs(x) <= largest / C   otherwise
 
     """
+    params = split_veltkamp_parameters(dtype)
     if C is None:
-        C, N, invN = get_veltkamp_splitter_constants(ctx, get_largest(ctx, x))
-    elif scale:
-        one = ctx.constant(1, x)
-        N = C - one
-        invN = one / N
-
+        C = params["N"]
     if scale:
-        N = ctx.select(abs(x) < one, one, N)
-        invN = ctx.select(abs(x) < one, one, invN)
-
-    x_n = x * invN if scale else x
+        ax = abs(x)
+        invN = params["invN"]
+        x_n = ctx.select(ax < 1, x, x * invN)
+    else:
+        x_n = x
 
     g = C * x_n
     d = g - x_n
-    xh = g - d
-    xl = x_n - xh
+    gd = g - d
 
-    return (xh * N, xl * N) if scale else (xh, xl)
+    # https://perso.ens-lyon.fr/jean-michel.muller/slides-split.pdf
+    # provides underflow-safe and almost overflow-safe scaling that
+    # cost is 4 arithmetic operations. However, the algorithm 7 does
+    # not always produce delta that is a power of two (unless I am
+    # using it incorrectly..):
+    #   smallest = get_smallest(ctx, x)
+    #   S = params["S"]
+    #   delta = ((ax * S + smallest) + ax) - ax  # not always a power of two!
+    #
+    # In the following, we'll use under/overflow-safe scaling that
+    # cost is 2 arithmetic operations and 4 logical operations.
+
+    if scale:
+        N = params["N"]
+        x_max = params["x_max"]
+        xh = ctx.select(ax > x_max, ctx.select(x < 0, -x_max, x_max), ctx.select(ax < 1, gd, gd * N))
+    else:
+        xh = gd
+
+    xl = x - xh
+    return xh, xl
 
 
 def mul_dw(ctx, x, y, xh, xl, yh, yl):
@@ -226,7 +519,8 @@ def mul_dw(ctx, x, y, xh, xl, yh, yl):
     return xyh, xyl
 
 
-def mul_dekker(ctx, x, y, C=None):
+@make_api()
+def mul_dekker(ctx, dtype, x, y, C=None, scale=True):
     """Dekker product:
 
       x * y = xyh + xyl
@@ -254,11 +548,8 @@ def mul_dekker(ctx, x, y, C=None):
       makes only sense when the accuracy of the pair (xyh, xyl) is
       taken into account.
     """
-    if C is None:
-        largest = get_largest(ctx, x)
-        C = get_veltkamp_splitter_constant(ctx, largest)
-    xh, xl = split_veltkamp(ctx, x, C)
-    yh, yl = split_veltkamp(ctx, y, C)
+    xh, xl = split_veltkamp(ctx, x, C=C, scale=scale, dtype=dtype)
+    yh, yl = split_veltkamp(ctx, y, C=C, scale=scale, dtype=dtype)
     return mul_dw(ctx, x, y, xh, xl, yh, yl)
 
 
@@ -727,6 +1018,17 @@ def fast_polynomial(ctx, x, coeffs, reverse=True, scheme=None, _N=None):
     b = fast_polynomial(ctx, x, coeffs[:d], reverse=reverse, scheme=scheme, _N=_N)
     xd = fast_exponent_by_squaring(ctx, x, d)
     return a * xd + b
+
+
+def rpolynomial(ctx, x, rcoeffs, reverse=False):
+    if reverse:
+        return rpolynomial(ctx, x, rcoeffs[::-1], reverse=False)
+    one = ctx.constant(1)
+    r = one
+    with warnings.catch_warnings(action="ignore"):
+        for rc in reversed(rcoeffs[1:]):
+            r = one + r * rc * x
+    return r * rcoeffs[0]
 
 
 def laurent(ctx, z, C, m, reverse=False, scheme=None):

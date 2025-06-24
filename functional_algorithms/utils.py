@@ -45,6 +45,9 @@ value_types = number_types + boolean_types
 
 def float2mpf(ctx, x):
     """Convert numpy floating-point number to mpf object."""
+    if isinstance(x, numpy.ndarray):
+        return [float2mpf(ctx, x_) for x_ in x]
+
     if numpy.isposinf(x):
         return ctx.make_mpf(mpmath.libmp.finf)
     elif numpy.isneginf(x):
@@ -56,7 +59,7 @@ def float2mpf(ctx, x):
         mantissa, exponent = numpy.frexp(x)
         man_ = ctx.ldexp(mantissa, prec)
         man = int(man_)
-        assert man == man_
+        assert man == man_, (man, man_, x, exponent, prec)
         exp_ = exponent - prec
         exp = int(exp_)
         assert exp == exp_
@@ -67,12 +70,29 @@ def float2mpf(ctx, x):
         assert 0  # unreachable
 
 
+def number2mpf(ctx, x):
+    if isinstance(x, list):
+        return [number2mpf(ctx, x_) for x_ in x]
+    elif isinstance(x, fractions.Fraction):
+        return fraction2mpf(ctx, x)
+    elif isinstance(x, (numpy.floating, float)):
+        return float2mpf(ctx, x)
+    elif isinstance(x, int):
+        return ctx.mpf(x)
+    elif isinstance(x, mpmath.mpf):
+        return x
+    else:
+        assert 0, type(x)  # not impl
+
+
 def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
     """Convert mpf object to numpy floating-point number.
 
     When x is larger than largest value of the floating point system,
     use round towards zero, otherwise round to nearest.
     """
+    if isinstance(x, list):
+        return [mpf2float(dtype, x_, flush_subnormals=flush_subnormals, prec=prec, rounding=rounding) for x_ in x]
     ctx = x.context
     if ctx.isfinite(x):
         prec_rounding = ctx._prec_rounding[:]
@@ -161,7 +181,123 @@ def mpf2bin(s):
     return f"{sign}{digits}p{exponent:+01d}"
 
 
+def mpfnextafter(x, y):
+    """Return next mpf value to x in the direction of y.
+
+    Warning: the concept of subnormals and infinities are not
+    supported because the values of mpf exponents are unlimited.
+    """
+    s, m, e, b = x._mpf_
+    prec = x.context._prec_rounding[0]
+    assert b <= prec, (x._mpf_, prec)
+    m1, e1 = m * (2 ** (prec - b)), e - (prec - b)
+    if x == y:
+        r = x
+    elif (x > y and x < 0) or (x < y and x > 0):
+        r = x.context.make_mpf((s, m1 + 1, e1, prec))
+    elif x == 0:
+        if y > 0:
+            r = x.context.make_mpf((0, 1, -prec - 1, 1))
+        else:
+            r = x.context.make_mpf((1, 1, -prec - 1, 1))
+    else:
+        if m1 <= 2 ** (prec - 1):
+            m1 *= 2
+            e1 -= 1
+        r = x.context.make_mpf((s, m1 - 1, e1, prec))
+    return r
+
+
+def matching_bits(x, y):
+    """Return the number of matching bits of floating point numbers.
+
+    The highest return value (the number of significant bits) is
+    returned when x == y.
+
+    The zero return value indicates that x and y have the same order
+    of magnitude.
+
+    The negative return value indicates that x and y are different
+    either in sign or magnitude.
+
+    For fixed x and monotonically varying y, matching_bits(x, y) is a
+    concave function.
+
+    """
+    if isinstance(x, numpy.ndarray) and isinstance(y, numpy.ndarray):
+        assert len(x) == len(y)
+        lst = []
+        for x_, y_ in zip(x, y):
+            lst.append(matching_bits(x_, y_))
+        return numpy.array(lst)
+
+    if isinstance(x, list) and isinstance(y, list):
+        assert len(x) == len(y)
+        lst = []
+        for x_, y_ in zip(x, y):
+            lst.append(matching_bits(x_, y_))
+        return lst
+
+    if isinstance(x, mpmath.mp.mpf) and isinstance(y, mpmath.mp.mpf):
+
+        ctx = x.context
+        prec = ctx._prec_rounding[0]
+
+        if x == y:
+            return prec
+        elif x < y:
+            return matching_bits(y, x)
+        elif ctx.isinf(x) or ctx.isnan(x):
+            return -2
+        elif y.context.isinf(y) or y.context.isnan(y):
+            return -2
+        # normalize to context precision
+        x = x + 0
+        y = y + 0
+
+        xsign, xman, xexp, xbc = x._mpf_
+        ysign, yman, yexp, ybc = y._mpf_
+        # x, y -> man1 * 2 ** exp, man2 * 2 ** exp
+        if xexp < yexp:
+            man1 = [1, -1][xsign] * xman
+            man2 = [1, -1][ysign] * yman * (2 ** (yexp - xexp) if yman else 1)
+            exp = xexp
+        else:
+            man1 = [1, -1][xsign] * xman * (2 ** (xexp - yexp) if xman else 1)
+            man2 = [1, -1][ysign] * yman
+            exp = yexp
+        r = round(prec * (1 - (man1 - man2).bit_length() / max(1, min(man1.bit_length(), man2.bit_length()))), 1)
+        return max(r, -1)
+    elif isinstance(x, numpy.floating) and isinstance(y, type(x)):
+        dtype = type(x)
+        fi = numpy.finfo(dtype)
+        prec = abs(fi.negep)
+        if x == y:
+            return prec
+        elif x < y:
+            return matching_bits(y, x)
+        elif numpy.isinf(x):
+            return -2
+        elif numpy.isinf(y):
+            return -2
+        xf, xe = numpy.frexp(x)
+        yf, ye = numpy.frexp(y)
+        if xe == ye:
+            f1, f2 = xf, yf
+        elif xe < ye:
+            f1 = xf
+            f2 = yf * 2 ** (ye - xe)
+        else:
+            f1 = xf * 2 ** (xe - ye)
+            f2 = yf
+        df, de = numpy.frexp(abs(f1 - f2))
+        return max(-de, -1)
+    else:
+        raise NotImplementedError(f"matching digits of {type(x).__name__} and {type(y).__name__}")
+
+
 def diff_prec(x, y):
+    """Return"""
     if isinstance(x, mpmath.mp.mpf) and isinstance(y, mpmath.mp.mpf):
         if x == y:
             return x.context._prec_rounding[0]
@@ -172,11 +308,65 @@ def diff_prec(x, y):
         de = dexp + dman.bit_length() - 1
         return xe - de
     elif isinstance(x, numpy.floating) and isinstance(y, type(x)):
+        if x == y:
+            fi = numpy.finfo(type(x))
+            return abs(fi.machep)
         xf, xe = numpy.frexp(x)
         df, de = numpy.frexp(x - y)
         return xe - de
     else:
         raise NotImplementedError(f"matching digits of {type(x).__name__} and {type(y).__name__}")
+
+
+def bin2float(dtype, b):
+    if b == "0":
+        return dtype(0)
+    elif b == "-inf":
+        return -dtype(numpy.inf)
+    elif b == "inf":
+        return dtype(numpy.inf)
+    elif b == "nan":
+        return dtype(numpy.nan)
+
+    exponent_width, significant_width, uint = {
+        numpy.float16: (5, 10, numpy.uint16),
+        numpy.float32: (8, 23, numpy.uint32),
+        numpy.float64: (11, 52, numpy.uint64),
+    }[dtype]
+
+    isneg = b.startswith("-")
+    if isneg:
+        b = b[1:]
+
+    i = b.index("p")
+    e = int(b[i + 1 :]) + (1 << (exponent_width - 1)) - 1
+    b = b[:i]
+
+    if b.startswith("1."):
+        significant_bits = b[2:]
+    elif b == "1":
+        significant_bits = "0"
+    else:
+        assert 0, b  # unreachable
+
+    s = significant_width - len(significant_bits)
+    if e <= 0:
+        significant_bits = "1" + significant_bits
+        s -= 1
+
+    significant_bits = uint(int(significant_bits, 2))
+    significant_bits <<= uint(s)
+
+    if e <= 0:
+        ivalue = significant_bits >> uint(-e)
+    else:
+        ivalue = significant_bits + uint(e << significant_width)
+
+    value = ivalue.view(dtype)
+    if isneg:
+        value = -value
+
+    return value
 
 
 def float2bin(f):
@@ -301,6 +491,18 @@ def float2fraction(f):
     raise TypeError(f"float to fraction conversion requires floating-point input, got {type(f).__name__}")
 
 
+def number2fraction(x):
+    if isinstance(x, list):
+        return list(map(number2fraction, x))
+    elif isinstance(x, (mpmath.mpf, float, numpy.floating)):
+        return float2fraction(x)
+    elif isinstance(x, int):
+        return fractions.Fraction(x, 1)
+    elif isinstance(x, fractions.Fraction):
+        return x
+    raise TypeError(f"float to fraction conversion requires int|floating-point|mpf input, got {type(x).__name__}")
+
+
 def fraction2float(dtype, q):
     """Convert Fraction to a floating-point number.
     The conversion may be inexact.
@@ -313,7 +515,13 @@ def fraction2float(dtype, q):
     elif denom == 1 and unum >= (1 << fi.maxexp):
         return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
     else:
-        return dtype(num / denom)
+        try:
+            f = num / denom
+            if abs(f) > fi.max:
+                raise OverflowError
+            return dtype(f)
+        except OverflowError:
+            return mpf2float(dtype, mpmath.mpf(num) / denom)
 
 
 def fraction2mpf(ctx, q):
@@ -321,13 +529,35 @@ def fraction2mpf(ctx, q):
     return ctx.mpf(num) / denom
 
 
+def number2float(dtype, q):
+    if isinstance(q, list):
+        return list(number2float(dtype, q_) for q_ in q)
+    elif isinstance(q, fractions.Fraction):
+        return fraction2float(dtype, q)
+    elif isinstance(q, (numpy.floating, float, int)):
+        return dtype(q)
+    elif isinstance(q, mpmath.mpf):
+        return mpf2float(dtype, q)
+    else:
+        assert 0, (dtype, type(q))  # not impl
+
+
 def get_precision(x):
+    """Return significant precision of x in bits."""
     if isinstance(x, numpy.ndarray):
         x = x.dtype.type
     elif isinstance(x, numpy.floating):
         x = type(x)
-    p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[x]
-    return p
+    return -numpy.finfo(x).negep
+
+
+def get_maxexp(x):
+    """Return maximal binary exponent of x."""
+    if isinstance(x, numpy.ndarray):
+        x = x.dtype.type
+    elif isinstance(x, numpy.floating):
+        x = type(x)
+    return numpy.finfo(x).maxexp
 
 
 def get_veltkamp_splitter_constant(x):
@@ -1427,6 +1657,7 @@ def real_samples(
     assert dtype in {numpy.float16, numpy.float32, numpy.float64}, dtype
     utype = {numpy.float16: numpy.uint16, numpy.float32: numpy.uint32, numpy.float64: numpy.uint64}[dtype]
     fi = numpy.finfo(dtype)
+    size = min(size, 2 ** {numpy.float16: 16, numpy.float32: 64, numpy.float64: 64}[dtype])
     user_specified_bounds = min_value is not None or max_value is not None
     num = size // 2 if not nonnegative and not user_specified_bounds else size
     if include_infinity and not user_specified_bounds:
@@ -2328,20 +2559,40 @@ def expansion2mpf(ctx, e):
     return sum([float2mpf(ctx, e_) for e_ in reversed(e[:-1])], float2mpf(ctx, e[-1]))
 
 
-def mpf2expansion(dtype, x):
+def mpf2expansion(dtype, x, length=None, functional=False, base=None):
     """Transform mpf instance to an FP expansion."""
-    lst = []
-    prev_x = 0
-    while True:
-        y = mpf2float(dtype, x)
-        if y == 0:
-            break
-        lst.append(y)
-        x = x - float2mpf(x.context, y)
-    return lst or [dtype(0)]
+    if isinstance(x, list):
+        return [mpf2expansion(dtype, x_, length=length, functional=functional, base=base) for x_ in x]
+    if x.context.isinf(x):
+        lst = [mpf2float(dtype, x)]
+    else:
+        lst = []
+        prev_x = 0
+        index = 0
+        while True:
+            if base is not None:
+                coeff = base**index
+                y = mpf2float(dtype, x * coeff)
+            else:
+                y = mpf2float(dtype, x)
+            lst.append(y)
+            if numpy.isinf(y) or y == 0:
+                break
+            if base is not None:
+                x = x - float2mpf(x.context, y) / coeff
+            else:
+                x = x - float2mpf(x.context, y)
+            if length is not None and len(lst) == length:
+                break
+            index += 1
+
+    if functional and length is not None and len(lst) < length:
+        lst.extend([dtype(0)] * (length - len(lst)))
+
+    return lst
 
 
-def fraction2expansion(dtype, q, length=2):
+def fraction2expansion(dtype, q, length=2, functional=False, base=None):
     """Transform a fraction to an FP expansion.
 
     If the length of output is smaller than the specified length then
@@ -2350,13 +2601,56 @@ def fraction2expansion(dtype, q, length=2):
     The output may require renormalization.
     """
     lst = []
-    for i in range(length):
-        f = fraction2float(dtype, q)
+    index = 0
+    while True:
+        if base is not None:
+            coeff = base**index
+            f = fraction2float(dtype, q * coeff)
+        else:
+            f = fraction2float(dtype, q)
         if f == dtype(0):
             break
         lst.append(f)
-        q = q - float2fraction(f)
+        if base is not None:
+            q = q - float2fraction(f) / coeff
+        else:
+            q = q - float2fraction(f)
+        if length is not None and len(lst) == length:
+            break
+        index += 1
+    if functional and len(lst) < length:
+        lst.extend([dtype(0)] * (length - len(lst)))
     return lst
+
+
+def float2expansion(dtype, q, length=None, functional=False, base=None):
+    assert base is None  # not impl
+    lst = []
+    while True:
+        f = dtype(q)
+        if f == dtype(0):
+            break
+        lst.append(f)
+        q = q - type(q)(f)
+        if length is not None and len(lst) == length:
+            break
+    if functional and len(lst) < length:
+        lst.extend([dtype(0)] * (length - len(lst)))
+    return lst
+
+
+def number2expansion(dtype, q, length=None, functional=False, base=None):
+    if isinstance(q, list):
+        return [number2expansion(dtype, q_, length=length, functional=functional, base=base) for q_ in q]
+    if isinstance(q, int):
+        q = fractions.Fraction(q, 1)
+    if isinstance(q, fractions.Fraction):
+        return fraction2expansion(dtype, q, length=length, functional=functional, base=base)
+    if isinstance(q, mpmath.mpf):
+        return mpf2expansion(dtype, q, length=length, functional=functional, base=base)
+    if isinstance(q, (numpy.floating, float)):
+        return float2expansion(dtype, q, length=length, functional=functional, base=base)
+    assert 0, type(q)  # not implemented
 
 
 def multiword2mpf(ctx, mw):
@@ -2447,29 +2741,97 @@ def mpf2multiword(dtype, x, p=None, max_length=None):
     return result
 
 
+class FractionContext:
+    """A light-weight context for evaluating select with Fraction inputs."""
+
+    def constant(self, value, like):
+        if isinstance(like, fractions.Fraction):
+            return fractions.Fraction(value)
+        assert 0, (value, like, type(like))  # unreachable
+
+    def reciprocal(self, x):
+        if isinstance(x, fractions.Fraction):
+            return 1 / x
+
+
 class NumpyContext:
     """A light-weight context for evaluating select with numpy inputs."""
+
+    def __init__(self, default_constant_type=None, mpmath_context=None):
+        self._default_like = None
+        self._default_constant_type = default_constant_type
+        self._mpmath_context = mpmath_context
+
+    @property
+    def default_like(self):
+        if self._default_like is None:
+            if self._default_constant_type is not None:
+                self._default_like = self._default_constant_type(0)
+            else:
+                raise ValueError("default_constant_type not specified")
+        return self._default_like
 
     def _is_nonzero(self, value):
         if isinstance(value, numpy.floating):
             return not (value == 0)
+        if isinstance(value, numpy.ndarray):
+            return value != 0
+        assert 0, (value, type(value))  # unreachable
+
+    def logical_not(self, a):
+        if isinstance(a, numpy.ndarray):
+            return numpy.logical_not(a)
+        return not a
+
+    def logical_or(self, a, b):
+        if isinstance(a, numpy.ndarray) or isinstance(b, numpy.ndarray):
+            return numpy.logical_or(a, b)
+        return a or b
+
+    def logical_xor(self, a, b):
+        if isinstance(a, numpy.ndarray) or isinstance(b, numpy.ndarray):
+            return numpy.logical_xor(a, b)
+        return (a and not b) or (not a and b)
+
+    def logical_and(self, a, b):
+        if isinstance(a, numpy.ndarray) or isinstance(b, numpy.ndarray):
+            return numpy.logical_and(a, b)
+        return a and b
+
+    def isnan(self, value):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
+            return numpy.isnan(value)
         assert 0, (value, type(value))  # unreachable
 
     def select(self, cond, x, y):
-        assert isinstance(cond, (bool, numpy.bool_))
-        return x if cond else y
+        if isinstance(cond, (bool, numpy.bool_)):
+            return x if cond else y
+        if isinstance(cond, numpy.ndarray):
+            return numpy.where(cond, x, y)
+        assert 0, (type(cond), type(x), type(y))
 
-    def constant(self, value, like):
+    def constant(self, value, like=None):
+        if like is None:
+            assert isinstance(value, (int, float, numpy.floating, str, numpy.ndarray)), type(value)
+            like = self.default_like
         if isinstance(like, numpy.floating):
             dtype = type(like)
-            if isinstance(value, str):
-                if value == "largest":
+            if isinstance(value, dtype):
+                return value
+            elif isinstance(value, str):
+                if value == "inf":
+                    return dtype(numpy.inf)
+                elif value == "largest":
                     return numpy.finfo(dtype).max
-                if value == "pi":
-                    return numpy.pi
+                elif value == "smallest":
+                    return numpy.finfo(dtype).smallest_normal
+                elif value == "pi":
+                    return dtype(numpy.pi)
                 assert 0, (value, dtype)  # not implemented
-            with warnings.catch_warnings(action="ignore"):
-                return dtype(value)
+            elif isinstance(value, fractions.Fraction):
+                return mpf2float(dtype, fraction2mpf(mpmath, value))
+
+            return dtype(value)
         assert 0, (value, like, type(like))  # unreachable
 
     def ne(self, x, y):
@@ -2488,33 +2850,56 @@ class NumpyContext:
         assert 0, (x, y, type(x))  # unreachable
 
     def floor(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.floor(value)
         assert 0, (value, type(value))  # unreachable
 
     def trunc(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.trunc(value)
         assert 0, (value, type(value))  # unreachable
 
     def round(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.round(value)
         assert 0, (value, type(value))  # unreachable
 
     def reciprocal(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.reciprocal(value)
         assert 0, (value, type(value))  # unreachable
 
     def sqrt(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.sqrt(value)
         assert 0, (value, type(value))  # unreachable
 
+    def exp(self, value):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
+            return numpy.exp(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def log(self, value):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
+            return numpy.log(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def log1p(self, value):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
+            return numpy.log1p(value)
+        assert 0, (value, type(value))  # unreachable
+
     def square(self, value):
-        if isinstance(value, numpy.floating):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
             return numpy.square(value)
+        assert 0, (value, type(value))  # unreachable
+
+    def exp2(self, value):
+        if isinstance(value, (numpy.floating, numpy.ndarray)):
+            return numpy.exp2(value)
+            if int(value) == value:
+                return type(value)(2 ** int(value))
+            return numpy.ldexp(type(value)(1), value)
         assert 0, (value, type(value))  # unreachable
 
 
@@ -2541,6 +2926,11 @@ def show_ulp(ulp, title=None):
     u5 = None
     if ulp and title is not None:
         print(f"{title}:")
+    data = sum([[u] * ulp[u] for u in ulp], [])
+    print(
+        f"  ULP difference min/mean/median/max: {numpy.min(data)}/{numpy.mean(data):1.1f}"
+        f"/{numpy.median(data):1.1f}/{numpy.max(data)}"
+    )
     for i, u in enumerate(sorted(ulp)):
         if i < 5:
             print(f"  ULP difference {u}: {ulp[u]}")
@@ -2561,6 +2951,11 @@ def show_prec(prec, title=None):
     u5 = None
     if prec and title is not None:
         print(f"{title}:")
+    data = sum([[p] * prec[p] for p in prec], [])
+    print(
+        f"  precision min/mean/median/max: {numpy.min(data)}/{numpy.mean(data):1.1f}"
+        f"/{numpy.median(data):1.1f}/{numpy.max(data)}"
+    )
     lst = list(reversed(sorted(prec)))
     for i, u in enumerate(lst):
         if i < 4:

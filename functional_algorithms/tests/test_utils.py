@@ -15,6 +15,98 @@ def dtype(request):
     return request.param
 
 
+def test_mpfnextafter(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    size = 1000
+    samples = list(
+        utils.real_samples(size=size, dtype=real_dtype, include_infinity=False, include_subnormal=False, include_zero=False)
+    )
+    mp_ctx = mpmath.mp
+    with mp_ctx.workprec(utils.get_precision(real_dtype)):
+        inf = real_dtype(numpy.inf)
+        inf_mp = utils.float2mpf(mp_ctx, inf)
+        for x in samples:
+            x_mp = utils.float2mpf(mp_ctx, x)
+            result_mp = utils.mpfnextafter(x_mp, inf_mp)
+            expected = numpy.nextafter(x, inf)
+            if numpy.isinf(expected) or abs(expected) < fi.smallest_normal:
+                continue
+            expected_mp = utils.float2mpf(mp_ctx, expected)
+            assert result_mp > x_mp, (x, result_mp, expected)
+            assert result_mp - x_mp == expected_mp - x_mp
+        for x in samples:
+            x_mp = utils.float2mpf(mp_ctx, x)
+            result_mp = utils.mpfnextafter(x_mp, -inf_mp)
+            expected = numpy.nextafter(x, -inf)
+            if numpy.isinf(expected) or abs(expected) < fi.smallest_normal:
+                continue
+            expected_mp = utils.float2mpf(mp_ctx, expected)
+            assert result_mp < x_mp, (x, result_mp, expected)
+            assert result_mp - x_mp == expected_mp - x_mp
+
+
+def test_matching_bits(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"support not implemented")
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    prec = abs(fi.negep)
+    size = 150
+    samples = list(utils.real_samples(size=size, dtype=real_dtype, include_infinity=False))
+    max_result = -fi.negep
+
+    mp_ctx = mpmath.mp
+    with mp_ctx.workprec(utils.get_precision(real_dtype)):
+        samples_mp = [utils.float2mpf(mp_ctx, x) for x in samples]
+
+        for x, x_mp in zip(samples, samples_mp):
+            b = utils.matching_bits(x, x)
+            assert b == prec
+            b = utils.matching_bits(x_mp, x_mp)
+            assert b == prec
+
+            y = numpy.nextafter(x, real_dtype(0))
+            if x != y:
+                b = utils.matching_bits(x, y)
+                if abs(x) <= fi.smallest_normal:
+                    assert b < prec
+                else:
+                    assert b == prec - 1
+
+        for x in samples[:: size // 100 or 1] + samples[-1:]:
+            d = 1
+            last = -1000
+            last_mp = -1000
+            x_mp = utils.float2mpf(mp_ctx, x)
+            for y, y_mp in zip(samples, samples_mp):
+                b = utils.matching_bits(x, y)
+                b1 = utils.matching_bits(y, x)
+                assert b == b1
+                b_mp = utils.matching_bits(x_mp, y_mp)
+                b_mp1 = utils.matching_bits(y_mp, x_mp)
+                assert b_mp == b_mp1
+                if b_mp > -1 and 0:
+                    print(x, y, b, b_mp)
+                if x == y:
+                    d = -1
+                    assert b == max_result
+                else:
+                    if d == 1:
+                        assert round(b) >= round(last - 2)
+                        assert round(b_mp) >= round(last_mp - 2), (x, y)
+                    else:
+                        assert round(b) <= round(last + 2)
+                        assert round(b_mp) <= round(last_mp + 2), (x, y)
+                last = b
+                last_mp = b_mp
+            assert d == -1
+
+
 def test_diff_ulp(real_dtype):
     if real_dtype == numpy.longdouble:
         pytest.skip(f"support not implemented")
@@ -736,3 +828,13 @@ def test_float2fraction(real_dtype):
             m = utils.float2mpf(mp_ctx, x)
             f = utils.float2fraction(m)
         assert f == q
+
+
+def test_bin2float(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented")
+    fi = numpy.finfo(real_dtype)
+    for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True, include_infinity=not False):
+        b = utils.float2bin(x)
+        y = utils.bin2float(real_dtype, b)
+        assert x == y

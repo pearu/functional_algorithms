@@ -24,10 +24,11 @@ NumpyContext = utils.NumpyContext
 
 
 def test_split_veltkamp(dtype):
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     p = utils.get_precision(dtype)
     C = utils.get_veltkamp_splitter_constant(dtype)
     largest = fpa.get_largest(ctx, dtype(0))
+    smallest = fpa.get_smallest(ctx, dtype(0))
 
     assert isinstance(C, dtype)
     assert C == dtype(2 ** ((p + 1) // 2) + 1)
@@ -59,24 +60,35 @@ def test_split_veltkamp(dtype):
         assert len(bh) < (p + 1) // 2
         assert len(bl) < (p + 1) // 2
 
-    max_x = largest * dtype(1 - 1 / C)
-    min_x = -max_x
-
-    size = 1000
-    for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-        xh, xl = fpa.split_veltkamp(ctx, x, C, scale=True)
+    size = 10000
+    samples = numpy.array(utils.real_samples(size, dtype=dtype))
+    xh_lst, xl_lst = [], []
+    for x in samples:
+        xh, xl = fpa.split_veltkamp(ctx, x, scale=True)
+        xh_lst.append(xh)
+        xl_lst.append(xl)
         assert x == xh + xl
         bh = utils.tobinary(xh).split("p")[0].lstrip("-")
         bl = utils.tobinary(xl).split("p")[0].lstrip("-")
+
         bh = bh[1 + bh.startswith("1.") :].lstrip("0")
         bl = bl[1 + bl.startswith("1.") :].lstrip("0")
+
         assert len(bh) < (p + 1) // 2
         assert len(bl) < (p + 1) // 2
+
+    xh_arr = numpy.array(xh_lst)
+    xl_arr = numpy.array(xl_lst)
+    xh, xl = fpa.split_veltkamp(ctx, samples, scale=True)
+
+    assert (xh == xh_arr).all()
+    assert (xl == xl_arr).all()
 
 
 def test_mul_dekker(dtype):
     import mpmath
 
+    ctx = NumpyContext(dtype)
     max_valid_ulp_count = 2
 
     if int(os.environ.get("FA_HIGH_RESOLUTION", "0")):
@@ -91,27 +103,33 @@ def test_mul_dekker(dtype):
     max_xy = {11: 62940.0, 24: numpy.inf, 53: numpy.inf}[p]
 
     fi = numpy.finfo(dtype)
-    if 1:
-        max_value = numpy.sqrt(fi.max) / dtype(2)
-        min_value = -max_value
-        min_x = min_value
-        max_x = max_value
 
     ulp_counts = defaultdict(int)
     ulp_counts_native = defaultdict(int)
-    C = utils.get_veltkamp_splitter_constant(dtype)
+    scale = True
+    samples = numpy.array(utils.real_samples(size, dtype=dtype, include_infinity=False))
+    xyh_lst, xyl_lst = [], []
     with mpmath.workprec(utils.vectorize_with_mpmath.float_prec[dtype.__name__] * 2):
-        ctx = mpmath.mp
-        for x in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-            x_mp = utils.float2mpf(ctx, x)
-            for y in utils.real_samples(size, dtype=dtype, min_value=min_x, max_value=max_x):
-                xy = x * y
-                xyh, xyl = fpa.mul_dekker(None, x, y, C)
-                assert numpy.isfinite(xyl)
+        mp_ctx = mpmath.mp
+        for x in samples:
+            x_mp = utils.float2mpf(mp_ctx, x)
+            for y in samples:
+                with warnings.catch_warnings(action="ignore"):
+                    xy = x * y
+                xyh, xyl = fpa.mul_dekker(ctx, x, y, scale=scale)
+                xyh_lst.append(xyh)
+                xyl_lst.append(xyl)
                 assert xyh == xy
-                y_mp = utils.float2mpf(ctx, y)
-                xyh_mp = utils.float2mpf(ctx, xyh)
-                xyl_mp = utils.float2mpf(ctx, xyl)
+                if not numpy.isfinite(xyl):
+                    # check if xh * yh or x * y overflows
+                    xh, xl = fpa.split_veltkamp(ctx, x, scale=scale)
+                    yh, yl = fpa.split_veltkamp(ctx, y, scale=scale)
+                    with warnings.catch_warnings(action="ignore"):
+                        assert not (numpy.isfinite(xh * yh) and numpy.isfinite(xy))
+                    continue
+                y_mp = utils.float2mpf(mp_ctx, y)
+                xyh_mp = utils.float2mpf(mp_ctx, xyh)
+                xyl_mp = utils.float2mpf(mp_ctx, xyl)
                 expected = x_mp * y_mp
                 if abs(xyl) >= fi.smallest_normal:
                     assert expected == xyh_mp + xyl_mp
@@ -126,6 +144,12 @@ def test_mul_dekker(dtype):
                 assert u <= max_valid_ulp_count
 
     print(f"\nULP counts using mul_dekker: {dict(ulp_counts)}\nULP counts using x*y: {dict(ulp_counts_native)}")
+
+    xyh_arr = numpy.array(xyh_lst)
+    xyl_arr = numpy.array(xyl_lst)
+    xyh, xyl = fpa.mul_dekker(ctx, samples.reshape(-1, samples.shape[-1]), samples.reshape(samples.shape[0], -1), scale=scale)
+    assert numpy.array_equal(xyh_arr, xyh.flatten())
+    assert numpy.array_equal(xyl_arr, xyl.flatten(), equal_nan=True)
 
 
 def test_add_2sum(dtype):
@@ -150,15 +174,18 @@ def test_add_2sum(dtype):
 
     ulp_counts = defaultdict(int)
     ulp_counts_native = defaultdict(int)
+    samples = numpy.array(utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value))
+    xyh_lst, xyl_lst = [], []
     with mpmath.workprec(working_prec):
         ctx = mpmath.mp
-        for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+        for x in samples:
             x_mp = utils.float2mpf(ctx, x)
-            for y in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+            for y in samples:
                 xy = x + y
                 xyh, xyl = fpa.add_2sum(None, x, y)
+                xyh_lst.append(xyh)
+                xyl_lst.append(xyl)
                 assert xyh == xy
-
                 y_mp = utils.float2mpf(ctx, y)
                 expected = x_mp + y_mp
                 xyh_mp = utils.float2mpf(ctx, xyh)
@@ -185,8 +212,16 @@ def test_add_2sum(dtype):
 
     print(f"\nULP counts using add_2sum: {dict(ulp_counts)}\nULP counts using x+y: {dict(ulp_counts_native)}")
 
+    xyh_arr = numpy.array(xyh_lst)
+    xyl_arr = numpy.array(xyl_lst)
+    xyh, xyl = fpa.add_2sum(None, samples.reshape(-1, samples.shape[-1]), samples.reshape(samples.shape[0], -1))
+
+    assert numpy.array_equal(xyh_arr, xyh.flatten())
+    assert numpy.array_equal(xyl_arr, xyl.flatten(), equal_nan=True)
+
 
 def test_accuracy(dtype, binary_op):
+    np_ctx = NumpyContext(dtype)
     if int(os.environ.get("FA_HIGH_RESOLUTION", "0")):
         blocksize = 10
         blocks = 51
@@ -232,7 +267,7 @@ def test_accuracy(dtype, binary_op):
                 result = [
                     utils.float2mpf(ctx, hi) + utils.float2mpf(ctx, lo)
                     for hi, lo in map(
-                        lambda args: fpa.add_2sum(None, args[0], args[1], fast=binary_op == "add_fast2sum"),
+                        lambda args: fpa.add_2sum(np_ctx, args[0], args[1], fast=binary_op == "add_fast2sum"),
                         zip(samples1, samples2),
                     )
                 ]
@@ -244,7 +279,7 @@ def test_accuracy(dtype, binary_op):
             with numpy.errstate(over="ignore", invalid="ignore"):
                 result = [
                     utils.float2mpf(ctx, hi) + utils.float2mpf(ctx, lo)
-                    for hi, lo in map(lambda args: fpa.mul_dekker(None, args[0], args[1], C), zip(samples1, samples2))
+                    for hi, lo in map(lambda args: fpa.mul_dekker(np_ctx, args[0], args[1], C), zip(samples1, samples2))
                 ]
             with numpy.errstate(over="ignore", invalid="ignore"):
                 native = [utils.float2mpf(ctx, x * y) for x, y in zip(samples1, samples2)]
@@ -459,7 +494,7 @@ def test_add_4sum(dtype):
 
 
 def test_dot2(dtype):
-    np_ctx = NumpyContext()
+    np_ctx = NumpyContext(dtype)
     import mpmath
 
     max_valid_ulp_count = 3
@@ -516,7 +551,7 @@ def test_dot2(dtype):
 
 
 def test_mul_add(dtype):
-    np_ctx = NumpyContext()
+    np_ctx = NumpyContext(dtype)
     import mpmath
 
     max_valid_ulp_count = 2
@@ -573,20 +608,23 @@ def test_mul_add(dtype):
 
 
 def test_next(dtype):
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     size = 1000
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
     max_value = fi.max
-
-    for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
+    samples = numpy.array(utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value))
+    up_results, down_results = [], []
+    for x in samples:
+        result = fpa.next(ctx, x, up=True)
+        up_results.append(result)
         with warnings.catch_warnings(action="ignore"):
-            result = fpa.next(ctx, x, up=True)
             expected = numpy.nextafter(x, dtype(numpy.inf))
         assert result == expected
 
+        result = fpa.next(ctx, -x, up=False)
+        down_results.append(result)
         with warnings.catch_warnings(action="ignore"):
-            result = fpa.next(ctx, -x, up=False)
             expected = numpy.nextafter(-x, dtype(-numpy.inf))
         assert result == expected
 
@@ -601,11 +639,14 @@ def test_next(dtype):
                 expected = numpy.nextafter(-x, dtype(numpy.inf))
             assert result == expected
 
+    assert numpy.array_equal(fpa.next(ctx, samples, up=True), up_results)
+    assert numpy.array_equal(fpa.next(ctx, -samples, up=False), down_results)
+
 
 def test_argument_reduction_exponent(dtype):
     import mpmath
 
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     size = 10_000_000 // 1000
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
@@ -634,12 +675,12 @@ def test_argument_reduction_exponent(dtype):
 
 
 def test_split_tripleword(dtype):
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     p = utils.get_precision(dtype)
     min_x = {numpy.float16: -986.0, numpy.float32: -7.51e33, numpy.float64: -4.33e299}[dtype]
     max_x = {numpy.float16: 1007.0, numpy.float32: 8.3e34, numpy.float64: 1.33e300}[dtype]
 
-    largest = fpa.get_largest(ctx, dtype(0))
+    largest = fpa.get_largest(ctx)
     C1 = fpa.get_tripleword_splitter_constants(ctx, largest)[0]
     max_x = largest * dtype(1 - 1 / C1)
     min_x = -max_x
@@ -665,7 +706,7 @@ def test_argument_reduction_trigonometric(dtype):
     import mpmath
 
     print()
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
     max_value = fi.max
@@ -732,7 +773,7 @@ def test_argument_reduction_trigonometric(dtype):
 
 def test_laurent():
     dtype = numpy.float64
-    ctx = NumpyContext()
+    ctx = NumpyContext(dtype)
     size = 1000
     samples = utils.real_samples(size, dtype=dtype, min_value=0.1, max_value=10)
 
