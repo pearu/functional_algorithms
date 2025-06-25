@@ -10,6 +10,8 @@ __all__ = [
     "restrict",
     "apmath",
     "special",
+    "fpu",
+    "polynomial",
 ]
 
 try:
@@ -34,3 +36,4 @@ from .signatures import filter_signatures
 from . import fpu
 from . import apmath
 from . import special
+from . import polynomial

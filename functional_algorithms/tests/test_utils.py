@@ -15,9 +15,103 @@ def dtype(request):
     return request.param
 
 
+def test_mpfnextafter(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip("support not implemented")
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    size = 1000
+    samples = list(
+        utils.real_samples(size=size, dtype=real_dtype, include_infinity=False, include_subnormal=False, include_zero=False)
+    )
+    mp_ctx = mpmath.mp
+    with mp_ctx.workprec(utils.get_precision(real_dtype)):
+        inf = real_dtype(numpy.inf)
+        inf_mp = utils.float2mpf(mp_ctx, inf)
+        for x in samples:
+            x_mp = utils.float2mpf(mp_ctx, x)
+            result_mp = utils.mpfnextafter(x_mp, inf_mp)
+            with warnings.catch_warnings(action="ignore"):
+                expected = numpy.nextafter(x, inf)
+            if numpy.isinf(expected) or abs(expected) < fi.smallest_normal:
+                continue
+            expected_mp = utils.float2mpf(mp_ctx, expected)
+            assert result_mp > x_mp, (x, result_mp, expected)
+            assert result_mp - x_mp == expected_mp - x_mp
+        for x in samples:
+            x_mp = utils.float2mpf(mp_ctx, x)
+            result_mp = utils.mpfnextafter(x_mp, -inf_mp)
+            with warnings.catch_warnings(action="ignore"):
+                expected = numpy.nextafter(x, -inf)
+            if numpy.isinf(expected) or abs(expected) < fi.smallest_normal:
+                continue
+            expected_mp = utils.float2mpf(mp_ctx, expected)
+            assert result_mp < x_mp, (x, result_mp, expected)
+            assert result_mp - x_mp == expected_mp - x_mp
+
+
+def test_matching_bits(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip("support not implemented")
+    import mpmath
+
+    fi = numpy.finfo(real_dtype)
+    prec = abs(fi.negep)
+    size = 150
+    samples = list(utils.real_samples(size=size, dtype=real_dtype, include_infinity=False))
+    max_result = -fi.negep
+
+    mp_ctx = mpmath.mp
+    with mp_ctx.workprec(utils.get_precision(real_dtype)):
+        samples_mp = [utils.float2mpf(mp_ctx, x) for x in samples]
+
+        for x, x_mp in zip(samples, samples_mp):
+            b = utils.matching_bits(x, x)
+            assert b == prec
+            b = utils.matching_bits(x_mp, x_mp)
+            assert b == prec
+
+            y = numpy.nextafter(x, real_dtype(0))
+            if x != y:
+                b = utils.matching_bits(x, y)
+                if abs(x) <= fi.smallest_normal:
+                    assert b < prec
+                else:
+                    assert b == prec - 1
+
+        for x in samples[:: size // 100 or 1] + samples[-1:]:
+            d = 1
+            last = -1000
+            last_mp = -1000
+            x_mp = utils.float2mpf(mp_ctx, x)
+            for y, y_mp in zip(samples, samples_mp):
+                b = utils.matching_bits(x, y)
+                b1 = utils.matching_bits(y, x)
+                assert b == b1
+                b_mp = utils.matching_bits(x_mp, y_mp)
+                b_mp1 = utils.matching_bits(y_mp, x_mp)
+                assert b_mp == b_mp1
+                if b_mp > -1 and 0:
+                    print(x, y, b, b_mp)
+                if x == y:
+                    d = -1
+                    assert b == max_result
+                else:
+                    if d == 1:
+                        assert round(b) >= round(last - 2)
+                        assert round(b_mp) >= round(last_mp - 2), (x, y)
+                    else:
+                        assert round(b) <= round(last + 2)
+                        assert round(b_mp) <= round(last_mp + 2), (x, y)
+                last = b
+                last_mp = b_mp
+            assert d == -1
+
+
 def test_diff_ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"support not implemented")
+        pytest.skip("support not implemented")
     fi = numpy.finfo(real_dtype)
 
     assert utils.diff_ulp(real_dtype(0), fi.tiny, flush_subnormals=True) == 1
@@ -37,7 +131,7 @@ def test_diff_ulp(real_dtype):
 
 def test_diff_log2ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"support not implemented")
+        pytest.skip("support not implemented")
     bw = {numpy.float16: 16, numpy.float32: 32, numpy.float64: 64}[real_dtype]
     fi = numpy.finfo(real_dtype)
 
@@ -520,9 +614,9 @@ def test_square_dekker(real_dtype):
 
 
 def test_mpf2multiword(real_dtype):
-    dtype = real_dtype
-    fi = numpy.finfo(dtype)
     import mpmath
+
+    dtype = real_dtype
 
     prec = utils.vectorize_with_mpmath.float_prec[dtype.__name__]
     max_m = {numpy.float16: 3, numpy.float32: 7, numpy.float64: 21, numpy.longdouble: 256}[dtype]
@@ -605,7 +699,7 @@ def test_mpf2multiword_log2(real_dtype):
 
     """
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     dtype = real_dtype
@@ -622,7 +716,6 @@ def test_mpf2multiword_log2(real_dtype):
     with mpmath.workprec(working_prec):
         ctx = mpmath.mp
         ln2 = ctx.log(2)
-        ln2_np = utils.mpf2float(dtype, ln2)
         stats = dict(non_redundant=0, redundant=0)
         for p in range(min_p, max_p + 1):
             lst = utils.mpf2multiword(dtype, ln2, p=p)
@@ -671,7 +764,7 @@ def test_mpf2multiword_log2(real_dtype):
 
 def test_ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import math
 
     size = 10000
@@ -701,14 +794,13 @@ def test_ulp(real_dtype):
 
 def test_overlapping(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
-    fi = numpy.finfo(real_dtype)
+        pytest.skip("test not implemented")
     size = 10000
-    C = numpy.ldexp(real_dtype(1), numpy.finfo(real_dtype).negep)
     for x in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
-        x1 = x / real_dtype(7)
-        y1 = x + x1
-        y2 = x1 - (y1 - x)
+        with warnings.catch_warnings(action="ignore"):
+            x1 = x / real_dtype(7)
+            y1 = x + x1
+            y2 = x1 - (y1 - x)
         if not numpy.isfinite(y1) or y1 == 0:
             continue
         assert utils.overlapping(x, x1)
@@ -723,7 +815,7 @@ def test_float2fraction(real_dtype):
     import mpmath
 
     if real_dtype == numpy.longdouble:
-        pytest.skip(f"support not implemented")
+        pytest.skip("support not implemented")
 
     prec = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53}[real_dtype]
 
@@ -736,3 +828,12 @@ def test_float2fraction(real_dtype):
             m = utils.float2mpf(mp_ctx, x)
             f = utils.float2fraction(m)
         assert f == q
+
+
+def test_bin2float(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip("test not implemented")
+    for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True, include_infinity=not False):
+        b = utils.float2bin(x)
+        y = utils.bin2float(real_dtype, b)
+        assert x == y

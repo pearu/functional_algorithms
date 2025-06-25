@@ -1,5 +1,5 @@
 import numpy
-from ..utils import mpmath_array_api, vectorize_with_mpmath, vectorize_with_jax, vectorize_with_numpy
+from ..utils import vectorize_with_mpmath, vectorize_with_jax, vectorize_with_numpy
 
 
 class mpmath_special_api:
@@ -60,7 +60,6 @@ class special_with_scipy:
         key = name, tuple(sorted(self.params.items()))
         if key in self._vfunc_cache:
             return self._vfunc_cache[key]
-        import numpy
         import scipy.special as sp
 
         vfunc = vectorize_with_numpy(getattr(sp, name), **self.params)
@@ -106,7 +105,10 @@ def function_validation_parameters(func_name, dtype, device=None):
     # If a function has symmetries, exclude superfluous samples by
     # specifying a region of the function domain:
     samples_limits = dict(
-        min_real_value=-numpy.inf, max_real_value=numpy.inf, min_imag_value=-numpy.inf, max_imag_value=numpy.inf
+        min_real_value=-real_dtype(numpy.inf),
+        max_real_value=real_dtype(numpy.inf),
+        min_imag_value=-real_dtype(numpy.inf),
+        max_imag_value=real_dtype(numpy.inf),
     )
 
     # ulp_diff(func(sample), reference(sample)) <= max_valid_ulp_count

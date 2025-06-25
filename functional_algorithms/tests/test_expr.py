@@ -658,7 +658,6 @@ def test_logical_op_flatten():
     x = ctx.symbol("x")
     y = ctx.symbol("y")
     z = ctx.symbol("z")
-    w = ctx.symbol("w")
 
     assert tuple(fa.rewrite.op_flatten(x, kind="logical_and")) == (x,)
     assert tuple(fa.rewrite.op_flatten(x & y)) == (x, y)
@@ -732,7 +731,6 @@ def test_logical_op_collect():
     x = ctx.symbol("x")
     y = ctx.symbol("y")
     z = ctx.symbol("z")
-    w = ctx.symbol("w")
 
     kwargs = dict(over_kind="logical_or")
     assert_equal(fa.rewrite.op_collect((x & z) | (y & z), **kwargs), (x | y) & z)

@@ -1,6 +1,5 @@
 import math
 import numpy
-from collections import defaultdict
 from . import expr as _expr
 from .utils import number_types, value_types, float_types, complex_types, boolean_types
 
@@ -405,7 +404,10 @@ class Rewriter:
                 return like.context.constant(op(*map(dtype, args)), like)
         if typ.kind == "float":
             if opname == "square":
-                op = lambda x: x * x
+
+                def op(x):
+                    return x * x
+
             else:
                 op = getattr(math, opname)
             return like.context.constant(op(*args), like)
@@ -622,8 +624,6 @@ class Rewriter:
                 value, like = x_.operands
                 if isinstance(value, bool):
                     return y_ if value else ctx.constant(False)
-
-        operands = tuple(op_flatten(expr, commutative=True, idempotent=True))
 
     def logical_or(self, expr):
         x, y = expr.operands
