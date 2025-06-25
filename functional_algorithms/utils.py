@@ -2830,8 +2830,10 @@ class NumpyContext:
                 assert 0, (value, dtype)  # not implemented
             elif isinstance(value, fractions.Fraction):
                 return mpf2float(dtype, fraction2mpf(mpmath, value))
-
             return dtype(value)
+        if isinstance(like, numpy.ndarray):
+            return self.constant(value, like=like.dtype.type(0))
+
         assert 0, (value, like, type(like))  # unreachable
 
     def ne(self, x, y):

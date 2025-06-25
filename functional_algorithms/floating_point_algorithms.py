@@ -82,9 +82,16 @@ def make_api(mp_func=None):
             import functional_algorithms as fa
 
             dtype = kwargs.pop("dtype", None)
-            largest = get_largest(ctx)
-            if isinstance(largest, numpy.floating) and dtype is None:
-                dtype = type(largest)
+            if isinstance(ctx, fa.Context):
+                largest = get_largest(ctx, args[0])
+            else:
+                largest = get_largest(ctx)
+
+            if isinstance(largest, numpy.floating):
+                if dtype is None:
+                    dtype = type(largest)
+                else:
+                    assert isinstance(largest, dtype), (type(largest), dtype)
 
             mp_ctx = kwargs.pop("mp_ctx", None)
             if mp_func is None:
@@ -181,20 +188,46 @@ def make_api(mp_func=None):
                     if isinstance(r, (tuple, list)):
                         assert len(r) <= max_size, (len(r), max_size)
                         return type(r)(map(make_return, r))
-
-                    return ctx.constant(r)
+                    if isinstance(r, fa.Expr):
+                        return r
+                    return ctx.constant(r, largest)
 
                 with warnings.catch_warnings(action="ignore"):
                     return make_return(impl_(dtype))
 
-            # Note that impl_ must return a scalar value as
-            # ctx.select(...)  is a scalar expression:
-            with warnings.catch_warnings(action="ignore"):
-                f64 = ctx.constant(impl_(numpy.float64), largest)
-                f32 = ctx.constant(impl_(numpy.float32), largest)
-                f16 = ctx.constant(impl_(numpy.float16), largest)
+            # TODO: define dtypes with in a context object
+            # dtypes must be ordered starting from a larger type
+            dtypes = (numpy.float64, numpy.float32, numpy.float16)
+            dtype_large = {numpy.float64: 1e308, numpy.float32: 1e38, numpy.float16: 1e3}
 
-            return ctx.select(largest > 1e308, f64, ctx.select(largest > 1e38, f32, f16))
+            results = []
+            with warnings.catch_warnings(action="ignore"):
+                for dtype_ in dtypes:
+                    results.append(impl_(dtype_))
+
+            def fix_result(result):
+                assert type(result) is not tuple
+                if not isinstance(result, fa.Expr):
+                    return ctx.constant(result, largest)
+                return result
+
+            if type(results[0]) is tuple:
+                for r in results:
+                    assert type(r) is tuple
+                    assert len(r) == len(results[0])
+                results_lst = []
+                for results_ in zip(*results):
+                    result = fix_result(results_[-1])
+                    for dtype, result_ in zip(reversed(dtypes[:-1]), reversed(results_[:-1])):
+                        result = ctx.select(largest > dtype_large[dtype], fix_result(result_), result)
+                    results_lst.append(result)
+                result = tuple(results_lst)
+            else:
+                result = fix_result(results[-1])
+                for dtype, result_ in reversed(zip(dtypes[:-1], results[:-1])):
+                    result = ctx.select(largest > dtype_large[dtype], fix_result(result_), result)
+
+            return result
 
         def api_mp(ctx, *args, **kwargs):
             mp_ctx = ctx._mpmath_context
@@ -212,7 +245,10 @@ def make_api(mp_func=None):
 
 
 def get_largest(ctx, x: float = None):
-    largest = ctx.constant("largest", x)
+    if x is None:
+        largest = ctx.constant("largest")
+    else:
+        largest = ctx.constant("largest", x)
     if hasattr(largest, "reference"):
         largest = largest.reference("largest")
     return largest
@@ -293,7 +329,7 @@ def switch_largest(ctx, largest: float, case_func):
     return ctx.select(largest > 1e308, f64, ctx.select(largest > 1e38, f32, f16))
 
 
-@functools.lru_cache(typed=True)
+# @functools.lru_cache(typed=True)
 def get_veltkamp_splitter_parameters(ctx, largest: float):
     """Return a dictionary of Veltkamp splitter parameters:
 
@@ -478,7 +514,7 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
         C = params["N"]
     if scale:
         ax = abs(x)
-        invN = params["invN"]
+        invN = ctx.constant(params["invN"], x)
         x_n = ctx.select(ax < 1, x, x * invN)
     else:
         x_n = x
@@ -500,8 +536,8 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
     # cost is 2 arithmetic operations and 4 logical operations.
 
     if scale:
-        N = params["N"]
-        x_max = params["x_max"]
+        N = ctx.constant(params["N"], x)
+        x_max = ctx.constant(params["x_max"], x)
         xh = ctx.select(ax > x_max, ctx.select(x < 0, -x_max, x_max), ctx.select(ax < 1, gd, gd * N))
     else:
         xh = gd
