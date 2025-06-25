@@ -155,9 +155,9 @@ def make_api(mp_func=None):
                         return tuple(list(numpy.array(r).T) for r in result)
                     return list(numpy.array(result).T)
 
-                def make_return(dtype_, r):
+                def make_return1(dtype_, r):
                     if isinstance(r, tuple):
-                        return type(r)(make_return(dtype_, r_) for r_ in r)
+                        return type(r)(make_return1(dtype_, r_) for r_ in r)
                     if kwargs.get("asmp"):
                         return r
                     assert isinstance(r, mp_ctx.mpf), r
@@ -172,7 +172,7 @@ def make_api(mp_func=None):
                             assert isscalar(a)
                         args_mp.append(a)
 
-                    return make_return(dtype, mp_func(mp_ctx, *args_mp))
+                    return make_return1(dtype, mp_func(mp_ctx, *args_mp))
 
                 return apply(func, args)
             # else
@@ -184,16 +184,16 @@ def make_api(mp_func=None):
                 max_size = {numpy.float16: 4, numpy.float32: 12, numpy.float64: 40}[dtype]
 
                 # Note that impl_ may return a non-scalar value:
-                def make_return(r):
+                def make_return2(r):
                     if isinstance(r, (tuple, list)):
                         assert len(r) <= max_size, (len(r), max_size)
-                        return type(r)(map(make_return, r))
+                        return type(r)(map(make_return2, r))
                     if isinstance(r, fa.Expr):
                         return r
                     return ctx.constant(r, largest)
 
                 with warnings.catch_warnings(action="ignore"):
-                    return make_return(impl_(dtype))
+                    return make_return2(impl_(dtype))
 
             # TODO: define dtypes with in a context object
             # dtypes must be ordered starting from a larger type
@@ -1141,7 +1141,6 @@ def mul_mw(ctx, x, y):
 
 def mul_mw_mod4(ctx, x, y):
     zero = ctx.constant(0, x[0])
-    one = ctx.constant(1, x[0])
     four = ctx.constant(4, x[0])
 
     def rem4(v):

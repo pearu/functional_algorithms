@@ -23,7 +23,7 @@ def dtype(request):
 )
 def test_expansion_samples(dtype, overlapping, length):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     fi = numpy.finfo(dtype)
     size = 4000
     for x in fa.utils.expansion_samples(size, length, overlapping=overlapping, dtype=dtype):
@@ -48,7 +48,7 @@ def test_expansion_samples(dtype, overlapping, length):
 )
 def test_renormalize(dtype, functional, fast):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     functional = {"non-functional": False, "functional": True}[functional]
@@ -166,7 +166,7 @@ def test_multiply(dtype, functional, overlapping):
     mpf.
     """
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     use_mpf = False  # disabled by default as mpmath mpf is twice
@@ -267,7 +267,7 @@ def test_square(dtype, functional, overlapping):
     overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
     functional = {"non-functional": False, "functional": True}[functional]
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -299,7 +299,7 @@ def test_square(dtype, functional, overlapping):
 
             result_mp = fa.utils.expansion2mpf(mp_ctx, e)
             expected_mp = e1_mp * e1_mp
-            err_mp = result_mp - expected_mp
+
             prec = fa.utils.diff_prec(result_mp, expected_mp)
             precs[prec] += 1
             if prec <= -fi.negep and 0:
@@ -339,7 +339,7 @@ def test_reciprocal(dtype, functional, overlapping):
     overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
     functional = {"non-functional": False, "functional": True}[functional]
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
 
     import mpmath
 
@@ -366,7 +366,7 @@ def test_reciprocal(dtype, functional, overlapping):
 
             result_mp = fa.utils.expansion2mpf(mp_ctx, e)
             expected_mp = 1 / e1_mp
-            err_mp = result_mp - expected_mp
+
             prec = fa.utils.diff_prec(result_mp, expected_mp)
             precs[prec] += 1
             if prec <= -fi.negep and 0:
@@ -391,7 +391,7 @@ def test_sqrt(dtype, functional, overlapping):
     overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
     functional = {"non-functional": False, "functional": True}[functional]
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
 
     import mpmath
 
@@ -418,10 +418,10 @@ def test_sqrt(dtype, functional, overlapping):
 
             result_mp = fa.utils.expansion2mpf(mp_ctx, e)
             expected_mp = mp_ctx.sqrt(e1_mp)
-            err_mp = result_mp - expected_mp
+
             prec = fa.utils.diff_prec(result_mp, expected_mp)
             precs[prec] += 1
-            if prec <= -fi.negep and 1:
+            if prec <= -fi.negep and 0:
                 print(f"{prec=} {e1=} {e=} {result_mp=} {expected_mp=}")
 
             if not overlapping:
@@ -441,7 +441,7 @@ def test_sqrt(dtype, functional, overlapping):
 )
 def test_add(dtype, functional, overlapping):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     length = 2
@@ -490,53 +490,6 @@ def test_add(dtype, functional, overlapping):
 
 
 @pytest.mark.parametrize(
-    "functional,overlapping",
-    [
-        # ("non-functional", "non-overlapping"),
-        # ("non-functional", "overlapping"),
-        ("functional", "non-overlapping"),
-        # ("functional", "overlapping"),
-    ],
-)
-def test_exponential(dtype, functional, overlapping):
-    overlapping = {"non-overlapping": False, "overlapping": True}[overlapping]
-    functional = {"non-functional": False, "functional": True}[functional]
-    if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
-
-    import mpmath
-
-    fi = numpy.finfo(dtype)
-    max_prec = fi.maxexp - numpy.frexp(fi.smallest_subnormal)[1] + 20
-    size = 500000
-    length = 2
-    renormalize = False
-    ctx = fa.utils.NumpyContext(dtype)
-    mp_ctx = mpmath.mp
-    precs = defaultdict(int)
-    with mp_ctx.workprec(max_prec):
-        for e1 in fa.utils.expansion_samples(size=size, length=length, min_value=1, overlapping=overlapping, dtype=dtype):
-            e1_mp = fa.utils.expansion2mpf(mp_ctx, e1)
-            if renormalize:
-                e1 = fa.apmath.renormalize(ctx, e1, functional=functional) or [dtype(0)]
-
-            e = fa.apmath.exponential(ctx, e1, functional=functional)
-
-            # skip samples that result overflow to infinity
-            s = sum(e[:-1], e[-1])
-            if not numpy.isfinite(s):
-                continue
-
-            result_mp = fa.utils.expansion2mpf(mp_ctx, e)
-            expected_mp = mp_ctx.exp(e1_mp)
-
-            prec = fa.utils.matching_bits(result_mp, expected_mp)
-            precs[prec] += 1
-
-    fa.utils.show_prec(precs)
-
-
-@pytest.mark.parametrize(
     "function,functional",
     [
         ("exp", "non-functional"),
@@ -548,7 +501,7 @@ def test_exponential(dtype, functional, overlapping):
 )
 def test_hypergeometric(dtype, function, functional):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
     import fractions
 
@@ -564,9 +517,16 @@ def test_hypergeometric(dtype, function, functional):
     max_value = 20
     niter = 20
     length = 2
+
+    def sample_func_pos(z):
+        return z
+
+    def sample_func_neg(z):
+        return -z
+
     if function == "exp":
         a, b = [], []  # exp(z)
-        sample_func = lambda z: z
+        sample_func = sample_func_pos
         length = 2
         min_value = 0
         max_value = 9
@@ -577,7 +537,7 @@ def test_hypergeometric(dtype, function, functional):
         }.get(dtype, niter)
     elif function == "cos":
         a, b = [], [fractions.Fraction(1, 2)]  # cos(-4 * sqrt(z))
-        sample_func = lambda z: -z
+        sample_func = sample_func_neg
         min_value = 0
         max_value = 10
         length = 2
@@ -598,7 +558,7 @@ def test_hypergeometric(dtype, function, functional):
         }.get(dtype, niter)
     elif function == "j0":
         a, b = [], [1]  # J0(-4 * sqrt(z)) * 2 / z
-        sample_func = lambda z: -z
+        sample_func = sample_func_neg
         min_value = 0
         max_value = 10
         length = 2
@@ -609,7 +569,7 @@ def test_hypergeometric(dtype, function, functional):
         }.get(dtype, niter)
     elif function == "j1":
         a, b = [], [2]  # J1(-4 * sqrt(z)) * (2 / z) ** 2 * 2
-        sample_func = lambda z: -z
+        sample_func = sample_func_neg
         min_value = 0
         max_value = 10
         length = 3
@@ -651,7 +611,7 @@ def test_hypergeometric(dtype, function, functional):
 
 def test_two_over_pi(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -680,7 +640,7 @@ def test_two_over_pi(dtype):
 
 def test_mul_two_over_pi(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -773,7 +733,7 @@ def test_mul_two_over_pi(dtype):
 
 def test_argument_reduction(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -796,7 +756,6 @@ def test_argument_reduction(dtype):
     with mp_ctx.workprec(max_prec):
         for x in fa.utils.real_samples(size=100, dtype=dtype, include_infinity=False):
             expected_sn = mp_ctx.sin(fa.utils.number2mpf(mp_ctx, x))
-            expected_cs = mp_ctx.cos(fa.utils.number2mpf(mp_ctx, x))
 
             k, rseq = fa.apmath.argument_reduction(ctx, [x], size=size, functional=True, base=base, scale=True)
 
@@ -823,7 +782,7 @@ def test_argument_reduction(dtype):
 
 def test_sine_cosine(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -833,7 +792,6 @@ def test_sine_cosine(dtype):
     size = 2
     single_prec = -fi.negep
 
-    base = 32
     if dtype == numpy.float16:
         max_prec = 50
     elif dtype == numpy.float32:
@@ -894,7 +852,7 @@ def test_sine_cosine(dtype):
 
 def test_log_of_two(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -923,7 +881,7 @@ def test_log_of_two(dtype):
 
 def test_reciprocal_log_of_two(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -952,7 +910,7 @@ def test_reciprocal_log_of_two(dtype):
 
 def test_argument_reduction_exponential(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -973,7 +931,6 @@ def test_argument_reduction_exponential(dtype):
     rseq_lst = []
 
     with mp_ctx.workprec(max_prec):
-        largest_log2 = fa.utils.mpf2float(dtype, mp_ctx.log(2) * fa.utils.float2mpf(mp_ctx, fi.max))
         smallest_integer_log2 = fa.utils.mpf2float(dtype, mp_ctx.log(2) * 2 ** (single_prec - 1))
         for x in samples:
             expected_mp = fa.utils.float2mpf(mp_ctx, x)
@@ -1001,7 +958,7 @@ def test_argument_reduction_exponential(dtype):
 
 def test_exponential(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -1012,7 +969,7 @@ def test_exponential(dtype):
     precs = defaultdict(int)
     ulps = defaultdict(int)
     samples = numpy.array(fa.utils.real_samples(size=100, dtype=dtype, include_infinity=False))
-    results = []
+
     with mp_ctx.workprec(max_prec):
         ctx = fa.utils.NumpyContext(dtype, mp_ctx)
         result = fa.apmath.exponential(ctx, [samples], size=size, functional=True)
@@ -1036,15 +993,11 @@ def test_exponential(dtype):
 
     fa.utils.show_prec(precs)
     fa.utils.show_ulp(ulps)
-    return
-    result = fa.apmath.exponential(ctx, [samples], size=size, functional=True)
-    for r, e in zip(result, map(numpy.array, zip(*results))):
-        assert numpy.array_equal(r, e)
 
 
 def test_logarithm(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -1086,7 +1039,7 @@ def test_logarithm(dtype):
 
 def test_hypergeometric0f1_taylor(dtype):
     if dtype == numpy.longdouble:
-        pytest.skip(f"test not implemented")
+        pytest.skip("test not implemented")
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -1102,7 +1055,7 @@ def test_hypergeometric0f1_taylor(dtype):
     samples = -numpy.array(
         fa.utils.real_samples(size=10000, dtype=dtype, min_value=0, max_value=max_value, include_infinity=False)
     )
-    results = []
+
     with mp_ctx.workprec(max_prec):
         result = fa.apmath.hypergeometric0f1_taylor(ctx, b, [samples], size=size, functional=True)
         result = numpy.array(result).T

@@ -94,19 +94,19 @@ class MXCSRRegister:
         bits = f"{val.value:016b}"
         FZ = int(bits[0])  # Flush to Zero
         RN = {"00": "nearest", "01": "down", "10": "up", "11": "towardszero"}[bits[1:3]]
-        PM = int(bits[3])  # Precision Mask
-        UM = int(bits[4])  # Underflow Mask
-        OM = int(bits[5])  # Overflow Mask
-        ZM = int(bits[6])  # Divide-by-Zero Mask
-        DM = int(bits[7])  # Denormal Operation Mask
-        IM = int(bits[8])  # Invalid Operation Mask
+        # PM = int(bits[3])  # Precision Mask
+        # UM = int(bits[4])  # Underflow Mask
+        # OM = int(bits[5])  # Overflow Mask
+        # ZM = int(bits[6])  # Divide-by-Zero Mask
+        # DM = int(bits[7])  # Denormal Operation Mask
+        # IM = int(bits[8])  # Invalid Operation Mask
         DAZ = int(bits[9])  # Denormals Are Zeros
-        PE = int(bits[10])  # Precision Flag
-        UE = int(bits[11])  # Underflow Flag
-        OE = int(bits[12])  # Overflow Flag
-        ZE = int(bits[13])  # Divide-by-Zero Flag
+        # PE = int(bits[10])  # Precision Flag
+        # UE = int(bits[11])  # Underflow Flag
+        # OE = int(bits[12])  # Overflow Flag
+        # ZE = int(bits[13])  # Divide-by-Zero Flag
         DE = int(bits[14])  # Denormal Flag
-        IE = int(bits[15])  # Invalid Operation Flag
+        # IE = int(bits[15])  # Invalid Operation Flag
         return f"{type(self).__name__}[{FZ=} {RN=} {DAZ=} {DE=}]"
 
     def __call__(self, FZ=None, DAZ=None, RN=None):

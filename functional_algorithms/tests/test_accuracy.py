@@ -44,7 +44,10 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
         pytest.importorskip(backend)
 
     register_params = dict()
-    register = lambda *args, **kwargs: contextlib.nullcontext()
+
+    def register_null(*args, **kwargs):
+        return contextlib.nullcontext()
+
     if fpu != "default":
         if backend not in {"algorithms"} or device != "cpu":
             pytest.skip(f"{unary_func_name}: fpu {fpu} mode N/A for {backend=} {device=}")
@@ -61,6 +64,8 @@ def test_unary(unary_func_name, backend, device, dtype, fpu):
         if device == "cpu":
             register = fa.fpu.context
             register_params.update(RN="nearest")
+        else:
+            register = register_null
 
     numpy_with_backend = getattr(fa.utils, f"numpy_with_{backend}")(device=device, dtype=dtype)
     try:

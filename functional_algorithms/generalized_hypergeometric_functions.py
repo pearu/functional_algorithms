@@ -100,7 +100,7 @@ For factorial Levin-type sequence transformation, we'll have
             = sum(binom(k, j) * (-1) ** (k - j) * (n + j + gamma)_{k - 1} / omega_{n + j}, j=0..k)
 
 In the following, we'll separate z-independent and z-dependent parts
-of N_n^{(k)} and D_n^{(k)}. 
+of N_n^{(k)} and D_n^{(k)}.
 
 Theorem 1
 ---------
@@ -201,10 +201,11 @@ where
 
 Proof:
 
-    pFq(a, b, c * z) = 
+    pFq(a, b, c * z) =
       = sum_{k=0..oo} pochhammer(a, k) / pochhammer(b, k) * c ** k / k! * z ** k
       = sum_{k=0..oo} pochhammer(a, k) / pochhammer(b, k) * c ** k / k! * (z - z0 + z0) ** k
-      = sum_{k=0..oo} pochhammer(a, k) / pochhammer(b, k) * c ** k / k! * sum_{i=0..k} k! / i! / (k-i)! z0 ** (k - i) * (z - z0) ** i
+      = sum_{k=0..oo} pochhammer(a, k) / pochhammer(b, k) * c ** k / k! * sum_{i=0..k} k!
+                      / i! / (k-i)! z0 ** (k - i) * (z - z0) ** i
       = sum_{k=0..oo, i=0..k} pochhammer(a, k) / pochhammer(b, k) * c ** k / i! / (k-i)! z0 ** (k - i) * (z - z0) ** i
       = sum_{i=0..oo} T_{i} * (z - z0) ** i
 
@@ -214,12 +215,14 @@ Proof:
           = sum_{i=0..oo, k=0..oo} T_{k, i} * [i <= k] * xi ** i
           = sum_{i=0..oo, k=i..oo} T_{k, i} * xi ** i
           = sum_{i=0..oo, j=0..oo} T_{j + i, i} * xi ** i
- 
+
     Hence,
 
       T_i = sum(j=0..oo) pochhammer(a, j + i) / pochhammer(b, j + i) * c ** (j + i) / i! / j! * z0 ** j
-          = sum(j=0..oo) pochhammer(a + i, j) * pochhammer(a, i) / pochhammer(b + i, j) / pochammer(b, i) * c ** (j + i) / i! / j! * z0 ** j
-          = c ** i / i! * pochhammer(a, i) / pochhammer(b, i) * sum(j=0..oo) pochhammer(a + i, j) / pochhammer(b + i, j) * c ** j / j! * z0 ** j
+          = sum(j=0..oo) pochhammer(a + i, j) * pochhammer(a, i) / pochhammer(b + i, j)
+                         / pochammer(b, i) * c ** (j + i) / i! / j! * z0 ** j
+          = c ** i / i! * pochhammer(a, i) / pochhammer(b, i) * sum(j=0..oo) pochhammer(a + i, j)
+                          / pochhammer(b + i, j) * c ** j / j! * z0 ** j
           = pFq(a + i, b + i, c * z0) * c ** i / i! * pochhammer(a, i) / pochhammer(b, i)
 
 QED
@@ -241,7 +244,7 @@ def pochhammer(x, n):
             r *= pochhammer(x_, n)
     else:
         if isinstance(x, (numpy.floating, float)):
-            assert x == numpy.round(x), x  #  todo: use gamma
+            assert x == numpy.round(x), x  # todo: use gamma
             x = fa.utils.float2fraction(x)
 
         for i in range(n):
@@ -336,7 +339,6 @@ class Reference:
         N_n^{(k)}(z) == polynomial(N, 1 / z) / z
         """
         N = []
-        s = 0
         for q in reversed(range(n)):
             s1 = 0
             for j in range(k + 1):
@@ -528,7 +530,9 @@ def pFq_drummond_coeffs(a, b, k, n=0):
     assert isinstance(k, int)
     assert isinstance(n, int)
 
-    A = lambda k: fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+    def A(k):
+        return fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+
     N = []
     D = []
 
@@ -560,7 +564,9 @@ def pFqm1_drummond_coeffs(a, b, k, n=0):
     assert isinstance(k, int)
     assert isinstance(n, int)
 
-    A = lambda k: fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+    def A(k):
+        return fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+
     Nm1 = []
     D = []
     for m in range(k + 1):
@@ -583,7 +589,10 @@ def pFq_levin_coeffs(a, b, k, n=0, gamma=2):
     """
     assert isinstance(k, int)
     assert isinstance(n, int)
-    A = lambda k: fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+
+    def A(k):
+        return fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+
     N = []
     D = []
 
@@ -617,7 +626,9 @@ def pFqm1_levin_coeffs(a, b, k, n=0, gamma=2):
     """
     assert isinstance(k, int)
     assert isinstance(n, int)
-    A = lambda k: fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
+
+    def A(k):
+        return fractions.Fraction(pochhammer(a, k), pochhammer(b, k) * math.factorial(k))
 
     Nm1 = []
     D = []
@@ -896,10 +907,8 @@ def hyp0f1(
     # return numer / denom
 
     zeros = fa.utils.number2float(dtype, hyp0f1_zeros(1, end=5))
-    # print(f'{zeros=}')
     zeros = fa.utils.number2fraction(zeros)
 
-    # print(f'{N=}')
     N1, R1 = fpp.divmod(N, [1, -zeros[0]], reverse=True)
     N2, R2 = fpp.divmod(N1, [1, -zeros[1]], reverse=True)
     N3, R3 = fpp.divmod(N2, [1, -zeros[2]], reverse=True)
@@ -907,12 +916,9 @@ def hyp0f1(
     N1 = fa.utils.number2float(dtype, N1)
     N2 = fa.utils.number2float(dtype, N2)
     N3 = fa.utils.number2float(dtype, N3)
-    # print(f'{fa.utils.number2float(dtype, R1)=}')
-
-    # print(f'{N=}')
 
     numer1 = fpa.laurent(ctx, dz, N1, m=m, reverse=True, scheme=fpa.horner_scheme)
-    numer2 = fpa.laurent(ctx, dz, N2, m=m, reverse=True, scheme=fpa.horner_scheme)
+    # numer2 = fpa.laurent(ctx, dz, N2, m=m, reverse=True, scheme=fpa.horner_scheme)
     numer3 = fpa.laurent(ctx, dz, N3, m=m, reverse=True, scheme=fpa.horner_scheme)
     znumer1 = fpa.laurent(ctx, dz, [1, -zeros[0]], m=m, reverse=True, scheme=fpa.horner_scheme)
     znumer2 = fpa.laurent(ctx, dz, [1, -zeros[1]], m=m, reverse=True, scheme=fpa.horner_scheme)

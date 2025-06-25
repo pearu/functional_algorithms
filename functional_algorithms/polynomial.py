@@ -1,6 +1,4 @@
 import functional_algorithms as fa
-import functional_algorithms.floating_point_algorithms as fpa
-import fractions
 import numpy
 import math
 

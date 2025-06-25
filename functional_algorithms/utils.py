@@ -261,11 +261,9 @@ def matching_bits(x, y):
         if xexp < yexp:
             man1 = [1, -1][xsign] * xman
             man2 = [1, -1][ysign] * yman * (2 ** (yexp - xexp) if yman else 1)
-            exp = xexp
         else:
             man1 = [1, -1][xsign] * xman * (2 ** (xexp - yexp) if xman else 1)
             man2 = [1, -1][ysign] * yman
-            exp = yexp
         r = round(prec * (1 - (man1 - man2).bit_length() / max(1, min(man1.bit_length(), man2.bit_length()))), 1)
         return max(r, -1)
     elif isinstance(x, numpy.floating) and isinstance(y, type(x)):
@@ -434,7 +432,7 @@ def float2fraction(f):
         one = itype(1)
         ssz = 1  # bit-size of sign part
         esz = itype(fi.nexp)  # bit-size of exponential part
-        fsz = itype(-1 - fi.negep)  # bit-size of fractional part
+        fsz = itype(-ssz - fi.negep)  # bit-size of fractional part
         fmask = itype((one << fsz) - one)
         emask = itype((one << esz) - one)
         umask = itype((one << (esz + fsz)) - one)
@@ -1067,9 +1065,6 @@ class mpmath_array_api:
     def absolute(self, x):
         return x.context.absmin(x)
 
-    def log(self, x):
-        return x.context.ln(x)
-
     def exp(self, x):
         return x.context.exp(x)
 
@@ -1503,7 +1498,6 @@ class numpy_with_numpy:
         key = name, tuple(sorted(self.params.items()))
         if key in self._vfunc_cache:
             return self._vfunc_cache[key]
-        import numpy
 
         vfunc = numpy.vectorize(getattr(numpy, name), **self.params)
         self._vfunc_cache[key] = vfunc
@@ -1530,7 +1524,6 @@ class numpy_with_algorithms:
             return self._vfunc_cache[key]
 
         import functional_algorithms as fa
-        import numpy
 
         ctx = fa.Context(paths=[fa.algorithms])
         graph = ctx.trace(getattr(fa.algorithms, name), dtype)
@@ -2365,17 +2358,13 @@ def validate_function(
 
 
 def function_validation_parameters(func_name, dtype, device=None):
-    if isinstance(dtype, str):
-        dtype_name = dtype
-    elif isinstance(dtype, numpy.dtype):
-        dtype_name = dtype.type.__name__
-    else:
-        dtype_name = dtype.__name__
-
     # If a function has symmetries, exclude superfluous samples by
     # specifying a region of the function domain:
     samples_limits = dict(
-        min_real_value=-numpy.inf, max_real_value=numpy.inf, min_imag_value=-numpy.inf, max_imag_value=numpy.inf
+        min_real_value=-numpy.inf,
+        max_real_value=numpy.inf,
+        min_imag_value=-numpy.inf,
+        max_imag_value=numpy.inf,
     )
 
     # diff_ulp(func(sample), reference(sample)) <= max_valid_ulp_count
@@ -2567,7 +2556,6 @@ def mpf2expansion(dtype, x, length=None, functional=False, base=None):
         lst = [mpf2float(dtype, x)]
     else:
         lst = []
-        prev_x = 0
         index = 0
         while True:
             if base is not None:

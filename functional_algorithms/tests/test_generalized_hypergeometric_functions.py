@@ -1,7 +1,5 @@
 import numpy
 import pytest
-import math
-import warnings
 from collections import defaultdict
 import functional_algorithms as fa
 import functional_algorithms.floating_point_algorithms as fpa
@@ -223,17 +221,22 @@ def test_pFq_validate(dtype, transform):
     min_value = 1
     max_value = 10
 
-    pFq = ghf.pFq_impl
     if transform == "scipy":
         try:
             import scipy
         except ImportError as msg:
             pytest.skip(f"failed to import scipy: {msg}")
         params = dict()
+
+        def pFq(x):
+            return dtype(scipy.special.hyp0f1(beta[0], x))
+
     else:
         params = dict(transform=transform)
         if transform.startswith("levin"):
             params.update(gamma=2)
+
+        pFq = ghf.pFq_impl
 
     ctx = fa.utils.NumpyContext(dtype)
     fctx = fa.utils.FractionContext()
@@ -249,7 +252,7 @@ def test_pFq_validate(dtype, transform):
         if transform == "scipy":
             assert len(alpha) == 0
             assert len(beta) == 1
-            pFq = lambda x: dtype(scipy.special.hyp0f1(beta[0], x))
+
         # J0, most accurate combinations:
         # Using horner scheme, float64, levin:
         # Range: 0.1...10
@@ -365,31 +368,27 @@ def test_hyp0f1(dtype, transform):
 
     fi = numpy.finfo(dtype)
 
-    min_value = fi.smallest_normal
-    min_value = 0
     min_value = numpy.sqrt(fi.eps)
-    # min_value = 7
     max_value = 70 * 2
-    # min_value = 1e-5
-    # max_value = 5e-5
-    # min_value = 1
-    # min_value = 34
-    # max_value = 1e23
 
-    pFq = ghf.hyp0f1
     if transform == "scipy":
         try:
             import scipy
         except ImportError as msg:
             pytest.skip(f"failed to import scipy: {msg}")
         params = dict()
+
+        def pFq(x):
+            return dtype(scipy.special.hyp0f1(beta[0], x))
+
     else:
         params = dict(transform=transform)
         if transform.startswith("levin"):
             params.update(gamma=2)
 
+        pFq = ghf.hyp0f1
+
     ctx = fa.utils.NumpyContext(dtype)
-    fctx = fa.utils.FractionContext()
     size = 100
     samples = list(fa.utils.real_samples(size=size, dtype=dtype, min_value=min_value, max_value=max_value))
     mp_ctx = mpmath.mp
@@ -400,7 +399,6 @@ def test_hyp0f1(dtype, transform):
     if transform == "scipy":
         assert len(alpha) == 0
         assert len(beta) == 1
-        pFq = lambda x: dtype(scipy.special.hyp0f1(beta[0], x))
 
     k = 34
     n = 0
@@ -413,7 +411,6 @@ def test_hyp0f1(dtype, transform):
         Clst = [C]
         Nlst = [N]
         start, step = 0, 0
-        # print(f'{fa.utils.number2float(dtype, fpp.asrpolynomial(Clst[-1]))=}')
         for i in range(start, start + step):
             if 0:
                 Z1 = [1, -1 / zeros[i]]
@@ -422,24 +419,16 @@ def test_hyp0f1(dtype, transform):
                 Z1 = [-zeros[i], 1]
             Clst[-1], R1 = fpp.divmod(Clst[-1], Z1, reverse=False)
             Nlst[-1], R1 = fpp.divmod(Nlst[-1], Z1[::-1], reverse=True)
-            # print(f'{fa.utils.number2float(dtype, R1)=}')
             if 0:
                 Clst[0] = fpp.multiply(Clst[0], Z1)
             else:
                 Clst.insert(0, Z1)
                 Nlst.insert(0, Z1[::-1])
-            # print(f'{fa.utils.number2float(dtype, fpp.asrpolynomial(Clst[-1]))=}')
-        # print(f'{Clst=}')
 
         z0 = zeros[start]
-        z1 = zeros[start + 1]
-        C0 = fpp.asrpolynomial(fpp.taylorat(C, z0, reverse=False)[1:], reverse=False)
-        print()
-        # print(f'{fa.utils.number2float(dtype, C0)=}')
-        # return
+
         rD = fpp.asrpolynomial(D, reverse=True)
         rN = fpp.asrpolynomial(Nlst[-1], reverse=True)
-        # rNlst = Nlst[:-1] + [fpp.asrpolynomial(Nlst[-1])]
 
         Clst = fa.utils.number2float(dtype, Clst)
         Nlst = fa.utils.number2float(dtype, Nlst)
@@ -475,13 +464,11 @@ def test_hyp0f1(dtype, transform):
 
     with mp_ctx.workprec(max_prec):
         ulp_counts = defaultdict(int)
-        min_k = 1
         max_error = 0
         result_lst = []
         expected_lst = []
         for z in samples:
             z = -z
-            fz = fa.utils.float2fraction(z)
             expected = fa.utils.mpf2float(dtype, mp_ctx.hyper(alpha, beta, fa.utils.float2mpf(mp_ctx, z)))
 
             if transform == "scipy":
@@ -538,15 +525,11 @@ def test_hyp0f1(dtype, transform):
     plt.semilogy(samples, abs(result_lst - expected_lst), label="result - reference")
     plt.legend()
 
-    print(f"wrote hyp0f1.jpg")
+    print("wrote hyp0f1.jpg")
     plt.savefig("hyp0f1.jpg")
 
 
 def test_pFq_taylor_coeffs(dtype):
-    import mpmath
-
-    fi = numpy.finfo(dtype)
-
     alpha, beta = [], [1]
     k = 110
     k1 = 40

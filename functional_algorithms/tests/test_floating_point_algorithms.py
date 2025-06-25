@@ -1,7 +1,6 @@
 import numpy
 import os
 import pytest
-import itertools
 from collections import defaultdict
 import warnings
 
@@ -27,8 +26,6 @@ def test_split_veltkamp(dtype):
     ctx = NumpyContext(dtype)
     p = utils.get_precision(dtype)
     C = utils.get_veltkamp_splitter_constant(dtype)
-    largest = fpa.get_largest(ctx, dtype(0))
-    smallest = fpa.get_smallest(ctx, dtype(0))
 
     assert isinstance(C, dtype)
     assert C == dtype(2 ** ((p + 1) // 2) + 1)
@@ -96,11 +93,10 @@ def test_mul_dekker(dtype):
     else:
         size = 20
 
-    p = utils.get_precision(dtype)
-    min_x = {11: -986.0, 24: -7.51e33, 53: -4.33e299}[p]
-    max_x = {11: 1007.0, 24: 8.3e34, 53: 1.33e300}[p]
-    min_xy = {11: -62940.0, 24: -numpy.inf, 53: -numpy.inf}[p]
-    max_xy = {11: 62940.0, 24: numpy.inf, 53: numpy.inf}[p]
+    # min_x = {11: -986.0, 24: -7.51e33, 53: -4.33e299}[p]
+    # max_x = {11: 1007.0, 24: 8.3e34, 53: 1.33e300}[p]
+    # min_xy = {11: -62940.0, 24: -numpy.inf, 53: -numpy.inf}[p]
+    # max_xy = {11: 62940.0, 24: numpy.inf, 53: numpy.inf}[p]
 
     fi = numpy.finfo(dtype)
 
@@ -659,7 +655,6 @@ def test_argument_reduction_exponent(dtype):
     ln2 = dtype(numpy.log(2))
 
     with mpmath.workprec(working_prec):
-        mpctx = mpmath.mp
         for x in utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value):
             for s in [dtype(1), dtype(-1)]:
                 x = s * x
@@ -709,10 +704,9 @@ def test_argument_reduction_trigonometric(dtype):
     ctx = NumpyContext(dtype)
     fi = numpy.finfo(dtype)
     min_value = fi.smallest_normal
-    max_value = fi.max
 
     largest = fpa.get_largest(ctx, dtype(0))
-    max_x = largest / dtype(2 ** {numpy.float64: 18, numpy.float32: 5, numpy.float16: 2}[dtype])
+    max_value = largest / dtype(2 ** {numpy.float64: 18, numpy.float32: 5, numpy.float16: 2}[dtype])
 
     max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
 
@@ -727,7 +721,7 @@ def test_argument_reduction_trigonometric(dtype):
         assert u <= 5, (r, t, r + t)
 
     size = 1000
-    samples = utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_x)
+    samples = utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value)
     ulp_counts = defaultdict(int)
     for x in samples:
         assert isinstance(x, dtype)

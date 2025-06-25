@@ -10,6 +10,8 @@ __all__ = [
     "restrict",
     "apmath",
     "special",
+    "fpu",
+    "polynomial",
 ]
 
 try:

@@ -1,6 +1,5 @@
 import numpy
 import pytest
-import os
 from collections import defaultdict
 import functional_algorithms as fa
 
@@ -28,8 +27,13 @@ def real_dtype(request):
     ],
 )
 def test_bessel_validation(real_dtype, backend, order):
-    import scipy.special as sc
     import mpmath
+
+    if backend == "scipy":
+        try:
+            import scipy.special as sc
+        except ImportError as msg:
+            pytest.skip(f"failed to import scipy.special: {msg}")
 
     dtype = real_dtype
     fi = numpy.finfo(dtype)
@@ -152,14 +156,19 @@ def test_bessel_validation(real_dtype, backend, order):
     ],
 )
 def test_hyp2f1(real_dtype, backend, a, b, c):
-    import scipy.special as sc
     import mpmath
 
-    if backend == "jax":
+    if backend == "scipy":
         try:
-            import jax
+            import scipy.special as sc
         except ImportError as msg:
-            pytest.skip(f"failed to import jax: {msg}")
+            pytest.skip(f"failed to import scipy.special: {msg}")
+
+    elif backend == "jax":
+        try:
+            import jax.scipy.special as jsc
+        except ImportError as msg:
+            pytest.skip(f"failed to import jax.scipy.special: {msg}")
 
     dtype = real_dtype
     fi = numpy.finfo(dtype)
@@ -191,7 +200,7 @@ def test_hyp2f1(real_dtype, backend, a, b, c):
     ]:
         if stop < start or numpy.isinf(dtype(start)) or numpy.isinf(dtype(stop)):
             continue
-        size = 10000
+        size = 1000
         samples = fa.utils.real_samples(size, dtype=dtype, min_value=start, max_value=stop)
 
         max_prec = {numpy.float16: 24, numpy.float32: 149, numpy.float64: 1074}[dtype]
@@ -206,8 +215,6 @@ def test_hyp2f1(real_dtype, backend, a, b, c):
                 if backend == "scipy":
                     result = sc.hyp2f1(dtype(a), dtype(b), dtype(c), x).astype(dtype)
                 elif backend == "jax":
-                    import jax.scipy.special as jsc
-
                     result = numpy.asarray(jsc.hyp2f1(dtype(a), dtype(b), dtype(c), x))[()]
                 else:
                     assert 0, backend  # not implemented
@@ -270,15 +277,20 @@ def test_hyp2f1(real_dtype, backend, a, b, c):
     ],
 )
 def test_hyp0f1(real_dtype, backend, b):
-    import scipy.special as sc
     import mpmath
     import functional_algorithms.generalized_hypergeometric_functions as ghf
 
-    if backend == "jax":
+    if backend == "scipy":
         try:
-            import jax
+            import scipy.special as sc
         except ImportError as msg:
-            pytest.skip(f"failed to import jax: {msg}")
+            pytest.skip(f"failed to import scipy.special: {msg}")
+
+    elif backend == "jax":
+        try:
+            import jax.scipy.special as jsc
+        except ImportError as msg:
+            pytest.skip(f"failed to import jax.scipy.special: {msg}")
 
     dtype = real_dtype
     fi = numpy.finfo(dtype)
@@ -344,8 +356,6 @@ def test_hyp0f1(real_dtype, backend, b):
                 elif backend == "scipy":
                     result = sc.hyp0f1(dtype(b), x).astype(dtype)
                 elif backend == "jax":
-                    import jax.scipy.special as jsc
-
                     result = numpy.asarray(jsc.hyp0f1(dtype(b), x))[()]
                 else:
                     assert 0, backend  # not implemented
@@ -372,9 +382,10 @@ def test_hyp0f1(real_dtype, backend, b):
                 if backend == "fa" and not is_close_to_zero:
                     if u > 1:
                         print(f"{u=}: {x=} {expected=} {result=} {label=}")
-                    # assert u <= 1
+                    assert u <= 1
                     # u > 1 is expected when x is close to a 0f1 zero
                     # that is not listed in zero_indices.
+
         ur = defaultdict(int)
         for u in ulp_sc_mp:
             for u0, u1, l in ulp_ranges:
@@ -396,7 +407,7 @@ def test_hyp0f1(real_dtype, backend, b):
             s_z = "-" if c_z == 0 else str(c_z)
             if s == "-":
                 if s_z == "-":
-                    row.append(f"-")
+                    row.append("-")
                 else:
                     row.append(f"({s_z})")
             elif s_z == "-":

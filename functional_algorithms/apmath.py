@@ -45,6 +45,7 @@ https://hal.science/hal-04474530v3
 """
 
 import numpy
+import math
 import fractions
 import functools
 
@@ -74,13 +75,25 @@ def mergesort(ctx, lst, mth="<"):
         return lst
     n = len(lst) // 2
     if mth == "<":
-        cmp = lambda ctx, x, y: ctx.lt(x, y)
+
+        def cmp(ctx, x, y):
+            return ctx.lt(x, y)
+
     elif mth == "a<a":
-        cmp = lambda ctx, x, y: ctx.lt(abs(x), abs(y))
-    if mth == ">":
-        cmp = lambda ctx, x, y: ctx.lt(y, x)
+
+        def cmp(ctx, x, y):
+            return ctx.lt(abs(x), abs(y))
+
+    elif mth == ">":
+
+        def cmp(ctx, x, y):
+            return ctx.lt(y, x)
+
     elif mth == "a>a":
-        cmp = lambda ctx, x, y: ctx.lt(abs(y), abs(x))
+
+        def cmp(ctx, x, y):
+            return ctx.lt(abs(y), abs(x))
+
     else:
         raise NotImplementedError(f"comparison method '{mth}'")
     return _merge(ctx, mergesort(ctx, lst[:n], mth=mth), mergesort(ctx, lst[n:], mth), cmp=cmp)
@@ -105,10 +118,10 @@ def two_prod(ctx, dtype, a, b, scale=True):
 
 @fpa.make_api()
 def two_prod_mod4(ctx, dtype, a, b, scale=True):
-    h, l = fpa.mul_dekker(ctx, a, b, scale=scale, dtype=dtype)
-    qh = quotient4(ctx, h, dtype=dtype)
-    ql = quotient4(ctx, l, dtype=dtype)
-    return h - qh, l - ql
+    hi, lo = fpa.mul_dekker(ctx, a, b, scale=scale, dtype=dtype)
+    qh = quotient4(ctx, hi, dtype=dtype)
+    ql = quotient4(ctx, lo, dtype=dtype)
+    return hi - qh, lo - ql
 
 
 def vecsum(ctx, seq, fast=False):
@@ -665,7 +678,6 @@ def hypergeometric_minus_one(ctx, dtype, a, b, seq, niter, functional=False, siz
       n! = 1 if n == 0 else (n-1)! * n
       a and b are lists of integers or Fraction instances.
     """
-    import fractions
     import functional_algorithms as fa
 
     rcoeffs = []
@@ -733,7 +745,6 @@ def hypergeometric0f1_asymptotic_parameters(dtype, b, max_k=20, prec=110, size=2
     JS(z) = rpolynomial(1 / z / 4, rS) * (b - 1)! * sqrt(pi) * 2
     """
     import mpmath
-    import fractions
     import functional_algorithms.generalized_hypergeometric_functions as ghf
 
     mp_ctx = mpmath.mp
@@ -780,7 +791,6 @@ def hypergeometric0f1_asymptotic_parameters(dtype, b, max_k=20, prec=110, size=2
 @functools.lru_cache(typed=True)
 def log_of_two(ctx, dtype, size=None, base=None):
     """Return FP expansion of log(2)."""
-    import numpy
     import mpmath
 
     if size is None:
@@ -797,7 +807,6 @@ def log_of_two(ctx, dtype, size=None, base=None):
 @functools.lru_cache(typed=True)
 def reciprocal_log_of_two(ctx, dtype, size=None, base=None):
     """Return FP expansion of log(2)."""
-    import numpy
     import mpmath
 
     if size is None:
@@ -813,7 +822,6 @@ def reciprocal_log_of_two(ctx, dtype, size=None, base=None):
 
 @functools.lru_cache(typed=True)
 def _argument_reduction_exponential_parameters(ctx, dtype, size=None, base=None):
-    import numpy
     import mpmath
 
     fi = numpy.finfo(dtype)
@@ -854,8 +862,6 @@ def argument_reduction_exponential(ctx, dtype, seq, size=None, functional=False,
     we'll set k = largest (which is also an integer) and sum(rseq) = x
     - largest * log(2).
     """
-    import numpy
-
     zero = ctx.constant(0)
     params = _argument_reduction_exponential_parameters(ctx, dtype, size=size, base=base)
     rlog2 = params["rlog2"]
@@ -881,15 +887,11 @@ def argument_reduction_exponential(ctx, dtype, seq, size=None, functional=False,
 
 @functools.lru_cache(typed=True)
 def _exponential_parameters(dtype, functional=False, size=None, base=None):
-    import math
-    import numpy
-    import fractions
-
     if size is None:
         size = 2
 
     fi = numpy.finfo(dtype)
-    prec = -fi.negep
+    # prec = -fi.negep
     # q = int(round(prec ** (2 / 5)))  # see exponential doc
     """
 1000000 samples:
@@ -954,8 +956,6 @@ def exponential(ctx, dtype, seq, functional=False, size=None, scale=False):
     use heuristics that leads to more accurate results [see
     exponential_parameters].
     """
-    import numpy
-
     zero = ctx.constant(0)
     inf = ctx.constant("inf")
 
@@ -1012,8 +1012,6 @@ def logarithm(ctx, dtype, seq, functional=False, size=None, niter=None):
 
       y_{k + 1} = y_k + multiply(seq, exponential(-y_k)) - 1
     """
-    import numpy
-
     if niter is None:
         niter = {numpy.float16: 2, numpy.float32: 1, numpy.float64: 1}[dtype]
     y0 = ctx.log(seq[0])
@@ -1432,7 +1430,6 @@ def rtaylor(ctx, dtype, seq, rcoeffs, seq0, reverse=False, functional=False, fas
 @functools.lru_cache(typed=True)
 def two_over_pi(ctx, dtype, size=None, base=None):
     """Return FP expansion of 2 / pi."""
-    import numpy
     import mpmath
 
     if size is None:
@@ -1449,7 +1446,6 @@ def two_over_pi(ctx, dtype, size=None, base=None):
 @functools.lru_cache(typed=True)
 def pi_over_two(ctx, dtype, size=None, base=None):
     """Return FP expansion of 2 / pi."""
-    import numpy
     import mpmath
 
     if size is None:
@@ -1474,8 +1470,6 @@ def argument_reduction(ctx, dtype, seq, size=None, functional=False, base=None, 
     where seq is FP expansion of x, k in [-1, 0, 1, 2], sum(rseq) <=
     0.5005, and N is integral that is not computed.
     """
-    import numpy
-
     if size is None:
         size = 2
 
@@ -1529,8 +1523,6 @@ def sine_coeffs(n):
 
     sine(x) ~ x * polynomial(x * x, Sn)
     """
-    import fractions
-
     assert isinstance(n, int)
     lst = [fractions.Fraction(1)]
     for i in range(1, n):
@@ -1543,8 +1535,6 @@ def cosine_minus_one_coeffs(n):
 
     cosine(x) ~ 1 + x * x * polynomial(x * x, Cs)
     """
-    import fractions
-
     assert isinstance(n, int)
     lst = [fractions.Fraction(-1, 2)]
     for i in range(2, n):

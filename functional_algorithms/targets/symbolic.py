@@ -1,6 +1,3 @@
-import warnings
-import sys
-import math
 from . import python as this_module
 from .. import utils
 from .base import PrinterBase, modifier_base

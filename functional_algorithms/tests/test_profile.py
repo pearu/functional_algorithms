@@ -1,5 +1,7 @@
 import numpy
-import cProfile, pstats, io
+import cProfile
+import pstats
+import io
 import functional_algorithms as fa
 import functional_algorithms.floating_point_algorithms as fpa
 
@@ -21,6 +23,7 @@ def test_dot2():
         graph = ctx.trace(square_of_abs, dtype)
         graph2 = graph.rewrite(fa.targets.numpy, fa.rewrite)
         func = fa.targets.numpy.as_function(graph2)
+        assert func is not None
 
         s = io.StringIO()
         ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
