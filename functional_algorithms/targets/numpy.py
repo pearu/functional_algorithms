@@ -66,6 +66,12 @@ def downcast_func(target, expr):
     return f"{t_new}({s})"
 
 
+def list_func(target, expr):
+    assert expr.kind == "list"
+    s = ", ".join([target.tostring(item) for item in expr.operands])
+    return f"[{s}]"
+
+
 trace_arguments = dict(
     absolute=[(":complex128",), (":complex64",)],
     asin_acos_kernel=[(":complex128",), (":complex64",)],
@@ -119,10 +125,10 @@ kind_to_target = dict(
     remainder="({0}) %% ({1})",
     floor_divide="({0}) // ({1})",
     pow="({0}) ** ({1})",
-    logical_and="({0}) and ({1})",
-    logical_or="({0}) or ({1})",
+    logical_and="numpy.logical_and({0}, {1})",
+    logical_or="numpy.logical_or({0}, {1})",
     logical_xor=NotImplemented,
-    logical_not="not ({0})",
+    logical_not="numpy.logical_not({0})",
     bitwise_invert="~({0})",
     bitwise_and="({0}) & ({1})",
     bitwise_or="({0}) | ({1})",
@@ -164,17 +170,20 @@ kind_to_target = dict(
     hypot="numpy.hypot({0}, {1})",
     square="numpy.square({0})",
     sqrt="numpy.sqrt({0})",
-    select="({1}) if ({0}) else ({2})",
-    lt="({0}) < ({1})",
-    le="({0}) <= ({1})",
-    gt="({0}) > ({1})",
-    ge="({0}) >= ({1})",
+    # select="({1}) if ({0}) else ({2})",
+    select="numpy.where({0}, {1}, {2})",
+    lt="numpy.less({0}, {1})",
+    le="numpy.less_equal({0}, {1})",
+    gt="numpy.greater({0}, {1})",
+    ge="numpy.greater_equal({0}, {1})",
     eq="numpy.equal({0}, {1})",
-    ne="({0}) != ({1})",
+    ne="numpy.not_equal({0}, {1})",
     nextafter="numpy.nextafter({0}, {1})",
     upcast=upcast_func,
     downcast=downcast_func,
     is_finite="numpy.isfinite({0})",
+    list=list_func,
+    item="{0}[{1}]",
 )
 
 constant_to_target = dict(
@@ -194,6 +203,7 @@ type_to_target = dict(
     integer32="numpy.int32",
     integer64="numpy.int64",
     integer="numpy.int64",
+    float16="numpy.float16",
     float32="numpy.float32",
     float64="numpy.float64",
     float="numpy.float64",
@@ -205,7 +215,7 @@ type_to_target = dict(
 )
 
 
-def as_function(graph, debug=0, numpy=numpy):
+def as_function(graph, debug=0, numpy=numpy, force_cast_arguments=None):
     """Return function graph as Python callable."""
     assert graph.kind == "apply"
     d = dict(
@@ -216,7 +226,7 @@ def as_function(graph, debug=0, numpy=numpy):
         finfo_float64=numpy.finfo(numpy.float64),
         warnings=warnings,
     )
-    np = graph.tostring(this_module, debug=debug)
+    np = graph.tostring(this_module, debug=debug, force_cast_arguments=force_cast_arguments)
     if debug >= 2:
         print(np)
     exec(np, d)
@@ -235,6 +245,7 @@ class Printer(PrinterBase):
     constant_to_target = constant_to_target
 
     def make_assignment(self, typ, var, value):
+        # assert value.kind != "list"
         if typ is None:
             return f"{var} = {value}"
         return f"{var}: {typ} = {value}"
@@ -246,6 +257,9 @@ class Printer(PrinterBase):
         return f"{typ}({s})"
 
     def make_argument(self, arg):
+        if arg.kind == "list":
+            at = ", ".join([str(self.get_type(a_)) for a_ in arg.operands])
+            return f"{arg.ref}: list[{at}]"
         assert arg.kind == "symbol", arg.kind
         typ = self.get_type(arg)
         return f"{arg}: {typ}"
@@ -259,6 +273,7 @@ class Printer(PrinterBase):
     def make_apply(self, expr, name, tab=""):
         sargs = ", ".join(map(self.make_argument, expr.operands[1:-1]))
         body = self.tostring(expr.operands[-1])
+        btype = expr.operands[-1].get_type()
         body_type = self.get_type(expr.operands[-1])
         lines = []
         lines.append(f"{tab}def {name}({sargs}) -> {body_type}:")
@@ -269,6 +284,14 @@ class Printer(PrinterBase):
         if self.debug >= 2:
             lines.append(f'{tab}    print("result=", result)')
         if self.debug >= 1:
-            lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
+            if btype.kind == "list":
+                lines.append(f"{tab}    assert isinstance(result, list), (type(result))")
+                lines.append(f"{tab}    assert len(result) == {len(btype.param)}, (len(result),)")
+                lines.append(f"{tab}    print({[t.__name__ for t in btype.asdtype()]})")
+                for i, t in enumerate(btype.asdtype()):
+                    lines.append(f"{tab}    {self.check_dtype('result[' + str(i) + ']', 'numpy.' + t.__name__)}")
+                # lines.append(f"{tab}    for item in result:")
+            else:
+                lines.append(f"{tab}    assert result.dtype == {body_type}, (result.dtype,)")
         lines.append(f"{tab}    return result")
         return utils.format_python("\n".join(lines))

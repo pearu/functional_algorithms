@@ -4,8 +4,8 @@ import types
 import typing
 import warnings
 from collections import defaultdict
-from .utils import UNSPECIFIED, boolean_types, float_types, complex_types
-from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds
+from .utils import UNSPECIFIED, boolean_types, float_types, complex_types, integer_types
+from .expr import Expr, make_constant, make_symbol, make_apply, known_expression_kinds, make_list, make_item, make_len
 from .typesystem import Type
 
 
@@ -194,11 +194,14 @@ class Context:
                     if ":" in a:
                         name, annot = a.split(":", 1)
                         name = name.strip()
+                        # TODO: parse annot as it may contain typing alias
                         param = param.replace(name=name if name else param.name, annotation=annot.strip())
                     else:
                         param = param.replace(name=a.strip())
                 elif isinstance(a, type):
                     param = param.replace(annotation=a.__name__)
+                elif isinstance(a, types.GenericAlias):
+                    param = param.replace(annotation=a)
                 else:
                     raise NotImplementedError((a, type(a)))
             if param.annotation is inspect.Parameter.empty:
@@ -207,12 +210,28 @@ class Context:
                 typ = param.annotation
                 if isinstance(typ, types.UnionType):
                     typ = typing.get_args(typ)[0]
-                assert isinstance(typ, (type, str)), typ
+                assert isinstance(typ, (type, str, types.GenericAlias)), (type(typ), typ)
             if default_typ is UNSPECIFIED:
                 default_typ = typ
-            a = self.symbol(param.name, typ).reference(ref_name=param.name)
+            if isinstance(typ, types.GenericAlias):
+                if typ.__name__ == "list":
+                    a = self.list(
+                        [
+                            self.symbol(f"{param.name}_{k}_", t).reference(
+                                ref_name=f"{param.name}_{k}_",
+                                force=False,  # reference to item will be defined only when it is used
+                            )
+                            for k, t in enumerate(typ.__args__)
+                        ]
+                    )
+                else:
+                    raise TypeError(f"annotation type must be type of a scalar or list, got {typ}")
+            else:
+                a = self.symbol(param.name, typ)
+            a = a.reference(ref_name=param.name)
             new_args.append(a)
         args = tuple(new_args)
+
         name = self.symbol(func.__name__).reference(ref_name=func.__name__)
         return make_apply(self, name, args, func(self, *args))
 
@@ -233,6 +252,7 @@ class Context:
         if typ is UNSPECIFIED:
             like = self.default_like
             if like is not None:
+                assert like.kind == "symbol", like.kind
                 typ = like.operands[1]
             else:
                 typ = "float"
@@ -243,14 +263,30 @@ class Context:
             if isinstance(value, boolean_types):
                 like_expr = self.symbol("_boolean_value", "boolean")
             elif self._default_constant_type is not None:
+                # Warning: when specified and default_constant_type is
+                # float, integer values will be interpreted as floats
                 like_expr = self.symbol("_value", self._default_constant_type)
+            elif isinstance(value, integer_types):
+                like_expr = self.symbol("_integer_value", type(value))
             elif isinstance(value, float_types):
                 like_expr = self.symbol("_float_value", type(value))
             elif isinstance(value, complex_types):
                 like_expr = self.symbol("_complex_value", type(value))
             else:
                 like_expr = self.default_like
+        elif isinstance(like_expr, (str, type, Type)):
+            typ = Type.fromobject(self, like_expr)
+            like_expr = self.symbol(f"_{typ.kind}_value", typ)
         return make_constant(self, value, like_expr)
+
+    def list(self, items):
+        return make_list(self, items)
+
+    def item(self, container, index):
+        return make_item(self, container, index)
+
+    def len(self, container):
+        return make_len(self, container)
 
     def call(self, func, args):
         """Apply callable to arguments and return its result.

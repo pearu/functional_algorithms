@@ -9,7 +9,7 @@ from .rewrite import RewriteContext
 
 known_expression_kinds = set(
     """
-symbol, constant, apply, select,
+symbol, constant, apply, select, list, item, len,
 negative, positive, add, subtract, multiply, divide,
 minimum, maximum,
 asin, acos, atan, asinh, acosh, atanh, asin_acos_kernel, atan2,
@@ -118,6 +118,28 @@ def make_apply(context, name, args, result):
     return Expr(context, "apply", (name, *args, result))
 
 
+def make_list(context, items):
+    return Expr(context, "list", tuple(items))
+
+
+def make_index(context, index):
+    if isinstance(index, integer_types):
+        return context.constant(index, type(index))
+    elif isinstance(index, Expr):
+        # TODO: check if index type is integer
+        return index
+    else:
+        raise TypeError(f"index must be integer or integer expression, got {type(index)}")
+
+
+def make_len(context, container):
+    return Expr(context, "len", (container,))
+
+
+def make_item(context, container, index):
+    return Expr(context, "item", (container, make_index(context, index)))
+
+
 def normalize(context, operands):
     """Convert numbers to constant expressions"""
     exprs = [operand for operand in operands if isinstance(operand, Expr)]
@@ -148,7 +170,7 @@ def toidentifier(value):
             intvalue = int(value)
         except OverflowError:
             intvalue = None
-        if value == intvalue:
+        if value == intvalue and intvalue.bit_length() <= 64:
             return "f" + toidentifier(intvalue)
         if math.isinf(value):
             return "posinf" if value > 0 else "neginf"
@@ -163,7 +185,7 @@ def toidentifier(value):
             intvalue = int(value)
         except OverflowError:
             intvalue = None
-        if value == intvalue:
+        if value == intvalue and intvalue.bit_length() <= value.dtype.itemsize * 8:
             return value.dtype.kind + toidentifier(intvalue)
         if numpy.isposinf(value):
             return "posinf"
@@ -198,6 +220,7 @@ def make_ref(expr):
                 ref = f"{expr.kind}_{make_ref(expr.operands[0])}"
             else:
                 ref = f"{expr.kind}_{toidentifier(expr.operands[0])}"
+            assert len(ref) < 50, type(expr.operands[0])
         elif expr.kind == "absolute":
             # using abs for BC
             ref = f"abs_{make_ref(expr.operands[0])}"
@@ -257,7 +280,15 @@ class Printer:
             sname = self.tostring(name)
             lst = []
             for a in args:
-                lst.append(f"{a.operands[0]}: {a.operands[1]}")
+                if a.kind == "symbol":
+                    lst.append(f"{a.operands[0]}: {a.operands[1]}")
+                elif a.kind == "list":
+                    at = ", ".join([self.tostring(a_.operands[1]) for a_ in a.operands])
+                    lst.append(f"{a.ref}: list[{at}]")
+                else:
+                    # argument must be a symbol or a list of symbols
+                    assert 0, a.kind  # unreachable
+
             sargs = ", ".join(lst)
 
             lines = []
@@ -338,7 +369,12 @@ class Expr:
                     operands = (Expr(context.alt, kind, tuple(constant_operands)), constant_like)
                     kind = "constant"
 
-            assert False not in [isinstance(operand, Expr) for operand in operands], operands
+            assert False not in [isinstance(operand, Expr) for operand in operands], [type(o) for o in operands]
+
+            if kind == "item":
+                assert len(operands) == 2
+                assert operands[0].kind == "list"
+                assert operands[1].get_type().is_integer
 
         obj.context = context
         obj.kind = kind
@@ -351,7 +387,7 @@ class Expr:
 
         # __serialize_id is an unique int id only within the given
         # context. __serialize_id will be initialized in
-        # _register_expression
+        # context._register_expression
         obj._set_serialized_id(None)
 
         # props is a dictionary that contains reference_name and
@@ -383,15 +419,18 @@ class Expr:
         elif self.kind == "constant":
             value, like = self.operands
             r = (
-                self.kind,
+                "z_" + self.kind,  # prefix `z_` ensures that constants are sorted as largest kinds
                 value.key if isinstance(value, Expr) else (value, type(value).__name__),
                 like.key,
             )
         else:
-            # Don't use `operand.key` as its size is unbounded and
+            # We don't use `operand.key` as its size is unbounded and
             # will lead to large overhead in computing the hash value
-            # for the key:
-            r = (self.kind, *(operand.intkey for operand in self.operands))
+            # of the expression. However, since intkey is unique only
+            # in the given runtime, the key will have the same
+            # property of intkey being unique only within the given
+            # runtime and context.
+            r = (self.kind, *(operand._two_level_intkey for operand in self.operands))
         self.__serialized = r
 
     def _set_serialized_id(self, i):
@@ -481,7 +520,7 @@ class Expr:
 
         return rewrite_context(self, result)
 
-    def tostring(self, target, tab="", need_ref=None, debug=0):
+    def tostring(self, target, tab="", need_ref=None, debug=0, **printer_parameters):
         if need_ref is None:
 
             def compute_need_ref(expr: Expr, need_ref: dict) -> None:
@@ -505,12 +544,18 @@ class Expr:
             need_ref = dict()
             compute_need_ref(self, need_ref)
 
-        return target.Printer(need_ref, debug=debug).tostring(self, tab=tab)
+        return target.Printer(need_ref, debug=debug, **printer_parameters).tostring(self, tab=tab)
 
     @property
     def key(self):
-        """Return a key unique to this expression instance and that can be
-        used as a dictionary key.
+        """Return a string key unique to this expression instance and that can
+        be used as a dictionary key.
+
+        Note: the value of key is equivalent to the high-level
+        structure of the expression but its finer details are
+        equivalent to operands intkey values.
+
+        Warning: the key is unique only within the given run-time.
 
         Warning: the key is unique only within the given context.
         """
@@ -525,11 +570,26 @@ class Expr:
         """Return a integer valued key that is unique to this expression
         instance and that can be used as a dictionary key. Different
         from the .key property, the .intkey property should not be
-        used in algorithms that relay on sorting of expressions.
+        used in algorithms that relay on sorting of expression kinds.
+
+        Note: the value of intkey is equivalent to the construction
+        time of the expression. Hence, similar to id, intkey has no
+        relation to the content of the expression but different from
+        id, intkey carries a time-stamp of expression construction
+        moment.
+
+        Warning: the intkey is unique only within the given run-time.
 
         Warning: the intkey is unique only within the given context.
         """
         return self.__serialize_id
+
+    @property
+    def _two_level_intkey(self):
+        # used in computing the key of an expression
+        if self.kind in {"symbol", "constant"}:
+            return (self.kind, self.intkey)
+        return (self.kind, *(op.intkey for op in self.operands))
 
     @property
     def ref(self):
@@ -584,8 +644,17 @@ class Expr:
         return Printer().tostring(self)
 
     def __repr__(self):
-        operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
-        return f"{type(self).__name__}({self.kind}, {operands}, {self.props})"
+        if self.kind in {"symbol", "constant"}:
+            operands = self.operands
+        else:
+            operands = tuple(f"{o.kind}:{o.intkey}" for o in self.operands)
+        # return f"{type(self).__name__}({self.kind}, {operands}, {self.props})"
+        return f"{type(self).__name__}({self.kind}, {operands})"
+
+    def __index__(self):
+        if self.kind == "constant" and self.get_type().is_integer:
+            return self.operands[0]
+        raise TypeError(f"cannot convert to Python int")
 
     def __abs__(self):
         return self.context.absolute(self)
@@ -720,6 +789,14 @@ class Expr:
 
     def __ne__(self, other):
         return self.context.ne(self, other)
+
+    def __getitem__(self, index):
+        return self.context.item(self, index)
+
+    def __len__(self):
+        if self.kind == "list":
+            return len(self.operands)
+        return self.context.len(self)
 
     @property
     def is_posinf(self):
@@ -995,6 +1072,8 @@ class Expr:
             return True
         elif self.kind in {"add", "subtract", "divide", "multiply", "pow"}:
             return self.operands[0].is_complex or self.operands[1].is_complex
+        elif self.kind == "list":
+            return False
         elif self.kind in {
             "positive",
             "negative",
@@ -1023,6 +1102,9 @@ class Expr:
             return self.operands[0].is_complex
         elif self.kind == "apply":
             return self.operands[-1].is_complex
+        elif self.kind == "item":
+            container, index = self.operands
+            return container.operands[index].is_complex
         else:
             raise NotImplementedError(f"{type(self).__name__}.is_complex not implemented for {self.kind}")
 
@@ -1095,6 +1177,13 @@ class Expr:
         elif self.kind == "downcast":
             t = self.operands[0].get_type()
             return Type(self.context, t.kind, t.bits // 2 if t.bits is not None else None)
+        elif self.kind == "list":
+            return Type(self.context, self.kind, tuple(item.get_type() for item in self.operands))
+        elif self.kind == "item":
+            ct = self.operands[0].get_type()
+            if ct.kind == "list":
+                return ct.param[0]
+            assert 0, ct.kind  # unreachable
         raise NotImplementedError(f"{type(self).__name__}.get_type not implemented for {self.kind}")
 
 

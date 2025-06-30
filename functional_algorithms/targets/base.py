@@ -36,7 +36,7 @@ class PrinterBase:
     force_cast_arguments = False
     constant_target = None
 
-    def __init__(self, need_ref, debug=1):
+    def __init__(self, need_ref, debug=1, force_cast_arguments=None):
         self.need_ref = need_ref
         self.defined_refs = set()
         self.assignments = []
@@ -47,11 +47,18 @@ class PrinterBase:
         else:
             self.constant_printer = self
         self.debug = debug
+        if force_cast_arguments is not None:
+            self.force_cast_arguments = force_cast_arguments
 
     def get_type(self, expr):
+        if expr.kind == "list":
+            return f"{expr.kind}[{', '.join(map(self.get_type, expr.operands))}]"
         typ = expr.get_type()
         if typ.kind == "type":
             typ = str(typ.param)
+        elif typ.kind == "list":
+            typ = ", ".join([self.type_to_target[str(t)] for t in typ.param])
+            typ = f"list[{typ}]"
         else:
             typ = str(typ)
             typ = self.type_to_target[typ]
@@ -78,11 +85,20 @@ class PrinterBase:
             return expr.ref
 
         if expr.kind == "apply":
-            # add arguments to defined refs
             for a in expr.operands[1:-1]:
                 self.defined_refs.add(a.ref)
+                if a.kind == "list":
+                    for i, a_ in enumerate(a.operands):
+                        if self.need_ref[a_.ref]:
+                            if self.force_cast_arguments:
+                                self.assignments.append(
+                                    self.make_assignment(None, a_.ref, self.make_constant(a_, self.tostring(a[i])))
+                                )
+                            else:
+                                self.assignments.append(self.make_assignment(None, a_.ref, self.tostring(a[i])))
+                            self.defined_refs.add(a_.ref)
 
-                if self.force_cast_arguments:
+                elif self.force_cast_arguments:
                     self.assignments.append(self.make_assignment(None, a.ref, self.make_constant(a, a)))
 
                 if self.debug >= 2:
@@ -135,8 +151,9 @@ class PrinterBase:
 
         if self.need_ref.get(expr.ref):
             assert expr.ref not in self.defined_refs, expr.ref
-            self.defined_refs.add(expr.ref)
             self.assignments.append(self.make_assignment(self.get_type(expr), expr.ref, result))
+            self.defined_refs.add(expr.ref)
+
             result = expr.ref
 
             if self.debug >= 2:

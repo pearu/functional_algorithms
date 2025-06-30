@@ -38,9 +38,9 @@ default_flush_subnormals = False
 complex_types = (complex, numpy.complexfloating)
 float_types = (float, numpy.floating)
 integer_types = (int, numpy.integer)
-number_types = complex_types, float_types, integer_types
+number_types = (*complex_types, *float_types, *integer_types)
 boolean_types = (bool,)
-value_types = number_types + boolean_types
+value_types = (*number_types, *boolean_types)
 
 
 def float2mpf(ctx, x):
@@ -2335,6 +2335,9 @@ def validate_function(
         v1 = func(*sample) if isinstance(sample, tuple) else func(sample)
         assert v1.dtype == v2.dtype, (sample, v1, v2)
         ulp = diff_ulp(v1, v2, flush_subnormals=flush_subnormals)
+        if isinstance(ulp, numpy.ndarray):
+            assert ulp.shape == ()
+            ulp = ulp[()]
         ulp_stats[ulp] += 1
 
         if bucket is not None:
@@ -2797,6 +2800,9 @@ class NumpyContext:
         if isinstance(cond, numpy.ndarray):
             return numpy.where(cond, x, y)
         assert 0, (type(cond), type(x), type(y))
+
+    def list(self, lst):
+        return list(lst)
 
     def constant(self, value, like=None):
         if like is None:

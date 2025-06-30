@@ -441,6 +441,38 @@ def test_rewrite_relop_consistency():
             assert ne is None or ne == (not inverse_ne)
 
 
+def test_rewrite_equal_select():
+    def rewrite(expr):
+        # print('expr=', expr)
+        r = expr.rewrite(fa.rewrite, fa.rewrite)
+        # print('1: r=', r)
+        return r
+
+    ctx = fa.Context()
+
+    a = ctx.symbol("a")
+    b = ctx.symbol("b")
+    x = ctx.symbol("x")
+    y = ctx.symbol("y")
+    z = ctx.symbol("z")
+
+    zero = ctx.constant(0.0, x)
+    one = ctx.constant(1.0, x)
+
+    assert rewrite(ctx.select(a == b, x, y) == x) is ctx.logical_or(a == b, x == y)
+    assert rewrite(ctx.select(a != b, x, y) == x) is ctx.logical_or(x == y, a != b)
+    assert rewrite(ctx.select(a != b, x, y) == y) is ctx.logical_or(a == b, x == y)
+    assert rewrite(ctx.select(a == b, x, y) == y) is ctx.logical_or(x == y, a != b)
+
+    assert rewrite(ctx.select(a == b, zero, one) == zero) is (a == b)
+    assert rewrite(ctx.select(a == b, zero, one) == one) is (a != b)
+
+    # (cond ? a : x ) != b  -> (cond and a != b) or (!cond and x != b)
+    # (cond ? a : x ) != a  -> !cond and x != b
+    assert rewrite(ctx.select(a == b, zero, x) != zero) is ctx.logical_and(a != b, x != zero)
+    assert rewrite(ctx.select(a == b, x, zero) != zero) is ctx.logical_and(a == b, x != zero)
+
+
 def test_relops():
     def rewrite(expr):
         r1 = expr.rewrite(fa.rewrite)
@@ -452,9 +484,12 @@ def test_relops():
             r2 = r2_
         else:
             r2 = fa.Expr(
-                expr.context, dict(lt="gt", le="ge", gt="lt", ge="le", eq="eq", ne="ne")[r2_.kind], r2_.operands[::-1]
+                expr.context,
+                dict(lt="gt", le="ge", gt="lt", ge="le", eq="eq", ne="ne")[r2_.kind],
+                (r2_.operands if r2_.kind in {"ne", "eq"} else r2_.operands[::-1]),
             )
-        assert r1 is r2
+
+        assert r1 is r2 or r1 is r2_
         return r1
 
     ctx = fa.Context()
