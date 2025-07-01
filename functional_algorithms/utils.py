@@ -1623,7 +1623,7 @@ def real_samples(
       actual size of the returned array may differ from size, except
       when both min/max_value are specified with the same sign.
     dtype:
-      Floating-point type: float32, float64.
+      Floating-point type: float16, float32, float64.
     include_infinity: bool
       When True, samples include signed infinities.
     include_zero: bool
@@ -1638,9 +1638,20 @@ def real_samples(
     nonnegative: bool
       When True, finite samples are all non-negative.
     min_value, max_value: dtype, None
-      When min_value or max_value is specified, use for constructing
-      uniform samples. Parameters include_infinity, include_nan,
-      include_huge, and nonnegative are silently ignored.
+      When min_value or max_value is specified, return log-uniformly
+      distributed samples within specified bounds. Parameters
+      include_infinity, include_nan, include_huge, and nonnegative are
+      silently ignored.
+
+      When max_value is specified then the default min_value is
+      smallest normal (max_value > 0) or negative largest value
+      (max_value < 0). When min_value is specified then the default
+      max_value is largest finite value (min_value > 0) or negative
+      smallest normal (min_value < 0).
+
+      When min_value and max_value is not specified, return
+      log-uniformly distributed samples within bounds specified by
+      include_* and nonnegative parameters.
     unique: bool
       When True, all samples are unique. Otherwise, allow repeated
       sample values for predictability of the number of samples.
@@ -1655,15 +1666,23 @@ def real_samples(
     num = size // 2 if not nonnegative and not user_specified_bounds else size
     if include_infinity and not user_specified_bounds:
         num -= 1
+    assert not isinstance(min_value, tuple)
+    assert not isinstance(max_value, tuple)
 
     min_pos_value = dtype(fi.smallest_subnormal if include_subnormal else fi.smallest_normal)
     if min_value is None:
-        min_value = min_pos_value
+        if max_value is not None and max_value < 0:
+            min_value = -dtype(fi.max)
+        else:
+            min_value = min_pos_value
     else:
         min_value = dtype(min_value)
 
     if max_value is None:
-        max_value = dtype(fi.max)
+        if min_value is not None and min_value < 0:
+            max_value = -min_pos_value
+        else:
+            max_value = dtype(fi.max)
     else:
         max_value = dtype(max_value)
 
@@ -1845,7 +1864,7 @@ def complex_samples(
     include_subnormal: bool
     include_nan: bool
     nonnegative: bool
-    min_real_value, max_real_value, min_imag_value, max_imag_value: dtype
+    min_real_value, max_real_value, min_imag_value, max_imag_value: dtype, tuple, None
     """
     if isinstance(dtype, str):
         dtype = getattr(numpy, dtype)
@@ -1882,6 +1901,20 @@ def complex_samples(
     return real_part + imag_part  # TODO: avoid arithmetic operations
 
 
+def _fix_limit_value(value, dims=1):
+    if value is None:
+        values = (None,) * dims
+    elif isinstance(value, number_types):
+        values = (value,) * dims
+    elif isinstance(value, tuple):
+        assert len(value) == dims
+        values = value
+    else:
+        assert 0, type(value)  # not implemented
+
+    return values
+
+
 def real_pair_samples(
     size=(10, 10),
     dtype=numpy.float32,
@@ -1891,6 +1924,8 @@ def real_pair_samples(
     include_nan=False,
     include_huge=True,
     nonnegative=False,
+    min_value=None,
+    max_value=None,
 ):
     """Return a pair of 1-D arrays of real line samples.
 
@@ -1905,7 +1940,11 @@ def real_pair_samples(
     include_subnormal: bool
     include_nan: bool
     nonnegative: bool
+    min_value, max_value: None, dtype, tuple
     """
+    min_values = _fix_limit_value(min_value, dims=2)
+    max_values = _fix_limit_value(max_value, dims=2)
+
     s1 = real_samples(
         size=size[0],
         dtype=dtype,
@@ -1915,6 +1954,8 @@ def real_pair_samples(
         include_nan=include_nan,
         nonnegative=nonnegative,
         include_huge=include_huge,
+        min_value=min_values[0],
+        max_value=max_values[0],
     )
     s2 = real_samples(
         size=size[1],
@@ -1925,6 +1966,8 @@ def real_pair_samples(
         include_nan=include_nan,
         nonnegative=nonnegative,
         include_huge=include_huge,
+        min_value=min_values[1],
+        max_value=max_values[1],
     )
     s1, s2 = s1.reshape(1, -1).repeat(s2.size, 0).flatten(), s2.repeat(s1.size)
     return s1, s2
@@ -1939,6 +1982,10 @@ def complex_pair_samples(
     include_nan=False,
     include_huge=True,
     nonnegative=False,
+    min_real_value=None,
+    max_real_value=None,
+    min_imag_value=None,
+    max_imag_value=None,
 ):
     """Return a pair of 2-D arrays of complex plane samples.
 
@@ -1954,7 +2001,12 @@ def complex_pair_samples(
     include_subnormal: bool
     include_nan: bool
     nonnegative: bool
+    min_real_value, max_real_value, min_imag_value, max_imag_value: dtype, tuple, None
     """
+    min_real_values = _fix_limit_value(min_real_value, dims=2)
+    max_real_values = _fix_limit_value(max_real_value, dims=2)
+    min_imag_values = _fix_limit_value(min_imag_value, dims=2)
+    max_imag_values = _fix_limit_value(max_imag_value, dims=2)
     s1 = complex_samples(
         size=size[0],
         dtype=dtype,
@@ -1964,6 +2016,10 @@ def complex_pair_samples(
         include_nan=include_nan,
         include_huge=include_huge,
         nonnegative=nonnegative,
+        min_real_value=min_real_values[0],
+        max_real_value=max_real_values[0],
+        min_imag_value=min_imag_values[0],
+        max_imag_value=max_imag_values[0],
     )
     s2 = complex_samples(
         size=size[1],
@@ -1974,6 +2030,10 @@ def complex_pair_samples(
         include_nan=include_nan,
         include_huge=include_huge,
         nonnegative=nonnegative,
+        min_real_value=min_real_values[1],
+        max_real_value=max_real_values[1],
+        min_imag_value=min_imag_values[1],
+        max_imag_value=max_imag_values[1],
     )
     shape1 = s1.shape
     shape2 = s2.shape
@@ -2083,6 +2143,96 @@ def expansion_samples(
             if numpy.isfinite(s):
                 lst.append(e)
     return lst
+
+
+def real_triple_samples(
+    size=(10, 10, 10),
+    dtype=numpy.float32,
+    include_infinity=True,
+    include_zero=True,
+    include_subnormal=False,
+    include_nan=False,
+    include_huge=True,
+    nonnegative=False,
+    min_value=None,
+    max_value=None,
+):
+    """Return a triple of 1-D arrays of real line samples.
+
+    Parameters
+    ----------
+    size : tuple(int, int, int)
+      Initial size of the samples array. A minimum value is (6, 6, 6). The
+      actual size of the returned array is approximately size[0] * size[1] * size[2].
+    dtype:
+    include_infinity: bool
+    include_zero: bool
+    include_subnormal: bool
+    include_nan: bool
+    nonnegative: bool
+    """
+    if min_value is None:
+        min_values = (None,) * 3
+    elif isinstance(min_value, number_types):
+        min_values = (min_value,) * 3
+    elif isinstance(min_value, tuple):
+        assert len(min_value) == 3
+        min_values = min_value
+    else:
+        assert 0, type(min_value)  # not implemented
+
+    if max_value is None:
+        max_values = (None,) * 3
+    elif isinstance(max_value, number_types):
+        max_values = (max_value,) * 3
+    elif isinstance(max_value, tuple):
+        assert len(max_value) == 3
+        max_values = max_value
+    else:
+        assert 0, type(max_value)  # not implemented
+
+    s1 = real_samples(
+        size=size[0],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+        min_value=min_values[0],
+        max_value=max_values[0],
+    )
+    s2 = real_samples(
+        size=size[1],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+        min_value=min_values[1],
+        max_value=max_values[1],
+    )
+    s3 = real_samples(
+        size=size[2],
+        dtype=dtype,
+        include_infinity=include_infinity,
+        include_zero=include_zero,
+        include_subnormal=include_subnormal,
+        include_nan=include_nan,
+        nonnegative=nonnegative,
+        include_huge=include_huge,
+        min_value=min_values[2],
+        max_value=max_values[2],
+    )
+    s1, s2, s3 = (
+        s1.reshape(-1, 1, 1).repeat(s2.size, 1).repeat(s3.size, 2).flatten(),
+        s2.reshape(1, -1, 1).repeat(s1.size, 0).repeat(s3.size, 2).flatten(),
+        s3.reshape(1, 1, -1).repeat(s1.size, 0).repeat(s2.size, 1).flatten(),
+    )
+    return s1, s2, s3
 
 
 def iscomplex(value):
