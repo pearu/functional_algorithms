@@ -187,7 +187,7 @@ def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None):
     e_lst = vecsum(ctx, seq, fast=fast)
     # VecSumErrBranch:
     if functional:
-        zero = ctx.constant(0)
+        zero = ctx.constant(0, seq[0])
 
     f_lst = []
     eps_i = e_lst[0]
@@ -241,20 +241,21 @@ def nztopk(ctx, seq, k):
     elif len(seq) == 1:
         return seq
     elif len(seq) == 2:
-        flag = seq[0] == ctx.constant(0)
+        flag = seq[0] == ctx.constant(0, seq[0])
         if k == 1:
             return [ctx.select(flag, seq[1], seq[0])]
         return [ctx.select(flag, seq[1], seq[0]), ctx.select(flag, seq[0], seq[1])]
 
-    result = []
-    zero = ctx.constant(0)
-    one = ctx.constant(1)
+    zero = ctx.constant(0, seq[0])
+    izero = ctx.constant(0)
+    ione = ctx.constant(1, izero)
 
     isnzero = [a != zero for a in seq]
-    nzcount = [zero]  # ideally, nzcount ought to be a integer sequence
+    nzcount = [izero]
     for b in isnzero[:-1]:
-        nzcount.append(nzcount[-1] + ctx.select(b, one, zero))
+        nzcount.append(nzcount[-1] + ctx.select(b, ione, izero))
 
+    result = []
     for i in range(min(k, len(seq))):
         lst = [ctx.select(ctx.logical_and(isnzero[j], nzcount[j] == i), seq[j], zero) for j in range(i, len(seq))]
         result.append(sum(lst[:-1], lst[-1]))

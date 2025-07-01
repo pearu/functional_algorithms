@@ -1,7 +1,7 @@
 import math
 import numpy
 from . import expr as _expr
-from .utils import number_types, value_types, float_types, complex_types, boolean_types
+from .utils import number_types, value_types, float_types, complex_types, boolean_types, integer_types
 
 
 class Printer:
@@ -387,7 +387,15 @@ class Rewriter:
     def __call__(self, expr):
         result = getattr(self, expr.kind, self._notimpl)(expr)
         if result is not None:
-            return result
+            return self._try_rewrite(result)
+
+    def _try_rewrite(self, expr):
+        mth = getattr(self, expr.kind, None)
+        if mth is not None:
+            new_expr = mth(expr)
+            if new_expr is not None:
+                return new_expr
+        return expr
 
     def _todo(self, expr):
         print(f'TODO: rewrite {expr.kind}({", ".join(op.kind for op in expr.operands)})')
@@ -625,6 +633,24 @@ class Rewriter:
                 if isinstance(value, bool):
                     return y_ if value else ctx.constant(False)
 
+        if x is y:
+            # x and x -> x
+            return x
+
+        if x.kind == "logical_and":
+            # (a and b) and y -> a and b  when y is a or y is b
+            a, b = x.operands
+            if y is b or y is a:
+                return x
+        if y.kind == "logical_and":
+            # x and (a and b) -> a and b  when x is a or x is b
+            a, b = y.operands
+            if x is a or x is b:
+                return y
+
+        if x.key > y.key:
+            return expr.context.logical_and(y, x)
+
     def logical_or(self, expr):
         x, y = expr.operands
         ctx = x.context
@@ -633,8 +659,29 @@ class Rewriter:
                 value, like = x_.operands
                 if isinstance(value, bool):
                     if value:
-                        return ctx.constant(True, ctx.symbol(None, "boolean"))
+                        return ctx.constant(True)
                     return y_
+
+            not_y_ = self._try_rewrite(expr.context.logical_not(y_))
+
+            if x_.kind == "logical_and" and not_y_ is not None:
+                # (not y_ and b) or y_ -> b or y_
+                a, b = x_.operands
+                for a_, b_ in [(a, b), (b, a)]:
+                    if a_ is not_y_:
+                        return expr.context.logical_or(b_, y_)
+                    if expr.context.logical_not(a_) is y_:
+                        return expr.context.logical_or(b_, y_)
+
+        if x is y:
+            # x or x -> x
+            return x
+
+        # make logical_or unique with respect to their operands,
+        # however, different runtimes may produce different orderings,
+        # see Expr.key
+        if x.key > y.key:
+            return expr.context.logical_or(y, x)
 
     def logical_not(self, expr):
         (x,) = expr.operands
@@ -642,6 +689,34 @@ class Rewriter:
             value, like = x.operands
             if isinstance(value, bool):
                 return x.context.constant(not value, like)
+
+        if x.kind == "eq":
+            a, b = x.operands
+            return expr.context.ne(a, b)
+
+        if x.kind == "ne":
+            a, b = x.operands
+            return expr.context.eq(a, b)
+
+        if x.kind == "lt":
+            # ! (x < y) -> x >= y -> y <= x
+            a, b = x.operands
+            return expr.context.le(b, a)
+
+        if x.kind == "le":
+            # ! (x <= y) -> x > y -> y < x
+            a, b = x.operands
+            return expr.context.lt(b, a)
+
+        if x.kind == "gt":
+            # ! (x > y) -> x <= y
+            a, b = x.operands
+            return expr.context.le(a, b)
+
+        if x.kind == "ge":
+            # ! (x >= y) -> x < y
+            a, b = x.operands
+            return expr.context.lt(a, b)
 
     def negative(self, expr):
         (x,) = expr.operands
@@ -706,7 +781,6 @@ class Rewriter:
                     r = _constant_relop_constant.get((xvalue, yvalue))
                     if r is not None:
                         return expr.context.constant(r[relop_index])
-
                 if isinstance(xvalue, value_types) and isinstance(yvalue, value_types):
                     r = bool(relop(xvalue, yvalue))
                     return expr.context.constant(r)
@@ -752,6 +826,45 @@ class Rewriter:
                         if r is not None:
                             return expr.context.constant(r)
 
+        if x is y:
+            # x rop x -> boolean constant
+            if expr.kind in {"eq", "le", "ge"}:
+                return expr.context.constant(True)
+            elif expr.kind in {"ne", "lt", "gt"}:
+                return expr.context.constant(False)
+            assert 0  # unreachable
+
+        if x.kind == "select":
+            # select(cond, a, b) rop y -> (cond and a rop y) or (not cond and b rop y)
+            cond, a, b = x.operands
+            not_cond = self._try_rewrite(expr.context.logical_not(cond))
+            return expr.context.logical_or(
+                self._try_rewrite(expr.context.logical_and(cond, relop(a, y))),
+                self._try_rewrite(expr.context.logical_and(not_cond, relop(b, y))),
+            )
+        if y.kind == "select":
+            # x rop select(cond, a, b) -> (cond and x rop a) or (not cond and y rop b)
+            cond, a, b = y.operands
+            not_cond = self._try_rewrite(expr.context.logical_not(cond))
+            return expr.context.logical_or(
+                self._try_rewrite(expr.context.logical_and(cond, relop(x, a))),
+                self._try_rewrite(expr.context.logical_and(not_cond, relop(x, b))),
+            )
+
+        if expr.kind in {"eq", "ne"}:
+            if x.key > y.key:
+                # make eq and ne unique with respect to their operands
+                return relop(y, x)
+
+        # TODO: enable the following if blocks after updating test_relops
+        if expr.kind == "gt" and 0:
+            # x > y -> y < x
+            return y < x
+
+        if expr.kind == "ge" and 0:
+            # x >= y -> y <= x
+            return y <= x
+
     def ge(self, expr):
         return self._compare(expr, lambda x, y: x >= y, 0, 2)
 
@@ -779,7 +892,51 @@ class Rewriter:
                 return x if value else y
 
         if x is y:
+            # cond ? x : x -> x
             return x
+
+        if cond.kind == "eq" and cond is (x == y):
+            # (x == y) ? x : y -> y
+            return y
+
+        if cond.kind == "ne":
+            if cond is (x != y):
+                # (x != y) ? x : y -> x
+                return x
+
+            # (a != b) ? x : y -> (a == b) ? y : x
+            a, b = cond.operands
+            return expr.context.select(a == b, y, x)
+
+        if cond.kind == "ge":
+            # (a >= b) ? x : y -> (a < b) ? y : x
+            a, b = cond.operands
+            return expr.context.select(a < b, y, x)
+
+        if cond.kind == "gt":
+            # (a > b) ? x : y -> (a <= b) ? y : x
+            a, b = cond.operands
+            return expr.context.select(a <= b, y, x)
+
+        if y.kind == "select":
+            # (cond ? x : (cond1 ? a : b)) -> (not cond ? (cond1 ? a : b) : x)
+            cond = self._try_rewrite(expr.context.logical_not(cond))
+            x, y = y, x
+
+        if x.kind == "select":
+            # (cond ? (cond1 ? a : b) : y) -> {cond & cond1: a; cond & not cond1: b, not cond & (cond1 | not cond1): y}
+            #
+            # (cond ? (cond1 ? a : y) : y) -> {cond & cond1: a; (cond & not cond1) | (not cond & (cond1 | not cond1)): y}
+            #                              -> cond and cond1 ? a : y
+            # (cond ? (cond1 ? y : b) : y) -> {cond & cond1: y; cond & not cond1: b, not cond & (cond1 | not cond1): y}
+            #                               -> cond & not cond1: b : y
+            cond1, a, b = x.operands
+            if b is y:
+                return expr.context.select(expr.context.logical_and(cond, cond1), a, y)
+            if a is y:
+                not_cond1 = self._try_rewrite(expr.context.logical_not(cond1))
+                cond = self._try_rewrite(expr.context.logical_and(cond, not_cond1))
+                return expr.context.select(cond, b, y)
 
     def sqrt(self, expr):
         (x,) = expr.operands
@@ -818,6 +975,18 @@ class Rewriter:
 
     def is_finite(self, expr):
         pass
+
+    def list(self, expr):
+        pass
+
+    def item(self, expr):
+        container, index = expr.operands
+
+        if index.kind == "constant":
+            index_value, like = index.operands
+            if isinstance(index_value, integer_types):
+                if container.kind == "list":
+                    return container.operands[index_value]
 
 
 def rewrite(expr):

@@ -50,7 +50,6 @@ def make_api(mp_func=None):
       func.mp(...)
 
     is equivalent to
-
       func(..., mp_ctx=mp_ctx)
 
     where mp_ctx is provided by ctx instance.
@@ -207,6 +206,8 @@ def make_api(mp_func=None):
 
             def fix_result(result):
                 assert type(result) is not tuple
+                if isinstance(result, list):
+                    result = ctx.list(result)
                 if not isinstance(result, fa.Expr):
                     return ctx.constant(result, largest)
                 return result
@@ -224,7 +225,7 @@ def make_api(mp_func=None):
                 result = tuple(results_lst)
             else:
                 result = fix_result(results[-1])
-                for dtype, result_ in reversed(zip(dtypes[:-1], results[:-1])):
+                for dtype, result_ in zip(reversed(dtypes[:-1]), reversed(results[:-1])):
                     result = ctx.select(largest > dtype_large[dtype], fix_result(result_), result)
 
             return result
@@ -245,8 +246,17 @@ def make_api(mp_func=None):
 
 
 def get_largest(ctx, x: float = None):
+    import functional_algorithms as fa
+
     if x is None:
         largest = ctx.constant("largest")
+    elif isinstance(x, list):
+        largest = ctx.constant("largest", x[0])
+    elif isinstance(x, fa.Expr):
+        if x.kind == "list":
+            largest = ctx.constant("largest", x[0])
+        else:
+            largest = ctx.constant("largest", x)
     else:
         largest = ctx.constant("largest", x)
     if hasattr(largest, "reference"):

@@ -38,8 +38,13 @@ Home = "https://github.com/pearu/functional_algorithms"
 Source = "https://github.com/pearu/functional_algorithms"
 
 [tool.setuptools.packages.find]
-include = ["functional_algorithms", "functional_algorithms.targets", "functional_algorithms.tests"]  # package names should match these glob patterns (["*"] by default)
-exclude = [".*", "*~", "*/*~", "*/*/*~", "*/__pycache__", "*/*/__pycache__"]
+include = [
+    "functional_algorithms",
+    "functional_algorithms.targets",
+    "functional_algorithms.tests",
+    "functional_algorithms.special",
+    "functional_algorithms.special.tests"]
+exclude = [".*", "*~", "*/*~", "*/*/*~", "*/*/*/*~", "*/__pycache__", "*/*/__pycache__", "*/*/*/__pycache__"]
 
 [tool.black]
 line-length = 127
@@ -50,6 +55,7 @@ minversion = "6.0"
 addopts = "-rsx -v"
 testpaths = [
     "functional_algorithms/tests",
+    "functional_algorithms/special/tests"
 ]
 
 [tool.setuptools_scm]

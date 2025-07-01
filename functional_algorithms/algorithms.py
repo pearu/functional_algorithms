@@ -13,6 +13,7 @@ accurate on the whole complex plane or real line.
 
 
 import functools
+import warnings
 from . import floating_point_algorithms as fpa
 
 
@@ -45,6 +46,16 @@ class definition:
           # domain=None)` implements dispatch to real_foo and
           # complex_foo based on the arguments domain.
           assert 0  # unreachable
+
+    Warning: definition registry is global. When reusing definition
+    class in other modules, make sure to use module specific registry
+    via::
+
+      import functional_algorithms as fa
+
+      class definition(fa.algorithms.definition):
+        _registry = {}
+
     """
 
     # dict(<domain>=<dict of <native function name>:<definition for domain>>)
@@ -82,8 +93,13 @@ class definition:
             if result is NotImplemented:
                 raise NotImplementedError(f"{self.native_func_name} not implemented for {self.domain} domain: {func.__name__}")
 
+            if isinstance(result, list):
+                result = ctx.list(result)
+
             return result
 
+        if self.native_func_name in self.registry:
+            warnings.warn(f"{self.native_func_name} wrapper is overwritten by {func.__name__} wrapper")
         self.registry[self.native_func_name] = wrapper
 
         return wrapper
