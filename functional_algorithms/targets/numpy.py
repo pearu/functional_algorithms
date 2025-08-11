@@ -264,6 +264,9 @@ class Printer(PrinterBase):
         typ = self.get_type(arg)
         return f"{arg}: {typ}"
 
+    def make_getitem(self, var, index):
+        return f"{var.ref}[{index}]"
+
     def show_value(self, var):
         return f'print("{var}=", {var})'
 

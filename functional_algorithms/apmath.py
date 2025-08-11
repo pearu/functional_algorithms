@@ -99,12 +99,12 @@ def mergesort(ctx, lst, mth="<"):
     return _merge(ctx, mergesort(ctx, lst[:n], mth=mth), mergesort(ctx, lst[n:], mth), cmp=cmp)
 
 
-def two_sum(ctx, a, b):
-    return fpa.add_2sum(ctx, a, b, fast=False)
+def two_sum(ctx, a, b, fix_overflow=False):
+    return fpa.add_2sum(ctx, a, b, fast=False, fix_overflow=fix_overflow)
 
 
-def quick_two_sum(ctx, a, b):
-    return fpa.add_2sum(ctx, a, b, fast=True)
+def quick_two_sum(ctx, a, b, fix_overflow=False):
+    return fpa.add_2sum(ctx, a, b, fast=True, fix_overflow=fix_overflow)
 
 
 def split(ctx, a):
@@ -112,8 +112,8 @@ def split(ctx, a):
 
 
 @fpa.make_api()
-def two_prod(ctx, dtype, a, b, scale=True):
-    return fpa.mul_dekker(ctx, a, b, scale=scale, dtype=dtype)
+def two_prod(ctx, dtype, a, b, scale=True, fix_overflow=False):
+    return fpa.mul_dekker(ctx, a, b, scale=scale, dtype=dtype, fix_overflow=fix_overflow)
 
 
 @fpa.make_api()
@@ -124,15 +124,15 @@ def two_prod_mod4(ctx, dtype, a, b, scale=True):
     return hi - qh, lo - ql
 
 
-def vecsum(ctx, seq, fast=False):
+def vecsum(ctx, seq, fast=False, fix_overflow=False):
     """ """
     s = seq[-1]
     e_lst = []
     for i in reversed(range(len(seq) - 1)):
         if fast:
-            s, e = quick_two_sum(ctx, seq[i], s)
+            s, e = quick_two_sum(ctx, seq[i], s, fix_overflow=fix_overflow)
         else:
-            s, e = two_sum(ctx, seq[i], s)
+            s, e = two_sum(ctx, seq[i], s, fix_overflow=fix_overflow)
         e_lst.insert(0, e)
     e_lst.insert(0, s)
     return e_lst
@@ -152,7 +152,7 @@ def vecsumerr(ctx, seq, fast=False):
     return g_lst
 
 
-def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None):
+def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None, fix_overflow=False):
     """Convert a list of possibly overlapping items to a list of
     non-overlapping items.
 
@@ -184,7 +184,7 @@ def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None):
     enables.
     """
     # VecSum:
-    e_lst = vecsum(ctx, seq, fast=fast)
+    e_lst = vecsum(ctx, seq, fast=fast, fix_overflow=fix_overflow)
     # VecSumErrBranch:
     if functional:
         zero = ctx.constant(0, seq[0])
@@ -193,9 +193,9 @@ def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None):
     eps_i = e_lst[0]
     for i in range(len(seq) - 1):
         if fast:
-            f_j, eps_ip1 = quick_two_sum(ctx, eps_i, e_lst[i + 1])
+            f_j, eps_ip1 = quick_two_sum(ctx, eps_i, e_lst[i + 1], fix_overflow=fix_overflow)
         else:
-            f_j, eps_ip1 = two_sum(ctx, eps_i, e_lst[i + 1])
+            f_j, eps_ip1 = two_sum(ctx, eps_i, e_lst[i + 1], fix_overflow=fix_overflow)
         if functional:
             p = ctx.ne(eps_ip1, zero)
             f_lst.append(ctx.select(p, f_j, zero))

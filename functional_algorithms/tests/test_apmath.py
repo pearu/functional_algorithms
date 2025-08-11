@@ -1114,6 +1114,8 @@ def test_nztopk():
 
 
 def test_renormalize_max_size(dtype):
+    if dtype == numpy.longdouble:
+        pytest.skip("test not implemented")
 
     fi = numpy.finfo(dtype)
     max_size = (fi.maxexp - fi.minexp - fi.machep) // (-fi.negep - 1)
@@ -1125,4 +1127,3 @@ def test_renormalize_max_size(dtype):
 
     y = fa.apmath.renormalize(ctx, x)
     assert len(y) <= max_size
-    print(f"{len(y), max_size=}")

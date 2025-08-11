@@ -55,11 +55,12 @@ def float2mpf(ctx, x):
     elif numpy.isnan(x):
         return ctx.make_mpf(mpmath.libmp.fnan)
     elif numpy.isfinite(x):
-        prec, rounding = ctx._prec_rounding
+        prec = get_precision(x)
+        _, rounding = ctx._prec_rounding
         mantissa, exponent = numpy.frexp(x)
         man_ = ctx.ldexp(mantissa, prec)
         man = int(man_)
-        assert man == man_, (man, man_, x, exponent, prec)
+        assert man == man_
         exp_ = exponent - prec
         exp = int(exp_)
         assert exp == exp_
@@ -102,8 +103,7 @@ def mpf2float(dtype, x, flush_subnormals=False, prec=None, rounding=None):
             prec_rounding[0] = get_precision(dtype)
         if rounding is not None:
             prec_rounding[1] = rounding
-
-        sign, man, exp, bc = mpmath.libmp.normalize(*x._mpf_, *prec_rounding)
+        sign, man, exp, bc = mpmath.libmp.libmpf._normalize(*x._mpf_, *prec_rounding)
         assert bc >= 0, (sign, man, exp, bc, x._mpf_)
         fp_format = dtype.__name__
         zexp = (
@@ -501,9 +501,11 @@ def number2fraction(x):
     raise TypeError(f"float to fraction conversion requires int|floating-point|mpf input, got {type(x).__name__}")
 
 
-def fraction2float(dtype, q):
+def fraction2float(dtype, q, prec=None):
     """Convert Fraction to a floating-point number.
-    The conversion may be inexact.
+
+    The conversion may be inexact and it depends on the precision set
+    for mpmath.mp.
     """
     fi = numpy.finfo(dtype)
     num, denom = q.numerator, q.denominator
@@ -513,13 +515,10 @@ def fraction2float(dtype, q):
     elif denom == 1 and unum >= (1 << fi.maxexp):
         return -dtype(numpy.inf) if num < 0 else dtype(numpy.inf)
     else:
-        try:
-            f = num / denom
-            if abs(f) > fi.max:
-                raise OverflowError
-            return dtype(f)
-        except OverflowError:
-            return mpf2float(dtype, mpmath.mpf(num) / denom)
+        if prec is None:
+            prec = get_precision(dtype) + 10
+        with mpmath.mp.workprec(prec):
+            return mpf2float(dtype, mpmath.mp.mpf(num) / denom)
 
 
 def fraction2mpf(ctx, q):
@@ -2156,6 +2155,7 @@ def real_triple_samples(
     nonnegative=False,
     min_value=None,
     max_value=None,
+    target_func=None,
 ):
     """Return a triple of 1-D arrays of real line samples.
 
@@ -2232,6 +2232,20 @@ def real_triple_samples(
         s2.reshape(1, -1, 1).repeat(s1.size, 0).repeat(s3.size, 2).flatten(),
         s3.reshape(1, 1, -1).repeat(s1.size, 0).repeat(s2.size, 1).flatten(),
     )
+
+    fi = numpy.finfo(dtype)
+
+    if target_func == "fma":
+        a1 = abs(s1)
+        i = numpy.where(numpy.logical_and(a1 <= s2, s3 >= 0))
+        s1, s2, s3 = s1[i], s2[i], s3[i]
+
+        if not include_nan:
+            a1 = a1[i]
+            a2 = abs(s2)
+            i = numpy.where(numpy.logical_or(a2 == 0, a1 < fi.max / a2))
+            s1, s2, s3 = s1[i], s2[i], s3[i]
+
     return s1, s2, s3
 
 
@@ -2947,7 +2961,7 @@ class NumpyContext:
     def select(self, cond, x, y):
         if isinstance(cond, (bool, numpy.bool_)):
             return x if cond else y
-        if isinstance(cond, numpy.ndarray):
+        if isinstance(cond, (numpy.floating, numpy.ndarray)):
             return numpy.where(cond, x, y)
         assert 0, (type(cond), type(x), type(y))
 
@@ -3068,10 +3082,19 @@ def get_two_over_pi_multiword(dtype, prec=None, max_length=None):
 
 
 def show_ulp(ulp, title=None):
+    if isinstance(ulp, numpy.ndarray):
+        d = defaultdict(int)
+        for u in ulp.flatten():
+            d[int(u)] += 1
+        return show_ulp(d, title=title)
+
     rest = 0
     u5 = None
-    if ulp and title is not None:
+    if title is not None:
         print(f"{title}:")
+    if not ulp:
+        print("  no ulp data")
+        return
     data = sum([[u] * ulp[u] for u in ulp], [])
     print(
         f"  ULP difference min/mean/median/max: {numpy.min(data)}/{numpy.mean(data):1.1f}"

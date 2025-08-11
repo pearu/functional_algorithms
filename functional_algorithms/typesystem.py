@@ -103,6 +103,13 @@ class Type:
             kind = "integer"
         elif "boolean" in {self.kind, other.kind}:
             kind = "boolean"
+        elif self.kind == "list" and other.kind == "list":
+            if len(self.param) < len(other.param):
+                assert self.param == other.param[: len(self.param)]
+                return other
+            else:
+                assert self.param[: len(other.param)] == other.param
+                return self
         else:
             raise NotImplementedError((self.kind, other.kind))
         bits = max([t.bits for t in [self, other] if t.kind == kind and t.bits is not None] or [None])

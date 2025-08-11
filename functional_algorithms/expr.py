@@ -373,8 +373,11 @@ class Expr:
 
             if kind == "item":
                 assert len(operands) == 2
-                assert operands[0].kind == "list"
+                assert operands[0].kind == "list", operands[0].kind
                 assert operands[1].get_type().is_integer
+
+            if kind == "len":
+                assert operands[0].kind == "list", operands[0].kind
 
         obj.context = context
         obj.kind = kind
@@ -654,7 +657,11 @@ class Expr:
     def __index__(self):
         if self.kind == "constant" and self.get_type().is_integer:
             return self.operands[0]
-        raise TypeError(f"cannot convert to Python int")
+        if self.kind == "len":
+            t = self.operands[0].get_type()
+            assert t.kind == "list", t.kind
+            return len(t.param)
+        raise TypeError(f"cannot convert {self.kind} Expr to Python int")
 
     def __abs__(self):
         return self.context.absolute(self)
@@ -791,12 +798,33 @@ class Expr:
         return self.context.ne(self, other)
 
     def __getitem__(self, index):
+        # when possible, we'll resolve getitem op immediately as it is
+        # often a part of algorithm implementation rather than of
+        # algorithm itself
+        if isinstance(index, Expr) and index.kind == "constant":
+            index = index.operands[0]
+        if isinstance(index, integer_types):
+            if self.kind == "list":
+                return self.operands[index]
+            elif self.kind == "select":
+                cond, c1, c2 = self.operands
+                return self.context.select(cond, c1[index], c2[index])
+            else:
+                assert 0, self.kind  # not implemented
         return self.context.item(self, index)
 
     def __len__(self):
+        # when possible, we'll resolve len op immediately as it is
+        # often a part of algorithm implementation rather than of
+        # algorithm itself
         if self.kind == "list":
-            return len(self.operands)
-        return self.context.len(self)
+            r = len(self.operands)
+        elif self.kind in {"select"}:
+            r = len(self.operands[1])
+        else:
+            assert 0, self.kind  # not implemented
+            return self.context.len(self)
+        return r
 
     @property
     def is_posinf(self):
@@ -1184,6 +1212,8 @@ class Expr:
             if ct.kind == "list":
                 return ct.param[0]
             assert 0, ct.kind  # unreachable
+        elif self.kind == "len":
+            return self.context.constant(0).get_type()
         raise NotImplementedError(f"{type(self).__name__}.get_type not implemented for {self.kind}")
 
 

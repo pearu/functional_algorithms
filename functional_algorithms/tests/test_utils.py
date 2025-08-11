@@ -2,6 +2,7 @@ import numpy
 import pytest
 import itertools
 import warnings
+import functional_algorithms as fa
 from functional_algorithms import utils
 
 
@@ -576,53 +577,55 @@ def test_numpy_with_backend(backend, dtype, device):
     test(func(arr))
 
 
-def test_float2mpf(real_dtype):
+@pytest.mark.parametrize("prec_multiplier", [1, 2])
+def test_float2mpf(real_dtype, prec_multiplier):
     import mpmath
 
     ctx = mpmath.mp
-    ctx.prec = utils.vectorize_with_mpmath.float_prec[real_dtype.__name__]
     fi = numpy.finfo(real_dtype)
     dtype_name = real_dtype.__name__
     dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
-    for f in [
-        -numpy.inf,
-        -utils.vectorize_with_mpmath.float_max[dtype_name],
-        -150,
-        -0.3,
-        -fi.eps,
-        -fi.smallest_normal,
-        -fi.smallest_subnormal * 15,
-        -fi.smallest_subnormal,
-        0,
-        fi.smallest_subnormal,
-        fi.smallest_subnormal * 10,
-        fi.smallest_normal,
-        fi.eps,
-        0.3,
-        150,
-        utils.vectorize_with_mpmath.float_max[dtype_name],
-        numpy.inf,
-        numpy.nan,
-    ]:
-        v = real_dtype(f)
-        m = utils.float2mpf(ctx, v)
-        r = utils.mpf2float(real_dtype, m)
-        assert type(r) is type(v)
-        if not numpy.isnan(f):
-            assert r == v
 
-        if real_dtype != numpy.longdouble:
-            assert utils.mpf2bin(m) == utils.float2bin(v)
-
-    if real_dtype in {numpy.float32, numpy.float64}:
-        for f in utils.real_samples(1000, dtype=real_dtype):
+    with ctx.workprec(-fi.negep * prec_multiplier):
+        for f in [
+            -numpy.inf,
+            -utils.vectorize_with_mpmath.float_max[dtype_name],
+            -150,
+            -0.3,
+            -fi.eps,
+            -fi.smallest_normal,
+            -fi.smallest_subnormal * 15,
+            -fi.smallest_subnormal,
+            0,
+            fi.smallest_subnormal,
+            fi.smallest_subnormal * 10,
+            fi.smallest_normal,
+            fi.eps,
+            0.3,
+            150,
+            utils.vectorize_with_mpmath.float_max[dtype_name],
+            numpy.inf,
+            numpy.nan,
+        ]:
             v = real_dtype(f)
             m = utils.float2mpf(ctx, v)
             r = utils.mpf2float(real_dtype, m)
             assert type(r) is type(v)
             if not numpy.isnan(f):
                 assert r == v
-            assert utils.mpf2bin(m) == utils.float2bin(v)
+
+            if real_dtype != numpy.longdouble:
+                assert utils.mpf2bin(m) == utils.float2bin(v)
+
+        if real_dtype in {numpy.float32, numpy.float64}:
+            for f in utils.real_samples(1000, dtype=real_dtype, min_value=-1, max_value=1):
+                v = real_dtype(f)
+                m = utils.float2mpf(ctx, v)
+                r = utils.mpf2float(real_dtype, m)
+                assert type(r) is type(v)
+                if not numpy.isnan(f):
+                    assert r == v
+                assert utils.mpf2bin(m) == utils.float2bin(v)
 
 
 def test_split_veltkamp(real_dtype):
@@ -982,3 +985,91 @@ def test_bin2float(real_dtype):
         b = utils.float2bin(x)
         y = utils.bin2float(real_dtype, b)
         assert x == y
+
+
+def test_fma_samples_fraction(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
+
+    import mpmath
+
+    mp_ctx = mpmath.mp
+    fi = numpy.finfo(real_dtype)
+
+    size = 30
+    x, y, z = fa.utils.real_triple_samples((size, size, size), dtype=real_dtype, target_func="fma", include_infinity=False)
+
+    x_f = list(map(fa.utils.float2fraction, x))
+    y_f = list(map(fa.utils.float2fraction, y))
+    z_f = list(map(fa.utils.float2fraction, z))
+
+    result_f = numpy.array(
+        [
+            fa.utils.fraction2float(real_dtype, x_ * y_ + z_, prec=fa.utils.get_precision(real_dtype))
+            for x_, y_, z_ in zip(x_f, y_f, z_f)
+        ],
+        dtype=real_dtype,
+    )
+
+    x_mp = fa.utils.float2mpf(mp_ctx, x)
+    y_mp = fa.utils.float2mpf(mp_ctx, y)
+    z_mp = fa.utils.float2mpf(mp_ctx, z)
+
+    result_mp = numpy.array(
+        [
+            fa.utils.mpf2float(real_dtype, mp_ctx.fadd(mp_ctx.fmul(x_, y_, exact=True), z_, exact=True))
+            for x_, y_, z_ in zip(x_mp, y_mp, z_mp)
+        ],
+        dtype=real_dtype,
+    )
+
+    numpy.testing.assert_equal(result_f, result_mp)
+
+    # that is, doing fma computation with infinite precision floats
+    # and fractions are equivalent.
+
+
+def test_fma_samples_pyfma(real_dtype):
+    """Test the equivalence of pyfma and mpmath exact calculations.
+
+    pyfma is much faster than mpmath and therefore we want to use it
+    as a reference for fma whenever possible.
+    """
+    if real_dtype in {numpy.float16, numpy.longdouble}:
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
+
+    try:
+        import pyfma
+    except ImportError as msg:
+        pytest.skip(f"test requires pyfma: {msg}")
+
+    import mpmath
+
+    mp_ctx = mpmath.mp
+
+    fi = numpy.finfo(real_dtype)
+
+    size = 30
+    x, y, z = fa.utils.real_triple_samples((size, size, size), dtype=real_dtype, target_func="fma", include_infinity=False)
+
+    result_f = pyfma.fma(x, y, z)
+    assert result_f.dtype == real_dtype
+
+    # Filter out subnormals as mpmath rounding of subnormals may be
+    # incorrect
+    normal_indices = numpy.where(abs(result_f) >= fi.smallest_normal)
+    subnormal_indices = numpy.where(abs(result_f) < fi.smallest_normal)
+
+    x_mp = fa.utils.float2mpf(mp_ctx, x)
+    y_mp = fa.utils.float2mpf(mp_ctx, y)
+    z_mp = fa.utils.float2mpf(mp_ctx, z)
+    result_mp = numpy.array(
+        [
+            fa.utils.mpf2float(real_dtype, mp_ctx.fadd(mp_ctx.fmul(x_, y_, exact=True), z_, exact=True))
+            for x_, y_, z_ in zip(x_mp, y_mp, z_mp)
+        ],
+        dtype=real_dtype,
+    )
+
+    numpy.testing.assert_equal(result_f[normal_indices], result_mp[normal_indices])
+    assert result_mp[subnormal_indices].max() <= fi.smallest_normal

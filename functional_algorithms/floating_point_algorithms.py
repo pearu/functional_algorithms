@@ -6,7 +6,9 @@
 """
 
 import functools
+import inspect
 import warnings
+import numpy
 
 
 def make_api(mp_func=None):
@@ -76,8 +78,11 @@ def make_api(mp_func=None):
 
     def _make_api(impl):
 
+        sig = inspect.signature(impl)
+        rtype = sig.return_annotation
+
         def api(ctx, *args, **kwargs):
-            import numpy
+
             import functional_algorithms as fa
 
             dtype = kwargs.pop("dtype", None)
@@ -192,7 +197,21 @@ def make_api(mp_func=None):
                     return ctx.constant(r, largest)
 
                 with warnings.catch_warnings(action="ignore"):
-                    return make_return2(impl_(dtype))
+                    res = impl_(dtype)
+                    if rtype is bool:
+                        if isinstance(res, (numpy.bool_, bool)):
+                            return res
+                        raise TypeError(
+                            f"{impl.__name__} returned {type(res).__name__}, expected {rtype.__name__} or equivalent"
+                        )
+                    elif rtype is inspect.Signature.empty:
+                        # implementation does not specify return
+                        # type(s), it will be determined from the
+                        # result while dtype being the default return
+                        pass
+                    else:
+                        raise NotImplementedError(f"check return value against {impl.__name__} return type ({rtype.__name__})")
+                    return make_return2(res)
 
             # TODO: define dtypes with in a context object
             # dtypes must be ordered starting from a larger type
@@ -517,7 +536,6 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
 
       abs(x) <= inf           if scale is True
       abs(x) <= largest / C   otherwise
-
     """
     params = split_veltkamp_parameters(dtype)
     if C is None:
@@ -536,8 +554,7 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
     # https://perso.ens-lyon.fr/jean-michel.muller/slides-split.pdf
     # provides underflow-safe and almost overflow-safe scaling that
     # cost is 4 arithmetic operations. However, the algorithm 7 does
-    # not always produce delta that is a power of two (unless I am
-    # using it incorrectly..):
+    # not always produce delta that is a power of two:
     #   smallest = get_smallest(ctx, x)
     #   S = params["S"]
     #   delta = ((ax * S + smallest) + ax) - ax  # not always a power of two!
@@ -566,7 +583,7 @@ def mul_dw(ctx, x, y, xh, xl, yh, yl):
 
 
 @make_api()
-def mul_dekker(ctx, dtype, x, y, C=None, scale=True):
+def mul_dekker(ctx, dtype, x, y, C=None, scale=True, fix_overflow=False):
     """Dekker product:
 
       x * y = xyh + xyl
@@ -577,12 +594,16 @@ def mul_dekker(ctx, dtype, x, y, C=None, scale=True):
 
     p is the precision of floating point system.
 
-    It is assumed that no overflow occurs in computations.
+    It is assumed that no overflow occurs in computations. If overflow
+    occurs and fix_overflow is True, then fallback to xyh = x * y and
+    xyl = 0.
 
     Domain of applicability (approximate):
       -986     <= x, y <= 1007, abs(x * y) < 62940 for float16
       -7.5e33  <= x, y <= 8.3e34                   for float32
       -4.3e299 <= x, y <= 1.3e300                  for float64
+
+    Applicability:
       x * y is finite.
 
     Accuracy:
@@ -593,21 +614,33 @@ def mul_dekker(ctx, dtype, x, y, C=None, scale=True):
       `x * y` is more accurate that `xyh + xyl`. So, using mul_dekker
       makes only sense when the accuracy of the pair (xyh, xyl) is
       taken into account.
+
     """
     xh, xl = split_veltkamp(ctx, x, C=C, scale=scale, dtype=dtype)
     yh, yl = split_veltkamp(ctx, y, C=C, scale=scale, dtype=dtype)
-    return mul_dw(ctx, x, y, xh, xl, yh, yl)
+    xyh, xyl = mul_dw(ctx, x, y, xh, xl, yh, yl)
+
+    if fix_overflow:
+        largest = get_largest(ctx, x)
+        overflow = abs(xh * yh) > largest
+        xyh = ctx.select(overflow, x * y, xyh)
+        xyl = ctx.select(overflow, 0, xyl)
+    return xyh, xyl
 
 
-def add_2sum(ctx, x, y, fast=False):
+@make_api()
+def add_2sum(ctx, dtype, x, y, fast=False, fix_overflow=False):
     """Add x and y using 2sum or fast2sum algorithm:
 
     x + y = s + t
 
-    where s = RN(s + y).
+    where s = RN(x + y).
 
-    Domain of applicability:
-      abs(x), abs(y) < largest / 2
+    Applicability[fix_overflow == False]:
+      x + y, (x + y) - x, (x + y) - y are all finite
+
+    Applicability[fix_overflow == True]:
+      x + y is finite
 
     Accuracy:
       (s, t) is exact.
@@ -624,14 +657,28 @@ def add_2sum(ctx, x, y, fast=False):
         t = y - z
     else:
         t = (x - (s - z)) + (y - z)
+    if fix_overflow:
+        largest = get_largest(ctx, x)
+        overflow = abs(z) > largest
+        t = ctx.select(overflow, 0, t)
     return s, t
 
 
-def is_power_of_two(ctx, x, Q, P, invert=False):
-    """Check if x is a power of two.
-
+@functools.lru_cache(typed=True)
+def _is_power_of_two_parameters(dtype):
+    fi = numpy.finfo(dtype)
+    p = -fi.negep
     Q = 2 ** (p - 1)
     P = 2 ** (p - 1) + 1
+    return dict(P=dtype(P), Q=dtype(Q))
+
+
+@make_api()
+def is_power_of_two(ctx, dtype, x, Q=None, P=None, invert=False) -> bool:
+    """Check if x is a power of two.
+
+    P = 2 ** (p - 1) + 1
+    Q = 2 ** (p - 1)
     p is the precision of the floating point system.
 
     Domain of applicability:
@@ -641,12 +688,49 @@ def is_power_of_two(ctx, x, Q, P, invert=False):
 
     Accuracy: exact.
     """
+    if Q is None:
+        params = _is_power_of_two_parameters(dtype)
+        P, Q = params["P"], params["Q"]
     L = P * x
     R = Q * x
     D = L - R
     if invert:
         return D != x
     return D == x
+
+
+@functools.lru_cache(typed=True)
+def _is_one_or_three_times_power_of_two_parameters(dtype):
+    fi = numpy.finfo(dtype)
+    p = -fi.negep
+    Q = 2 ** (p - 2)
+    P = 2 ** (p - 2) + 1
+    return dict(P=dtype(P), Q=dtype(Q))
+
+
+@make_api()
+def is_one_or_three_times_power_of_two(ctx, dtype, x, invert=False) -> bool:
+    """Check if x is one or three times power of two.
+
+    P = 2 ** (p - 2) + 1
+    Q = 2 ** (p - 2)
+    p is the precision of the floating point system.
+
+    Applicability:
+      P * x is finite.
+
+    Reference:
+      Algorithm 5 in https://hal.science/hal-04575249
+    """
+    params = _is_one_or_three_times_power_of_two_parameters(dtype)
+    P, Q = params["P"], params["Q"]
+
+    L = P * x
+    R = Q * x
+    D = L - R
+    if invert:
+        return ctx.ne(D, x)
+    return ctx.eq(D, x)
 
 
 def add_3sum(ctx, x, y, z, Q, P, three_over_two):
