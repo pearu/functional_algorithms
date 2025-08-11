@@ -2,6 +2,7 @@ import numpy
 import pytest
 import itertools
 import warnings
+import functional_algorithms as fa
 from functional_algorithms import utils
 
 
@@ -17,7 +18,7 @@ def dtype(request):
 
 def test_mpfnextafter(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("support not implemented")
+        pytest.skip(f"{real_dtype.__name__} support not implemented")
     import mpmath
 
     fi = numpy.finfo(real_dtype)
@@ -53,7 +54,7 @@ def test_mpfnextafter(real_dtype):
 
 def test_matching_bits(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("support not implemented")
+        pytest.skip(f"{real_dtype.__name__} support not implemented")
     import mpmath
 
     fi = numpy.finfo(real_dtype)
@@ -111,7 +112,7 @@ def test_matching_bits(real_dtype):
 
 def test_diff_ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("support not implemented")
+        pytest.skip(f"{real_dtype.__name__} support not implemented")
     fi = numpy.finfo(real_dtype)
 
     assert utils.diff_ulp(real_dtype(0), fi.tiny, flush_subnormals=True) == 1
@@ -131,7 +132,7 @@ def test_diff_ulp(real_dtype):
 
 def test_diff_log2ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("support not implemented")
+        pytest.skip(f"{real_dtype.__name__} support not implemented")
     bw = {numpy.float16: 16, numpy.float32: 32, numpy.float64: 64}[real_dtype]
     fi = numpy.finfo(real_dtype)
 
@@ -167,10 +168,19 @@ def _check_real_samples(
     include_nan=None,
     nonnegative=None,
     include_huge=None,
+    min_value=None,
+    max_value=None,
 ):
     fi = numpy.finfo(r.dtype)
     size = r.size
-    if nonnegative:
+    if min_value is not None or max_value is not None:
+        if min_value is not None:
+            assert r[0] == min_value
+        if max_value is not None:
+            assert r[-1] == max_value
+        for i in range(r.size - 1):
+            assert r[i] < r[i + 1]
+    elif nonnegative:
         if include_zero:
             assert r[0] == 0
             if include_subnormal:
@@ -239,7 +249,7 @@ def _check_real_samples(
                 assert r[loc - 1] == -fi.smallest_normal
 
 
-def _iter_samples_parameters():
+def _iter_samples_parameters(dims=1, iscomplex=False):
     for (
         include_huge,
         include_subnormal,
@@ -256,10 +266,27 @@ def _iter_samples_parameters():
             include_nan=include_nan,
             nonnegative=nonnegative,
         )
+    if iscomplex:
+        for min_value, max_value in [(1, 10), (1, None), (-2, None), (-2, 2), (None, 2), (None, -2)]:
+            yield dict(
+                min_real_value=min_value,
+                max_real_value=max_value,
+                min_imag_value=min_value,
+                max_imag_value=max_value,
+            )
+    else:
+        for min_value, max_value in [(1, 10), (1, None), (-2, None), (-2, 2), (None, 2), (None, -2)]:
+            yield dict(min_value=min_value, max_value=max_value)
+        if dims == 2:
+            for min_value, max_value in [((1, 2), (10, 8))]:
+                yield dict(min_value=min_value, max_value=max_value)
+        elif dims == 3:
+            for min_value, max_value in [((1, 2, 3), (10, 8, 6))]:
+                yield dict(min_value=min_value, max_value=max_value)
 
 
 def test_real_samples(real_dtype):
-    if real_dtype not in {numpy.float32, numpy.float64}:
+    if real_dtype not in {numpy.float16, numpy.float32, numpy.float64}:
         pytest.skip(f"{real_dtype.__name__} not supported")
     for size in range(6, 20):
         for params in _iter_samples_parameters():
@@ -272,33 +299,59 @@ def test_complex_samples(real_dtype):
     if real_dtype not in {numpy.float32, numpy.float64}:
         pytest.skip(f"{real_dtype.__name__} not supported")
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
-        for params in _iter_samples_parameters():
+        for params in _iter_samples_parameters(dims=1, iscomplex=True):
+            min_real_value = params.get("min_real_value")
+            max_real_value = params.get("max_real_value")
+            min_imag_value = params.get("min_imag_value")
+            max_imag_value = params.get("max_imag_value")
+            params_re = params.copy()
+            params_im = params.copy()
+            params_re.pop("min_real_value", None)
+            params_re.pop("max_real_value", None)
+            params_re.pop("min_imag_value", None)
+            params_re.pop("max_imag_value", None)
+            params_im.pop("min_real_value", None)
+            params_im.pop("max_real_value", None)
+            params_im.pop("min_imag_value", None)
+            params_im.pop("max_imag_value", None)
+            params_re.update(min_value=min_real_value, max_value=max_real_value)
+            params_im.update(min_value=min_imag_value, max_value=max_imag_value)
             r = utils.complex_samples(size=size, dtype=real_dtype, **params)
             re, im = r.real, r.imag
             assert re.dtype == real_dtype
             assert im.dtype == real_dtype
             for i in range(r.shape[0]):
-                _check_real_samples(re[i], **params)
+                _check_real_samples(re[i], **params_re)
             for j in range(r.shape[1]):
-                _check_real_samples(im[:, j], **params)
+                _check_real_samples(im[:, j], **params_im)
 
 
 def test_real_pair_samples(real_dtype):
-    if real_dtype not in {numpy.float32, numpy.float64}:
+    if real_dtype not in {numpy.float16, numpy.float32, numpy.float64}:
         pytest.skip(f"{real_dtype.__name__} not supported")
     for size in [(6, 6), (6, 7), (7, 6), (13, 13), (13, 15), (15, 13)]:
-        for params in _iter_samples_parameters():
-            s1 = utils.real_samples(size=size[0], dtype=real_dtype, **params).size
-            s2 = utils.real_samples(size=size[1], dtype=real_dtype, **params).size
+        for params in _iter_samples_parameters(dims=2):
+            min_value = params.get("min_value")
+            max_value = params.get("max_value")
+            params1 = params.copy()
+            params2 = params.copy()
+            if isinstance(min_value, tuple):
+                params1.update(min_value=min_value[0])
+                params2.update(min_value=min_value[1])
+            if isinstance(max_value, tuple):
+                params1.update(max_value=max_value[0])
+                params2.update(max_value=max_value[1])
+            s1 = utils.real_samples(size=size[0], dtype=real_dtype, **params1).size
+            s2 = utils.real_samples(size=size[1], dtype=real_dtype, **params2).size
             r1, r2 = utils.real_pair_samples(size=size, dtype=real_dtype, **params)
             assert r1.dtype == real_dtype
             assert r2.dtype == real_dtype
             assert r1.size == s1 * s2
             assert r2.size == s1 * s2
             for r in r1.reshape(s2, s1):
-                _check_real_samples(r, **params)
+                _check_real_samples(r, **params1)
             for r in r2.reshape(s2, s1).T:
-                _check_real_samples(r, **params)
+                _check_real_samples(r, **params2)
 
 
 def test_complex_pair_samples(real_dtype):
@@ -306,9 +359,63 @@ def test_complex_pair_samples(real_dtype):
         pytest.skip(f"{real_dtype.__name__} not supported")
     for size1 in [(6, 6), (6, 7)]:
         for size2 in [(6, 6), (7, 6)]:
-            for params in _iter_samples_parameters():
-                s1 = utils.complex_samples(size=size1, dtype=real_dtype, **params).shape
-                s2 = utils.complex_samples(size=size2, dtype=real_dtype, **params).shape
+            for params in _iter_samples_parameters(dims=2, iscomplex=True):
+                min_real_value = params.get("min_real_value")
+                max_real_value = params.get("max_real_value")
+                min_imag_value = params.get("min_imag_value")
+                max_imag_value = params.get("max_imag_value")
+                params1 = params.copy()
+                params2 = params.copy()
+                params_re = params.copy()
+                params_im = params.copy()
+                params_re.pop("min_real_value", None)
+                params_re.pop("max_real_value", None)
+                params_re.pop("min_imag_value", None)
+                params_re.pop("max_imag_value", None)
+                params_im.pop("min_real_value", None)
+                params_im.pop("max_real_value", None)
+                params_im.pop("min_imag_value", None)
+                params_im.pop("max_imag_value", None)
+                params1_re = params_re.copy()
+                params2_re = params_re.copy()
+                params1_im = params_im.copy()
+                params2_im = params_im.copy()
+                min_real_values = utils._fix_limit_value(min_real_value, dims=2)
+                max_real_values = utils._fix_limit_value(max_real_value, dims=2)
+                min_imag_values = utils._fix_limit_value(min_imag_value, dims=2)
+                max_imag_values = utils._fix_limit_value(max_imag_value, dims=2)
+
+                params1.update(
+                    min_real_value=min_real_values[0],
+                    max_real_value=max_real_values[0],
+                    min_imag_value=min_imag_values[0],
+                    max_imag_value=max_imag_values[0],
+                )
+                params2.update(
+                    min_real_value=min_real_values[1],
+                    max_real_value=max_real_values[1],
+                    min_imag_value=min_imag_values[1],
+                    max_imag_value=max_imag_values[1],
+                )
+                params1_re.update(
+                    min_value=min_real_values[0],
+                    max_value=max_real_values[0],
+                )
+                params2_re.update(
+                    min_value=min_real_values[1],
+                    max_value=max_real_values[1],
+                )
+                params1_im.update(
+                    min_value=min_imag_values[0],
+                    max_value=max_imag_values[0],
+                )
+                params2_im.update(
+                    min_value=min_imag_values[1],
+                    max_value=max_imag_values[1],
+                )
+
+                s1 = utils.complex_samples(size=size1, dtype=real_dtype, **params1).shape
+                s2 = utils.complex_samples(size=size2, dtype=real_dtype, **params2).shape
                 r1, r2 = utils.complex_pair_samples(size=(size1, size2), dtype=real_dtype, **params)
                 re1, im1 = r1.real, r1.imag
                 re2, im2 = r2.real, r2.imag
@@ -321,23 +428,23 @@ def test_complex_pair_samples(real_dtype):
                     for j in range(0, s1[1] * s2[1], s1[1]):
                         r = re1[i : i + s1[0], j : j + s1[1]]
                         for i1 in range(r.shape[0]):
-                            _check_real_samples(r[i1], **params)
+                            _check_real_samples(r[i1], **params1_re)
                         r = im1[i : i + s1[0], j : j + s1[1]]
                         for j1 in range(r.shape[1]):
-                            _check_real_samples(r[:, j1], **params)
+                            _check_real_samples(r[:, j1], **params1_im)
 
                 for i in range(s1[0]):
                     for j in range(s1[1]):
                         r = re2[i :: s1[0], j :: s1[1]]
                         for i1 in range(r.shape[0]):
-                            _check_real_samples(r[i1], **params)
+                            _check_real_samples(r[i1], **params2_re)
                         r = im2[i :: s1[0], j :: s1[1]]
                         for j1 in range(r.shape[1]):
-                            _check_real_samples(r[:, j1], **params)
+                            _check_real_samples(r[:, j1], **params2_im)
 
 
 def test_periodic_samples(real_dtype):
-    if real_dtype not in {numpy.float32, numpy.float64}:
+    if real_dtype not in {numpy.float16, numpy.float32, numpy.float64}:
         pytest.skip(f"{real_dtype.__name__} not supported")
     for period in [1, 3.14, numpy.pi / 2]:
         for size in [10, 11, 51]:
@@ -365,6 +472,45 @@ def test_periodic_samples(real_dtype):
 
                     p = samples_per_period[-1] - samples_per_period[0]
                     assert p <= period * size / (size - 1) and p >= period * (size - 1) / size
+
+
+def test_real_triple_samples(real_dtype):
+    if real_dtype not in {numpy.float16, numpy.float32, numpy.float64}:
+        pytest.skip(f"{real_dtype.__name__} not supported")
+    for size in [(6, 6, 6), (6, 7, 8), (13, 7, 6)]:
+        for params in _iter_samples_parameters():
+            min_value = params.get("min_value")
+            max_value = params.get("max_value")
+            params1 = params.copy()
+            params2 = params.copy()
+            params3 = params.copy()
+            if isinstance(min_value, tuple):
+                params1.update(min_value=min_value[0])
+                params2.update(min_value=min_value[1])
+                params3.update(min_value=min_value[2])
+            if isinstance(max_value, tuple):
+                params1.update(max_value=max_value[0])
+                params2.update(max_value=max_value[1])
+                params3.update(max_value=max_value[2])
+            s1 = utils.real_samples(size=size[0], dtype=real_dtype, **params1).size
+            s2 = utils.real_samples(size=size[1], dtype=real_dtype, **params2).size
+            s3 = utils.real_samples(size=size[2], dtype=real_dtype, **params3).size
+            r1, r2, r3 = utils.real_triple_samples(size=size, dtype=real_dtype, **params)
+            assert r1.dtype == real_dtype
+            assert r2.dtype == real_dtype
+            assert r3.dtype == real_dtype
+            assert r1.size == s1 * s2 * s3
+            assert r2.size == s1 * s2 * s3
+            assert r3.size == s1 * s2 * s3
+            for r in r3.reshape(s1, s2, s3):
+                for r_ in r:
+                    _check_real_samples(r_, **params3)
+            for r in r2.reshape(s1, s2, s3):
+                for r_ in r.T:
+                    _check_real_samples(r_, **params2)
+            for r in r1.reshape(s1, s2, s3).T:
+                for r_ in r:
+                    _check_real_samples(r_, **params1)
 
 
 @pytest.fixture(scope="function", params=["mpmath", "jax"])
@@ -431,53 +577,55 @@ def test_numpy_with_backend(backend, dtype, device):
     test(func(arr))
 
 
-def test_float2mpf(real_dtype):
+@pytest.mark.parametrize("prec_multiplier", [1, 2])
+def test_float2mpf(real_dtype, prec_multiplier):
     import mpmath
 
     ctx = mpmath.mp
-    ctx.prec = utils.vectorize_with_mpmath.float_prec[real_dtype.__name__]
     fi = numpy.finfo(real_dtype)
     dtype_name = real_dtype.__name__
     dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
-    for f in [
-        -numpy.inf,
-        -utils.vectorize_with_mpmath.float_max[dtype_name],
-        -150,
-        -0.3,
-        -fi.eps,
-        -fi.smallest_normal,
-        -fi.smallest_subnormal * 15,
-        -fi.smallest_subnormal,
-        0,
-        fi.smallest_subnormal,
-        fi.smallest_subnormal * 10,
-        fi.smallest_normal,
-        fi.eps,
-        0.3,
-        150,
-        utils.vectorize_with_mpmath.float_max[dtype_name],
-        numpy.inf,
-        numpy.nan,
-    ]:
-        v = real_dtype(f)
-        m = utils.float2mpf(ctx, v)
-        r = utils.mpf2float(real_dtype, m)
-        assert type(r) is type(v)
-        if not numpy.isnan(f):
-            assert r == v
 
-        if real_dtype != numpy.longdouble:
-            assert utils.mpf2bin(m) == utils.float2bin(v)
-
-    if real_dtype in {numpy.float32, numpy.float64}:
-        for f in utils.real_samples(1000, dtype=real_dtype):
+    with ctx.workprec(-fi.negep * prec_multiplier):
+        for f in [
+            -numpy.inf,
+            -utils.vectorize_with_mpmath.float_max[dtype_name],
+            -150,
+            -0.3,
+            -fi.eps,
+            -fi.smallest_normal,
+            -fi.smallest_subnormal * 15,
+            -fi.smallest_subnormal,
+            0,
+            fi.smallest_subnormal,
+            fi.smallest_subnormal * 10,
+            fi.smallest_normal,
+            fi.eps,
+            0.3,
+            150,
+            utils.vectorize_with_mpmath.float_max[dtype_name],
+            numpy.inf,
+            numpy.nan,
+        ]:
             v = real_dtype(f)
             m = utils.float2mpf(ctx, v)
             r = utils.mpf2float(real_dtype, m)
             assert type(r) is type(v)
             if not numpy.isnan(f):
                 assert r == v
-            assert utils.mpf2bin(m) == utils.float2bin(v)
+
+            if real_dtype != numpy.longdouble:
+                assert utils.mpf2bin(m) == utils.float2bin(v)
+
+        if real_dtype in {numpy.float32, numpy.float64}:
+            for f in utils.real_samples(1000, dtype=real_dtype, min_value=-1, max_value=1):
+                v = real_dtype(f)
+                m = utils.float2mpf(ctx, v)
+                r = utils.mpf2float(real_dtype, m)
+                assert type(r) is type(v)
+                if not numpy.isnan(f):
+                    assert r == v
+                assert utils.mpf2bin(m) == utils.float2bin(v)
 
 
 def test_split_veltkamp(real_dtype):
@@ -486,7 +634,7 @@ def test_split_veltkamp(real_dtype):
     dtype_name = real_dtype.__name__
     dtype_name = dict(longdouble="float128").get(dtype_name, dtype_name)
     if dtype_name == "float128":
-        pytest.skip("NOT IMPL")
+        pytest.skip(f"{dtype_name} support not implemented")
     p = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53, numpy.longdouble: 64}[real_dtype]
     for f in [
         -utils.vectorize_with_mpmath.float_max[dtype_name],
@@ -699,7 +847,7 @@ def test_mpf2multiword_log2(real_dtype):
 
     """
     if real_dtype == numpy.longdouble:
-        pytest.skip("test not implemented")
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
     import mpmath
 
     dtype = real_dtype
@@ -764,7 +912,7 @@ def test_mpf2multiword_log2(real_dtype):
 
 def test_ulp(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("test not implemented")
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
     import math
 
     size = 10000
@@ -794,7 +942,7 @@ def test_ulp(real_dtype):
 
 def test_overlapping(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("test not implemented")
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
     size = 10000
     for x in utils.real_samples(size, dtype=real_dtype, include_infinity=False):
         with warnings.catch_warnings(action="ignore"):
@@ -815,7 +963,7 @@ def test_float2fraction(real_dtype):
     import mpmath
 
     if real_dtype == numpy.longdouble:
-        pytest.skip("support not implemented")
+        pytest.skip(f"support not implemented for {real_dtype.__name__}")
 
     prec = {numpy.float16: 11, numpy.float32: 24, numpy.float64: 53}[real_dtype]
 
@@ -832,8 +980,96 @@ def test_float2fraction(real_dtype):
 
 def test_bin2float(real_dtype):
     if real_dtype == numpy.longdouble:
-        pytest.skip("test not implemented")
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
     for x in utils.real_samples(10_000, dtype=real_dtype, include_subnormal=True, include_infinity=not False):
         b = utils.float2bin(x)
         y = utils.bin2float(real_dtype, b)
         assert x == y
+
+
+def test_fma_samples_fraction(real_dtype):
+    if real_dtype == numpy.longdouble:
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
+
+    import mpmath
+
+    mp_ctx = mpmath.mp
+    fi = numpy.finfo(real_dtype)
+
+    size = 30
+    x, y, z = fa.utils.real_triple_samples((size, size, size), dtype=real_dtype, target_func="fma", include_infinity=False)
+
+    x_f = list(map(fa.utils.float2fraction, x))
+    y_f = list(map(fa.utils.float2fraction, y))
+    z_f = list(map(fa.utils.float2fraction, z))
+
+    result_f = numpy.array(
+        [
+            fa.utils.fraction2float(real_dtype, x_ * y_ + z_, prec=fa.utils.get_precision(real_dtype))
+            for x_, y_, z_ in zip(x_f, y_f, z_f)
+        ],
+        dtype=real_dtype,
+    )
+
+    x_mp = fa.utils.float2mpf(mp_ctx, x)
+    y_mp = fa.utils.float2mpf(mp_ctx, y)
+    z_mp = fa.utils.float2mpf(mp_ctx, z)
+
+    result_mp = numpy.array(
+        [
+            fa.utils.mpf2float(real_dtype, mp_ctx.fadd(mp_ctx.fmul(x_, y_, exact=True), z_, exact=True))
+            for x_, y_, z_ in zip(x_mp, y_mp, z_mp)
+        ],
+        dtype=real_dtype,
+    )
+
+    numpy.testing.assert_equal(result_f, result_mp)
+
+    # that is, doing fma computation with infinite precision floats
+    # and fractions are equivalent.
+
+
+def test_fma_samples_pyfma(real_dtype):
+    """Test the equivalence of pyfma and mpmath exact calculations.
+
+    pyfma is much faster than mpmath and therefore we want to use it
+    as a reference for fma whenever possible.
+    """
+    if real_dtype in {numpy.float16, numpy.longdouble}:
+        pytest.skip(f"test not implemented for {real_dtype.__name__}")
+
+    try:
+        import pyfma
+    except ImportError as msg:
+        pytest.skip(f"test requires pyfma: {msg}")
+
+    import mpmath
+
+    mp_ctx = mpmath.mp
+
+    fi = numpy.finfo(real_dtype)
+
+    size = 30
+    x, y, z = fa.utils.real_triple_samples((size, size, size), dtype=real_dtype, target_func="fma", include_infinity=False)
+
+    result_f = pyfma.fma(x, y, z)
+    assert result_f.dtype == real_dtype
+
+    # Filter out subnormals as mpmath rounding of subnormals may be
+    # incorrect
+    normal_indices = numpy.where(abs(result_f) >= fi.smallest_normal)
+    subnormal_indices = numpy.where(abs(result_f) < fi.smallest_normal)
+
+    x_mp = fa.utils.float2mpf(mp_ctx, x)
+    y_mp = fa.utils.float2mpf(mp_ctx, y)
+    z_mp = fa.utils.float2mpf(mp_ctx, z)
+    result_mp = numpy.array(
+        [
+            fa.utils.mpf2float(real_dtype, mp_ctx.fadd(mp_ctx.fmul(x_, y_, exact=True), z_, exact=True))
+            for x_, y_, z_ in zip(x_mp, y_mp, z_mp)
+        ],
+        dtype=real_dtype,
+    )
+
+    numpy.testing.assert_equal(result_f[normal_indices], result_mp[normal_indices])
+    assert result_mp[subnormal_indices].max() <= fi.smallest_normal

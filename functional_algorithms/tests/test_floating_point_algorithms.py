@@ -168,6 +168,8 @@ def test_add_2sum(dtype):
     max_value = fi.max / dtype(2)
     min_value = -max_value
 
+    npctx = NumpyContext(dtype)
+
     ulp_counts = defaultdict(int)
     ulp_counts_native = defaultdict(int)
     samples = numpy.array(utils.real_samples(size, dtype=dtype, min_value=min_value, max_value=max_value))
@@ -178,7 +180,7 @@ def test_add_2sum(dtype):
             x_mp = utils.float2mpf(ctx, x)
             for y in samples:
                 xy = x + y
-                xyh, xyl = fpa.add_2sum(None, x, y)
+                xyh, xyl = fpa.add_2sum(npctx, x, y)
                 xyh_lst.append(xyh)
                 xyl_lst.append(xyl)
                 assert xyh == xy
@@ -197,7 +199,7 @@ def test_add_2sum(dtype):
                 if abs(x) < abs(y):
                     continue
 
-                xyh, xyl = fpa.add_2sum(None, x, y, fast=True)
+                xyh, xyl = fpa.add_2sum(npctx, x, y, fast=True)
                 assert xyh == xy
 
                 x_mp = utils.float2mpf(ctx, x)
@@ -210,7 +212,7 @@ def test_add_2sum(dtype):
 
     xyh_arr = numpy.array(xyh_lst)
     xyl_arr = numpy.array(xyl_lst)
-    xyh, xyl = fpa.add_2sum(None, samples.reshape(-1, samples.shape[-1]), samples.reshape(samples.shape[0], -1))
+    xyh, xyl = fpa.add_2sum(npctx, samples.reshape(-1, samples.shape[-1]), samples.reshape(samples.shape[0], -1))
 
     assert numpy.array_equal(xyh_arr, xyh.flatten())
     assert numpy.array_equal(xyl_arr, xyl.flatten(), equal_nan=True)
@@ -352,6 +354,7 @@ def test_accuracy(dtype, binary_op):
 
 
 def test_is_power_of_two(dtype):
+    npctx = NumpyContext(dtype)
     p = utils.get_precision(dtype)
     Q = dtype(1 << (p - 1))
     P = dtype((1 << (p - 1)) + 1)
@@ -361,24 +364,24 @@ def test_is_power_of_two(dtype):
     for e in range(min_e, max_e):
         x = dtype(2**e)
         assert utils.tobinary(x).startswith("1p") or x == 0
-        assert fpa.is_power_of_two(None, x, Q, P)
-        assert not fpa.is_power_of_two(None, x, Q, P, invert=True)
+        assert fpa.is_power_of_two(npctx, x, Q, P)
+        assert not fpa.is_power_of_two(npctx, x, Q, P, invert=True)
 
         x1 = numpy.nextafter(x, dtype(numpy.inf))
         while utils.tobinary(abs(x1)).startswith("1p"):
             x1 = numpy.nextafter(x1, dtype(numpy.inf))
-        assert not fpa.is_power_of_two(None, x1, Q, P)
-        assert fpa.is_power_of_two(None, x1, Q, P, invert=True)
+        assert not fpa.is_power_of_two(npctx, x1, Q, P)
+        assert fpa.is_power_of_two(npctx, x1, Q, P, invert=True)
 
         x1 = numpy.nextafter(x, dtype(-numpy.inf))
         while utils.tobinary(abs(x1)).startswith("1p") or x1 == 0:
             x1 = numpy.nextafter(x1, dtype(-numpy.inf))
-        assert not fpa.is_power_of_two(None, x1, Q, P)
-        assert fpa.is_power_of_two(None, x1, Q, P, invert=True)
+        assert not fpa.is_power_of_two(npctx, x1, Q, P)
+        assert fpa.is_power_of_two(npctx, x1, Q, P, invert=True)
 
 
 def test_add_3sum(dtype):
-    np_ctx = NumpyContext()
+    np_ctx = NumpyContext(dtype)
     import mpmath
 
     max_valid_ulp_count = 1
@@ -432,7 +435,7 @@ def test_add_3sum(dtype):
 
 
 def test_add_4sum(dtype):
-    np_ctx = NumpyContext()
+    np_ctx = NumpyContext(dtype)
     import mpmath
 
     max_valid_ulp_count = 1

@@ -73,6 +73,9 @@ class PrinterBase:
     def make_apply(self, expr, name, tab=""):
         raise NotImplementedError(type(self))
 
+    def make_getitem(self, var, index):
+        raise NotImplementedError(type(self))
+
     def show_value(self, var):
         return NotImplemented
 
@@ -95,7 +98,9 @@ class PrinterBase:
                                     self.make_assignment(None, a_.ref, self.make_constant(a_, self.tostring(a[i])))
                                 )
                             else:
-                                self.assignments.append(self.make_assignment(None, a_.ref, self.tostring(a[i])))
+                                self.assignments.append(
+                                    self.make_assignment(self.get_type(a_), a_.ref, self.make_getitem(a, i))
+                                )
                             self.defined_refs.add(a_.ref)
 
                 elif self.force_cast_arguments:
@@ -162,8 +167,13 @@ class PrinterBase:
                     self.assignments.append(stmt)
 
             if self.debug >= 1:
-                stmt = self.check_dtype(expr.ref, self.get_type(expr))
-                if isinstance(stmt, str):
-                    self.assignments.append(stmt)
+                t = expr.get_type()
+
+                if t.kind == "list":
+                    pass  # TODO
+                else:
+                    stmt = self.check_dtype(expr.ref, self.get_type(expr))
+                    if isinstance(stmt, str):
+                        self.assignments.append(stmt)
 
         return result
