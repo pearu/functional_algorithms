@@ -132,7 +132,7 @@ class Type:
             return f"{self.kind}[{', '.join(map(str, self.param))}]"
         if self.kind == "array":
             if self.param is None or not self.param:
-                return kind
+                return self.kind
             assert len(self.param) == 1, self.param  # shape support not impl
             itype = self.param[0]
             return f"{self.kind}[{itype}]"

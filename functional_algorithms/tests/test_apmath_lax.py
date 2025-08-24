@@ -112,16 +112,6 @@ def test_two_sum(dtype, suffix):
     assert jnp.array_equal(s, simple_func(*args))
 
     _benchmark(func, jax.jit(simple_func), args)
-    return
-
-    if 0:
-        f = func
-        print(dir(f))
-        l = f.lower(x, y)
-        print(dir(l))
-        c = l.compile()
-        print(c.as_text())
-        print(dir(c))
 
 
 def test_two_prod(dtype, suffix):
