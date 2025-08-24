@@ -2,6 +2,7 @@ from . import algorithms as faa
 from . import floating_point_algorithms as fpa
 from . import apmath
 
+FloatArrayOrScalar = fpa.FloatArrayOrScalar
 expansion: type = list[float | complex, ...]
 fexpansion: type = list[float, ...]
 cexpansion: type = list[complex, ...]
@@ -34,6 +35,7 @@ def fma_real(
     possibly_zero_z: bool = True,
     fix_overflow: bool = True,
     algorithm: str = "a7",
+    assume_fma: bool = False,
 ):
     """Emulated fused add-multiply float expansion: x * y + z
 
@@ -45,17 +47,18 @@ def fma_real(
 
     Accuracy:
 
-      The ULP distance between the result and correct value is always
-      <= 1.
+      The ULP distance between the result and correct value is <= 1.
 
       fma(x, y, z) is exact (ULP distance is zero) for most inputs.
       If not, either
 
-      - overflow occured in fma arithmetics (the return value is nan),
-        use fix_overflow to workaround overflow in Dekker product or 2Sum;
-      - or underflow occured in fma arithmetics, use possibly_zero_z to
-        fix z == 0 cases.
+      - overflow occured in fma arithmetics (the return value is nan).
+        Use fix_overflow to workaround overflow in Dekker product or 2Sum;
+      - underflow occured in fma arithmetics. Use possibly_zero_z to
+        fix z == 0 cases;
+      - or the target uses flush-to-zero (FTZ) mode. Disable FTZ in target.
     """
+    ctx._assume_same_dtype(x, y, z)
     if algorithm == "a9":
         # Algorithm 9 from https://hal.science/hal-04575249
         #
@@ -81,11 +84,11 @@ def fma_real(
     elif algorithm == "a7":
         # Algorithm 7 from https://hal.science/hal-04624238
         # It's faster than other algorithms.
-        mh, ml = apmath.two_prod(ctx, x, y, fix_overflow=fix_overflow)
-        sh, sl = apmath.two_sum(ctx, mh, z, fix_overflow=fix_overflow)
+        mh, ml = apmath.two_prod(ctx, x, y, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        sh, sl = apmath.two_sum(ctx, mh, z, fix_overflow=fix_overflow, assume_fma=assume_fma)
         v = ml + sl
-        zh, zl = apmath.quick_two_sum(ctx, sh, v, fix_overflow=fix_overflow)
-        # zh, zl = apmath.two_sum(ctx, sh, v, fix_overflow=fix_overflow)
+        # zh, zl = apmath.quick_two_sum(ctx, sh, v, fix_overflow=fix_overflow)
+        zh, zl = apmath.two_sum(ctx, sh, v, fix_overflow=fix_overflow, assume_fma=assume_fma)
         return zh + zl
     elif algorithm == "a8":
         # Algorithm 8 from https://hal.science/hal-04624238

@@ -4,14 +4,35 @@ import numpy
 
 class Type:
 
-    def __init__(self, context, kind, param):
+    def __new__(cls, context, kind, param):
+        obj = object.__new__(cls)
+        obj._initialize(context, kind, param)
+
+        # Type instances are singletons within the given context:
+        if obj in context._types:
+            return context._types[obj]
+        context._types[obj] = obj
+
+        return obj
+
+    def _initialize(self, context, kind, param):
         self.context = context
-        assert kind in {"float", "complex", "integer", "boolean", "type", "list"}, kind
+        assert kind in {"float", "complex", "integer", "boolean", "type", "list", "array"}, kind
         if isinstance(param, (int, type(None))):
             assert param in {1, 8, 16, 32, 64, 128, 256, 512, None}, param
         elif isinstance(param, tuple):
-            for p in param:
-                assert isinstance(p, type(self))
+            if kind == "array":
+                assert len(param) <= 2
+                if len(param) > 0:
+                    assert isinstance(param[0], type(self))
+                if len(param) == 2:
+                    assert isinstance(param[1], (tuple, type(None)))
+            else:
+                for p in param:
+                    assert isinstance(p, type(self))
+        elif isinstance(param, type(self)):
+            if kind == "array":
+                param = (param,)
         self.kind = kind
         self.param = param
 
@@ -19,6 +40,8 @@ class Type:
         return hash((self.kind, self.param))
 
     def __eq__(self, other):
+        if self is other:
+            return True
         if isinstance(other, type(self)):
             return self.context is other.context and self.kind == other.kind and self.param == other.param
         return False
@@ -27,7 +50,7 @@ class Type:
     def bits(self):
         if self.kind in {"float", "complex", "integer", "boolean"}:
             return self.param
-        raise NotImplementedError(self.kind)
+        raise NotImplementedError(self)
 
     @classmethod
     def fromobject(cls, context, obj):
@@ -46,10 +69,26 @@ class Type:
                 kind = "type"
             elif obj.startswith("list"):
                 kind = "list"
-                obj = obj[4:].lstrip()
+                obj = obj[len(kind) :].lstrip()
                 assert obj.startswith("[") and obj.endswith("]")
                 obj = obj[1:-1].strip()
                 params = tuple(cls.fromobject(context, s.strip()) for s in obj.split(","))
+                return cls(context, kind, params)
+            elif obj.lower().startswith("array"):
+                kind = "array"
+                obj = obj[len(kind) :].lstrip()
+                if obj.startswith("["):
+                    i = obj.index("]")
+                    assert i > 0, obj
+                    itype = cls.fromobject(context, obj[1:i].strip())
+                    obj = obj[i + 1].lstrip()
+                    assert len(obj) == 0, obj  # parsing dims not implemented
+                    params = (itype,)
+                else:
+                    if obj.lower().startswith("like"):
+                        obj = obj[4:].lstrip()
+                    assert len(obj) == 0, obj  # parsing dims not implemented
+                    params = None
                 return cls(context, kind, params)
             else:
                 return cls(context, "type", obj)
@@ -78,7 +117,8 @@ class Type:
         elif isinstance(obj, list):
             return cls(context, "list", tuple(cls.fromobject(context, item) for item in obj))
         # TODO: list from typing.List
-        raise NotImplementedError(type(obj))
+        # TODO: array from ndarray
+        raise NotImplementedError((obj, type(obj)))
 
     def __repr__(self):
         return f"Type({self.kind}, {self.param})"
@@ -90,11 +130,31 @@ class Type:
             return str(self.param)
         if self.kind == "list":
             return f"{self.kind}[{', '.join(map(str, self.param))}]"
+        if self.kind == "array":
+            if self.param is None or not self.param:
+                return self.kind
+            assert len(self.param) == 1, self.param  # shape support not impl
+            itype = self.param[0]
+            return f"{self.kind}[{itype}]"
         return f"{self.kind}{self.param}"
 
     def max(self, other):
         if self == other:
             return self
+        if self.kind == "array":
+            if other.kind == "array":
+                if self.param is not None:
+                    if other.param is not None:
+                        itype1 = self.param[0]
+                        itype2 = other.param[0]
+                        return type(self)(self.kind, itype1.max(itype2))
+                    else:
+                        return other
+                return self
+            assert other.kind in {"integer", "boolean", "float", "complex"}, other.kind
+            return self
+        elif other.kind == "array":
+            return other.max(self)
         if "complex" in {self.kind, other.kind}:
             kind = "complex"
         elif "float" in {self.kind, other.kind}:
@@ -112,6 +172,7 @@ class Type:
                 return self
         else:
             raise NotImplementedError((self.kind, other.kind))
+        # TODO: array type support
         bits = max([t.bits for t in [self, other] if t.kind == kind and t.bits is not None] or [None])
         return type(self)(self.context, kind, bits)
 
@@ -145,19 +206,27 @@ class Type:
     def is_list(self):
         return self.kind == "list"
 
+    @property
+    def is_array(self):
+        return self.kind == "array"
+
     def tostring(self, target):
         return target.Printer(dict()).tostring(self)
 
     def is_same(self, other):
+        if self is other:
+            return True
         if self.kind == other.kind:
             if self.kind == "list":
-                if len(self.params) == len(other.params):
-                    for i1, i2 in zip(self.params, other.params):
+                if len(self.param) == len(other.param):
+                    for i1, i2 in zip(self.param, other.param):
                         if not i1.is_same(i2):
                             return False
                     return True
+            elif self.kind == "array":
+                return self.param == other.param
             else:
-                return (self.kind, self.bits) == (other.kind, other.bits)
+                return self.param == other.param
         return False
 
     def is_same_kind(self, other):
@@ -166,4 +235,5 @@ class Type:
     def asdtype(self):
         if self.kind == "list":
             return [item.asdtype() for item in self.param]
+        assert self.kind != "array"  # not impl
         return getattr(numpy, str(self), None)

@@ -1925,6 +1925,7 @@ def real_pair_samples(
     nonnegative=False,
     min_value=None,
     max_value=None,
+    target_func=None,
 ):
     """Return a pair of 1-D arrays of real line samples.
 
@@ -1969,6 +1970,15 @@ def real_pair_samples(
         max_value=max_values[1],
     )
     s1, s2 = s1.reshape(1, -1).repeat(s2.size, 0).flatten(), s2.repeat(s1.size)
+
+    if target_func == "add":
+        i = numpy.where(s2 >= 0)
+        s1, s2 = s1[i], s2[i]
+
+    elif target_func == "mul":
+        i = numpy.where(abs(s1) <= s2)
+        s1, s2 = s1[i], s2[i]
+
     return s1, s2
 
 
@@ -2587,7 +2597,8 @@ def format_python(code):
         import black
     except ImportError:
         return code
-    return black.format_str(code, mode=black.FileMode(line_length=127))
+    result = black.format_str(code, mode=black.FileMode(line_length=127))
+    return result
 
 
 def format_cpp(code):
@@ -2916,6 +2927,13 @@ class NumpyContext:
         self._default_like = None
         self._default_constant_type = default_constant_type
         self._mpmath_context = mpmath_context
+
+    @property
+    def dtypes(self):
+        pass
+
+    def _assume_same_dtype(self, *args):
+        pass
 
     @property
     def default_like(self):

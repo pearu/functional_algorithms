@@ -988,6 +988,9 @@ class Rewriter:
                 if container.kind == "list":
                     return container.operands[index_value]
 
+    def dtype_index(self, expr):
+        pass
+
 
 def rewrite(expr):
     """Return rewritten expression, otherwise return None."""

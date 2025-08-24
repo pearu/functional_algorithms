@@ -3,7 +3,7 @@ __all__ = [
 ]
 
 
-def hyp0f1(b, z, zero_indices=None, enable_largest_correction=False):
+def hyp0f1(b, z, zero_indices=None, enable_largest_correction: bool = False):
     r"""The 0F1 hypergeometric function.
 
     Functional implementation of :obj:`scipy.special.hyp0f1`.

@@ -53,6 +53,8 @@ import functional_algorithms as fa
 from . import floating_point_algorithms as fpa
 from . import generalized_hypergeometric_functions as ghf
 
+FloatArrayOrScalar = fpa.FloatArrayOrScalar
+
 
 def _merge(ctx, x, y, cmp):
     if not x:
@@ -99,8 +101,24 @@ def mergesort(ctx, lst, mth="<"):
     return _merge(ctx, mergesort(ctx, lst[:n], mth=mth), mergesort(ctx, lst[n:], mth), cmp=cmp)
 
 
-def two_sum(ctx, a, b, fix_overflow=False):
-    return fpa.add_2sum(ctx, a, b, fast=False, fix_overflow=fix_overflow)
+def two_sum(
+    ctx, x: FloatArrayOrScalar, y: FloatArrayOrScalar, fix_overflow: bool = False, assume_fma: bool = False
+) -> tuple[FloatArrayOrScalar, FloatArrayOrScalar]:
+    """Add floating-point numbers x and y using 2sum algorithm.
+
+    Returns (s, t) such that
+
+      s = RN(x + y)
+      x + y == s + t
+
+    Applicability:
+      x + y is finite and no overflow occurs within the 2sum algorithm [fix_overflow == False],
+      x + y is finite [fix_overflow == True].
+
+    Accuracy:
+      The pair (s, t) represents the floating-point sum `x + y` exactly.
+    """
+    return fpa.add_2sum(ctx, x, y, fast=assume_fma, fix_overflow=fix_overflow)
 
 
 def quick_two_sum(ctx, a, b, fix_overflow=False):
@@ -112,8 +130,34 @@ def split(ctx, a):
 
 
 @fpa.make_api()
-def two_prod(ctx, dtype, a, b, scale=True, fix_overflow=False):
-    return fpa.mul_dekker(ctx, a, b, scale=scale, dtype=dtype, fix_overflow=fix_overflow)
+def two_prod(
+    ctx,
+    dtype,
+    x: FloatArrayOrScalar,
+    y: FloatArrayOrScalar,
+    scale: bool = True,
+    fix_overflow: bool = False,
+    assume_fma: bool = False,
+) -> tuple[FloatArrayOrScalar, FloatArrayOrScalar]:
+    """Multiply floating-point numbers x and y using Dekker's product.
+
+    Returns (xyh, xyl) such that
+
+      xyh = RN(x * y)
+      x * y == xyh + xyl
+
+    Applicability:
+      x * y is finite and no overflow occurs within the Dekker's product [scale==True, fix_overflow == False],
+      x * y is finite [scale==True, fix_overflow == True]
+      If scale == False,
+        -986     <= x, y <= 1007, abs(x * y) < 62940 for float16
+        -7.5e33  <= x, y <= 8.3e34                   for float32
+        -4.3e299 <= x, y <= 1.3e300                  for float64
+
+    Accuracy:
+      The pair (xyh, xyl) represents the floating-point product `x * y` exactly.
+    """
+    return fpa.mul_dekker(ctx, x, y, scale=scale, dtype=dtype, fix_overflow=fix_overflow, assume_fma=assume_fma)
 
 
 @fpa.make_api()
@@ -129,10 +173,7 @@ def vecsum(ctx, seq, fast=False, fix_overflow=False):
     s = seq[-1]
     e_lst = []
     for i in reversed(range(len(seq) - 1)):
-        if fast:
-            s, e = quick_two_sum(ctx, seq[i], s, fix_overflow=fix_overflow)
-        else:
-            s, e = two_sum(ctx, seq[i], s, fix_overflow=fix_overflow)
+        s, e = two_sum(ctx, seq[i], s, fix_overflow=fix_overflow, assume_fma=fast)
         e_lst.insert(0, e)
     e_lst.insert(0, s)
     return e_lst
@@ -192,23 +233,22 @@ def renormalize(ctx, seq, functional=False, fast=False, size=None, dtype=None, f
     f_lst = []
     eps_i = e_lst[0]
     for i in range(len(seq) - 1):
-        if fast:
-            f_j, eps_ip1 = quick_two_sum(ctx, eps_i, e_lst[i + 1], fix_overflow=fix_overflow)
-        else:
-            f_j, eps_ip1 = two_sum(ctx, eps_i, e_lst[i + 1], fix_overflow=fix_overflow)
+        f_j, eps_ip1 = two_sum(ctx, eps_i, e_lst[i + 1], fix_overflow=fix_overflow, assume_fma=fast)
         if functional:
-            p = ctx.ne(eps_ip1, zero)
-            f_lst.append(ctx.select(p, f_j, zero))
-            eps_i = ctx.select(p, eps_ip1, f_j)
+            if len(seq) > 2:
+                p = ctx.ne(eps_ip1, zero)
+                f_lst.append(ctx.select(p, f_j, zero))
+                eps_i = ctx.select(p, eps_ip1, f_j)
+            else:
+                f_lst.append(f_j)
+                eps_i = eps_ip1
         elif ctx._is_nonzero(eps_ip1):
             f_lst.append(f_j)
             eps_i = eps_ip1
         else:
             eps_i = f_j
     if functional:
-        p = ctx.ne(eps_i, zero)
-        f_lst.append(ctx.select(p, eps_i, zero))
-        # TODO: replace it with f_lst.append(eps_i) ?
+        f_lst.append(eps_i)
     elif ctx._is_nonzero(eps_i):
         f_lst.append(eps_i)
 
@@ -1941,3 +1981,102 @@ def sine_impl(ctx, dtype, target, seq, n=None, functional=False, fast=False, siz
         )
     else:
         assert 0, target  # unreachable
+
+
+@fpa.make_api()
+def fma(
+    ctx,
+    dtype,
+    x: FloatArrayOrScalar,
+    y: FloatArrayOrScalar,
+    z: FloatArrayOrScalar,
+    functional: bool = True,
+    size: int = None,
+    possibly_zero_z: bool = True,
+    scale: bool = True,
+    fix_overflow: bool = True,
+    algorithm: str = "a7",
+    assume_fma: bool = False,
+) -> FloatArrayOrScalar:
+    """Emulate fused add-multiply: x * y + z
+
+    Applicability:
+      x * y and x * y + z are finite.
+
+    Accuracy:
+
+      The ULP distance between the result and correct value is <= 1.
+
+      fma(x, y, z) is exact (ULP distance is zero) for most inputs.
+      If not, either
+
+      - overflow occured in fma arithmetics (the return value is nan).
+        Use fix_overflow to workaround overflow in Dekker product or 2Sum;
+      - underflow occured in fma arithmetics. Use possibly_zero_z to
+        fix z == 0 cases;
+      - or the target uses flush-to-zero (FTZ) mode. Disable FTZ in target.
+
+    Algorithms:
+      a9: Algorithm 9 from https://hal.science/hal-04575249
+      a7: Algorithm 7 from https://hal.science/hal-04624238
+      a8: Algorithm 8 from https://hal.science/hal-04624238
+      apmath: Using floating-point expansions.
+    """
+    ctx._assume_same_dtype(x, y, z)
+    if algorithm == "a9":
+        # Algorithm 9 from https://hal.science/hal-04575249
+        #
+        # If fix_overflow is True, avoid overflow in Dekker product.
+        mh, ml = two_prod(ctx, x, y, fix_overflow=fix_overflow, scale=scale, assume_fma=assume_fma)
+        sh, sl = two_sum(ctx, mh, z, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        vh, vl = two_sum(ctx, ml, sl, assume_fma=assume_fma)
+
+        p2 = fpa.is_one_or_three_times_power_of_two(ctx, vh, invert=True)
+        cond = ctx.logical_or(p2, vl == 0)
+
+        # (vh > 0 and vl > 0) or (vh <= 0 and vl <= 0)
+        # (vh > 0 and vl > 0) or (not (vh > 0) and not (vl > 0))
+        # (vh > 0 and vl > 0) or not (vh > 0 or vl > 0)
+        same_sign = ctx.logical_or(ctx.logical_and(vh > 0, vl > 0), ctx.logical_not(ctx.logical_or(vh > 0, vl > 0)))
+
+        C = ctx.constant(1, x)
+        if possibly_zero_z:
+            C = ctx.select(z == 0, ctx.constant(0, x), C)
+        C = ctx.select(cond, C, ctx.select(same_sign, ctx.constant(9 / 8, x), ctx.constant(7 / 8, x)))
+
+        return C * vh + sh
+    elif algorithm == "a7":
+        # Algorithm 7 from https://hal.science/hal-04624238
+        # It's faster than other algorithms.
+        mh, ml = two_prod(ctx, x, y, fix_overflow=fix_overflow, scale=scale, assume_fma=assume_fma)
+        sh, sl = two_sum(ctx, mh, z, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        v = ml + sl
+        zh, zl = two_sum(ctx, sh, v, fix_overflow=fix_overflow, assume_fma=True)
+        return zh + zl
+    elif algorithm == "a8":
+        # Algorithm 8 from https://hal.science/hal-04624238
+        mh, ml = two_prod(ctx, x, y, fix_overflow=fix_overflow, scale=scale, assume_fma=assume_fma)
+        xh, xl = two_sum(ctx, mh, ml, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        sh, sl = two_sum(ctx, xh, z, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        vh, vl = two_sum(ctx, xl, sl, fix_overflow=fix_overflow, assume_fma=assume_fma)
+        zh, zl = two_sum(ctx, sh, vh, fix_overflow=fix_overflow, assume_fma=True)
+        w = vl + zl
+        st1 = zh + w
+        wpof2 = fpa.is_power_of_two(ctx, w)
+        wp = ctx.constant(3 / 2, x) * w
+        st2 = zh + wp
+
+        delta = w - zl
+        t = vl - delta
+        g = t * w
+        r = ctx.select(wpof2, ctx.select(st2 == zh, zh, ctx.select(t == 0, st1, ctx.select(g < 0, zh, st2))), st1)
+        return r
+    elif algorithm in {"apmath", "apmath0"}:
+        # apmath native algorithm
+        mh, ml = two_prod(ctx, x, y, fix_overflow=fix_overflow, scale=scale, assume_fma=assume_fma)
+        hi, lo = renormalize(ctx, [z, mh, ml], functional=functional, size=2, fast=assume_fma, fix_overflow=fix_overflow)
+        if algorithm == "apmath0":
+            return hi
+        return hi + lo
+    else:
+        raise ValueError(f"unsupported algorithm value (got '{algorithm}'), expected 'a9|a7|a8|apmath'")

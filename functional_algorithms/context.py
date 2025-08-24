@@ -39,6 +39,7 @@ class Context:
         self._enable_alt = enable_alt
         self._default_constant_type = default_constant_type
         self._default_like = None
+        self._types = {}
         self.parameters = parameters or {}
         if "using" not in self.parameters:
             self.parameters["using"] = set()
@@ -167,7 +168,7 @@ class Context:
                         obj.operands[0].reference(ref_name=name + "_", force=obj.props.get("force", None))
         return expr
 
-    def trace(self, func, *args):
+    def trace(self, func, *args, **kwargs):
         """Trace a Python function to a functional graph.
 
         Use `*args` to override annotations or argument names of the
@@ -179,12 +180,24 @@ class Context:
         the function.
         """
         sig = inspect.signature(func)
+        if hasattr(func, "sig"):
+            new_parameters = []
+            for i, (name, param) in enumerate(func.sig.parameters.items()):
+                if name == "dtype":
+                    continue
+                new_parameters.append(param)
+            sig = sig.replace(parameters=new_parameters, return_annotation=func.sig.return_annotation)
+
+        func_name = kwargs.pop("override_name", func.__name__)
+
         default_typ = UNSPECIFIED
         new_args = []
         for i, (name, param) in enumerate(sig.parameters.items()):
             if i == 0:
                 if name != "ctx":
                     warnings.warn(f"The first argument of {func.__name__} is expected to have a name `ctx` but got {name}")
+                continue
+            if name in kwargs:
                 continue
             assert param.kind in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}, param.kind
             if i <= len(args):
@@ -210,7 +223,10 @@ class Context:
                 typ = param.annotation
                 if isinstance(typ, types.UnionType):
                     typ = typing.get_args(typ)[0]
-                assert isinstance(typ, (type, str, types.GenericAlias)), (type(typ), typ)
+                if isinstance(typ, str) and typ.startswith("typeof(") and typ.endswith(")"):
+                    n = typ[7:-1].strip()
+                    typ = [a_.operands[1] for a_ in new_args if a_.operands[0] == n][0]
+                assert isinstance(typ, (type, str, types.GenericAlias, Type)), (type(typ), typ)
             if default_typ is UNSPECIFIED:
                 default_typ = typ
             if isinstance(typ, types.GenericAlias):
@@ -231,9 +247,20 @@ class Context:
             a = a.reference(ref_name=param.name)
             new_args.append(a)
         args = tuple(new_args)
-
-        name = self.symbol(func.__name__).reference(ref_name=func.__name__)
-        return make_apply(self, name, args, func(self, *args))
+        name = self.symbol(func_name).reference(ref_name=func_name)
+        body = func(self, *args, **kwargs)
+        if type(body) in {tuple, list}:
+            body = make_list(self, body)
+        r = make_apply(self, name, args, body)
+        doc = ""
+        if func.__doc__ is not None:
+            doc += func.__doc__
+        if kwargs:
+            doc += "\nFA tracing parameters:"
+            for k, v in kwargs.items():
+                doc += f" {k}={v}"
+        r.props["__doc__"] = doc
+        return r
 
     def __rewrite_modifier__(self, expr):
         """Used to rewrite expressions based on context parameters."""
@@ -560,3 +587,72 @@ class Context:
             elif x.operands[0] == 0:
                 return False
         return True
+
+    @property
+    def dtypes(self):
+        return self.parameters.get("dtypes")
+
+    def dtype_index(self, x):
+        """Return the index of x dtype.
+
+        If dtypes property of an context instance returns a list of
+        supported dtypes, then following relation holds
+
+          dtypes[dtype_index(x)] == x.dtype
+        """
+        x = x.get_like()
+        dtype_index_cache = self.parameters.get("dtype_index_cache")
+        if dtype_index_cache is None:
+            dtype_index_cache = self.parameters["dtype_index_cache"] = dict()
+
+        if x.key in dtype_index_cache:
+            return dtype_index_cache[x.key]
+
+        same_dtype_cache = self.parameters.get("same_dtype_cache", dict())
+
+        def find_dtype_index(x_key, skip):
+            if x_key in dtype_index_cache:
+                return dtype_index_cache[x_key]
+
+            for y_key in same_dtype_cache.get(x_key, []):
+                if y_key in skip:
+                    continue
+                skip.add(y_key)
+                r = find_dtype_index(y_key, skip)
+                if r is not None:
+                    return r
+
+            skip.add(x_key)
+
+        dtype_index = find_dtype_index(x.key, set())
+        if dtype_index is None:
+            dtype_index = Expr(self, "dtype_index", (x,))
+            dtype_index_cache[x.key] = dtype_index
+        return dtype_index
+
+    def _assume_same_dtype(self, *args):
+        """Declare that all specified arguments have the same dtype."""
+        cache = self.parameters.get("same_dtype_cache")
+        if cache is None:
+            cache = self.parameters["same_dtype_cache"] = dict()
+        for i, a in enumerate(args):
+            others = cache.get(a.key)
+            if others is None:
+                others = cache[a.key] = set()
+            for j, b in enumerate(args):
+                if i != j:
+                    others.add(b.key)
+
+    def _has_same_dtype(self, x, y):
+        if x is y:
+            return True
+        cache = self.parameters.get("same_dtype_cache")
+        if cache is not None:
+            others = cache.get(x.key)
+            if others is not None:
+                if y.key in others:
+                    return True
+            others = cache.get(y.key)
+            if others is not None:
+                if x.key in others:
+                    return True
