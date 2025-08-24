@@ -5,6 +5,7 @@ class TestImplementations:
 
     @staticmethod
     def square(ctx, x):
+        ctx._assume_same_dtype(x)
         if x.is_complex:
             x_sq = ctx.complex(ctx.square(x.real).reference("x_real_square") - ctx.square(x.imag), 2 * x.real * x.imag)
         else:
@@ -356,6 +357,23 @@ def readme_square(z: numpy.complex128) -> numpy.complex128:
         print("result=", result)
         assert result.dtype == numpy.complex128, (result.dtype,)
         return result"""
+    )
+
+
+def test_square_lax():
+    ctx = Context(paths=[TestImplementations])
+
+    graph = ctx.trace(TestImplementations.square, "x: ArrayLike")
+
+    graph1 = graph.rewrite(targets.lax)
+    py = graph1.tostring(targets.lax, tab="")
+    assert py == utils.format_python(
+        """\
+@jit
+def square(x: ArrayLike) -> Array:
+    (x,) = promote_args_inexact("square", x)
+    return lax.mul(x, x)
+"""
     )
 
 

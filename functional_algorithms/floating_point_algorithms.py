@@ -9,6 +9,10 @@ import functools
 import inspect
 import warnings
 import numpy
+import typing
+
+
+FloatArrayOrScalar = typing.NewType("FloatArrayOrScalar", float)
 
 
 def make_api(mp_func=None):
@@ -50,7 +54,6 @@ def make_api(mp_func=None):
     The call
 
       func.mp(...)
-
     is equivalent to
       func(..., mp_ctx=mp_ctx)
 
@@ -82,10 +85,15 @@ def make_api(mp_func=None):
         rtype = sig.return_annotation
 
         def api(ctx, *args, **kwargs):
-
             import functional_algorithms as fa
 
             dtype = kwargs.pop("dtype", None)
+
+            if dtype is None and ctx.dtypes is not None:
+                # use dtype_index approach to postpone dtype
+                # interference to target-specific generated code
+                return impl(ctx, dtype, *args, **kwargs)
+
             if isinstance(ctx, fa.Context):
                 largest = get_largest(ctx, args[0])
             else:
@@ -209,7 +217,15 @@ def make_api(mp_func=None):
                         # type(s), it will be determined from the
                         # result while dtype being the default return
                         pass
+                    elif isinstance(rtype, typing.GenericAlias):
+                        if isinstance(res, rtype.__origin__):
+                            pass
+                        else:
+                            raise TypeError(
+                                f"{impl.__name__} returned {type(res).__name__}, expected {rtype.__origin__.__name__} or equivalent"
+                            )
                     else:
+                        print(f"{rtype=} {type(res)=}")
                         raise NotImplementedError(f"check return value against {impl.__name__} return type ({rtype.__name__})")
                     return make_return2(res)
 
@@ -255,7 +271,10 @@ def make_api(mp_func=None):
             kwargs.update(mp_ctx=mp_ctx)
             return api(ctx, *args, **kwargs)
 
+        api.sig = sig
         api.mp = api_mp
+        api.__name__ = impl.__name__
+        api.__doc__ = impl.__doc__
 
         # api.impl = impl  # likely unused
 
@@ -264,8 +283,46 @@ def make_api(mp_func=None):
     return _make_api
 
 
+def _get_parameters(ctx, dtype, like, func):
+    """Utility function to retrive dtype-specific parameters.
+
+    func signature must be
+
+      (dtype) -> dict(<name>=<dtype(value)>)
+    """
+    if dtype is None:
+        dtype_index = ctx.dtype_index(like)
+        raw_params = None
+        for dtype_ in ctx.dtypes:
+            params_ = func(dtype_)
+            if raw_params is None:
+                raw_params = dict()
+                for k, v in params_.items():
+                    raw_params[k] = [ctx.constant(v, dtype_)]
+            else:
+                for k, v in params_.items():
+                    raw_params[k].append(ctx.constant(v, dtype_))
+        params = dict()
+        for k, lst in raw_params.items():
+            params[k] = ctx.item(ctx.list(lst).reference(f"{k}_lst"), dtype_index).reference(k)
+    else:
+        raw_params = func(dtype)
+        params = dict()
+        for k, p in raw_params.items():
+            params[k] = ctx.constant(p, like)
+    return params
+
+
 def get_largest(ctx, x: float = None):
     import functional_algorithms as fa
+
+    if ctx.dtypes is not None and x is not None:
+        dtype_index = ctx.dtype_index(x)
+
+        lst = []
+        for dtype_ in ctx.dtypes:
+            lst.append(ctx.constant(numpy.finfo(dtype_).max, dtype_))
+        return ctx.item(ctx.list(lst).reference("largest_lst"), dtype_index).reference("largest")
 
     if x is None:
         largest = ctx.constant("largest")
@@ -275,6 +332,7 @@ def get_largest(ctx, x: float = None):
         if x.kind == "list":
             largest = ctx.constant("largest", x[0])
         else:
+            assert x.kind != "array"  # not impl
             largest = ctx.constant("largest", x)
     else:
         largest = ctx.constant("largest", x)
@@ -489,7 +547,7 @@ def nextdown(ctx, dtype, x: float):
 
 
 @functools.lru_cache(typed=True)
-def split_veltkamp_parameters(dtype):
+def _split_veltkamp_parameters(dtype):
     import functional_algorithms as fa
 
     p = fa.utils.get_precision(dtype)
@@ -504,7 +562,9 @@ def split_veltkamp_parameters(dtype):
 
 
 @make_api()
-def split_veltkamp(ctx, dtype, x, C=None, scale=False):
+def split_veltkamp(
+    ctx, dtype, x: FloatArrayOrScalar, C: float = None, scale: bool = False
+) -> tuple[FloatArrayOrScalar, FloatArrayOrScalar]:
     """Veltkamp splitter:
 
       x = xh + xl
@@ -537,12 +597,18 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
       abs(x) <= inf           if scale is True
       abs(x) <= largest / C   otherwise
     """
-    params = split_veltkamp_parameters(dtype)
+    ctx._assume_same_dtype(x)
+
+    params = _get_parameters(ctx, dtype, x, _split_veltkamp_parameters)
     if C is None:
         C = params["N"]
     if scale:
+        invN = params["invN"]
+        N = params["N"]
+        x_max = params["x_max"]
+
+    if scale:
         ax = abs(x)
-        invN = ctx.constant(params["invN"], x)
         x_n = ctx.select(ax < 1, x, x * invN)
     else:
         x_n = x
@@ -563,8 +629,6 @@ def split_veltkamp(ctx, dtype, x, C=None, scale=False):
     # cost is 2 arithmetic operations and 4 logical operations.
 
     if scale:
-        N = ctx.constant(params["N"], x)
-        x_max = ctx.constant(params["x_max"], x)
         xh = ctx.select(ax > x_max, ctx.select(x < 0, -x_max, x_max), ctx.select(ax < 1, gd, gd * N))
     else:
         xh = gd
@@ -583,7 +647,16 @@ def mul_dw(ctx, x, y, xh, xl, yh, yl):
 
 
 @make_api()
-def mul_dekker(ctx, dtype, x, y, C=None, scale=True, fix_overflow=False):
+def mul_dekker(
+    ctx,
+    dtype,
+    x: FloatArrayOrScalar,
+    y: FloatArrayOrScalar,
+    C=None,
+    scale: bool = True,
+    fix_overflow: bool = False,
+    assume_fma: bool = False,
+) -> tuple[FloatArrayOrScalar, FloatArrayOrScalar]:
     """Dekker product:
 
       x * y = xyh + xyl
@@ -616,9 +689,15 @@ def mul_dekker(ctx, dtype, x, y, C=None, scale=True, fix_overflow=False):
       taken into account.
 
     """
-    xh, xl = split_veltkamp(ctx, x, C=C, scale=scale, dtype=dtype)
-    yh, yl = split_veltkamp(ctx, y, C=C, scale=scale, dtype=dtype)
-    xyh, xyl = mul_dw(ctx, x, y, xh, xl, yh, yl)
+    ctx._assume_same_dtype(x, y)
+
+    if assume_fma:
+        xyh = x * y
+        xyl = x * y + (-xyh)  # assuming this is mapped to fma(x, y, -xyh)
+    else:
+        xh, xl = split_veltkamp(ctx, x, C=C, scale=scale, dtype=dtype)
+        yh, yl = split_veltkamp(ctx, y, C=C, scale=scale, dtype=dtype)
+        xyh, xyl = mul_dw(ctx, x, y, xh, xl, yh, yl)
 
     if fix_overflow:
         largest = get_largest(ctx, x)
@@ -629,7 +708,9 @@ def mul_dekker(ctx, dtype, x, y, C=None, scale=True, fix_overflow=False):
 
 
 @make_api()
-def add_2sum(ctx, dtype, x, y, fast=False, fix_overflow=False):
+def add_2sum(
+    ctx, dtype, x: FloatArrayOrScalar, y: FloatArrayOrScalar, fast: bool = False, fix_overflow: bool = False
+) -> tuple[FloatArrayOrScalar, FloatArrayOrScalar]:
     """Add x and y using 2sum or fast2sum algorithm:
 
     x + y = s + t
@@ -651,6 +732,8 @@ def add_2sum(ctx, dtype, x, y, fast=False, fix_overflow=False):
       makes only sense when the accuracy of the pair (s, t) is taken
       into account.
     """
+    ctx._assume_same_dtype(x, y)
+
     s = x + y
     z = s - x
     if fast:
@@ -689,7 +772,7 @@ def is_power_of_two(ctx, dtype, x, Q=None, P=None, invert=False) -> bool:
     Accuracy: exact.
     """
     if Q is None:
-        params = _is_power_of_two_parameters(dtype)
+        params = _get_parameters(ctx, dtype, x, _is_power_of_two_parameters)
         P, Q = params["P"], params["Q"]
     L = P * x
     R = Q * x
@@ -722,7 +805,8 @@ def is_one_or_three_times_power_of_two(ctx, dtype, x, invert=False) -> bool:
     Reference:
       Algorithm 5 in https://hal.science/hal-04575249
     """
-    params = _is_one_or_three_times_power_of_two_parameters(dtype)
+
+    params = _get_parameters(ctx, dtype, x, _is_one_or_three_times_power_of_two_parameters)
     P, Q = params["P"], params["Q"]
 
     L = P * x

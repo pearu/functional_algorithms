@@ -67,6 +67,28 @@ class PrinterBase:
     def make_assignment(self, typ, var, value):
         raise NotImplementedError(type(self))
 
+    def init_arguments(self, name, args):
+        assignments = []
+        for a in args:
+            self.defined_refs.add(a.ref)
+            if a.kind == "list":
+                for i, a_ in enumerate(a.operands):
+                    if self.need_ref[a_.ref]:
+                        if self.force_cast_arguments:
+                            assignments.append(self.make_assignment(None, a_.ref, self.make_constant(a_, self.tostring(a[i]))))
+                        else:
+                            assignments.append(self.make_assignment(self.get_type(a_), a_.ref, self.make_getitem(a, i)))
+                        self.defined_refs.add(a_.ref)
+
+            elif self.force_cast_arguments:
+                assignments.append(self.make_assignment(None, a.ref, self.make_constant(a, a)))
+
+            if self.debug >= 2:
+                stmt = self.show_value(a.ref)
+                if isinstance(stmt, str):
+                    assignments.append(stmt)
+        return assignments
+
     def make_constant(self, like, value):
         raise NotImplementedError(type(self))
 
@@ -88,32 +110,13 @@ class PrinterBase:
             return expr.ref
 
         if expr.kind == "apply":
-            for a in expr.operands[1:-1]:
-                self.defined_refs.add(a.ref)
-                if a.kind == "list":
-                    for i, a_ in enumerate(a.operands):
-                        if self.need_ref[a_.ref]:
-                            if self.force_cast_arguments:
-                                self.assignments.append(
-                                    self.make_assignment(None, a_.ref, self.make_constant(a_, self.tostring(a[i])))
-                                )
-                            else:
-                                self.assignments.append(
-                                    self.make_assignment(self.get_type(a_), a_.ref, self.make_getitem(a, i))
-                                )
-                            self.defined_refs.add(a_.ref)
-
-                elif self.force_cast_arguments:
-                    self.assignments.append(self.make_assignment(None, a.ref, self.make_constant(a, a)))
-
-                if self.debug >= 2:
-                    stmt = self.show_value(a.ref)
-                    if isinstance(stmt, str):
-                        self.assignments.append(stmt)
             name = expr.props.get("name", expr.operands[0])
             if not isinstance(name, str):
                 assert name.kind == "symbol", name
                 name = name.operands[0]
+
+            self.assignments.extend(self.init_arguments(name, expr.operands[1:-1]))
+
             result = self.make_apply(expr, name, tab=tab)
 
         elif expr.kind == "symbol":

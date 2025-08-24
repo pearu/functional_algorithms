@@ -23,7 +23,8 @@ bitwise_invert, bitwise_and, bitwise_or, bitwise_xor, bitwise_left_shift, bitwis
 ceil, floor, floor_divide, remainder, round, truncate,
 copysign, sign, nextafter,
 upcast, downcast,
-is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero
+is_finite, is_inf, is_posinf, is_neginf, is_nan, is_negzero,
+dtype_index
 """.replace(
         " ", ""
     )
@@ -351,7 +352,9 @@ class Expr:
             else:
                 operands = normalize(context, operands)
 
-            if context.alt is not None:
+            if kind == "list":
+                pass
+            elif context.alt is not None:
                 constant_operands = []
                 constant_type = None
                 constant_like = None
@@ -1094,6 +1097,8 @@ class Expr:
             "minimum",
             "floor_divide",
             "remainder",
+            "len",
+            "dtype_index",
         }:
             return False
         elif self.kind in {"complex", "conjugate"}:
@@ -1132,7 +1137,12 @@ class Expr:
             return self.operands[-1].is_complex
         elif self.kind == "item":
             container, index = self.operands
-            return container.operands[index].is_complex
+            if isinstance(index, int):
+                return container.operands[index].is_complex
+            for item_ in container:
+                if not item_.is_complex:
+                    return False
+            return True
         else:
             raise NotImplementedError(f"{type(self).__name__}.is_complex not implemented for {self.kind}")
 
@@ -1210,11 +1220,94 @@ class Expr:
         elif self.kind == "item":
             ct = self.operands[0].get_type()
             if ct.kind == "list":
-                return ct.param[0]
+                kinds = set()
+                params = set()
+                for it in ct.param:
+                    kinds.add(it.kind)
+                    params.add(it.param)
+                if len(kinds) == 1:
+                    if len(params) == 1:
+                        return ct.param[0]
+                    kind = kinds.pop()
+                    return Type(self.context, kind, None)
+                assert 0, (kinds, params)  # not impl
+                return ct.param[0]  # TODO: container may hold items with variable types, return numpy.floating
             assert 0, ct.kind  # unreachable
-        elif self.kind == "len":
+        elif self.kind in {"len", "dtype_index"}:
             return self.context.constant(0).get_type()
         raise NotImplementedError(f"{type(self).__name__}.get_type not implemented for {self.kind}")
+
+    def get_like(self):
+        if self.kind == "symbol":
+            return self
+        elif self.kind == "constant":
+            return self.operands[1].get_like()
+        elif self.kind in {
+            "positive",
+            "negative",
+            "sqrt",
+            "square",
+            "asin",
+            "acos",
+            "atan",
+            "asinh",
+            "acosh",
+            "atanh",
+            "sin",
+            "cos",
+            "tan",
+            "sinh",
+            "cosh",
+            "tanh",
+            "log",
+            "log1p",
+            "log2",
+            "log10",
+            "exp",
+            "exp2",
+            "expm1",
+            "ceil",
+            "floor",
+            "sign",
+            "copysign",
+            "conjugate",
+            "asin_acos_kernel",
+            "logical_not",
+        }:
+            return self.operands[0].get_like()
+        elif self.kind in {
+            "add",
+            "multiply",
+            "divide",
+            "subtract",
+            "pow",
+            "maximum",
+            "minimum",
+            "hypot",
+            "remainder",
+            "atan2",
+            "logical_or",
+            "logical_and",
+            "logical_xor",
+            "select",
+        }:
+            start_index = 1 if self.kind == "select" else 0
+            likes = [op.get_like() for op in self.operands[start_index:]]
+            if len(likes) == 1:
+                return likes[0]
+            elif likes:
+                like0 = likes[0]
+                for like in likes[1:]:
+                    if not self.context._has_same_dtype(like0, like):
+                        return self
+                return like0
+            return self
+        elif self.kind == "item":
+            index = self.operands[1]
+            assert index.kind == "dtype_index"
+            return index.operands[0].get_like()
+        print(f"Expr.get_like()[kind={self.kind}] not impl")
+        return self
 
 
 def assert_equal(result, expected):
