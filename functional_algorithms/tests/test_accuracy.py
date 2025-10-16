@@ -11,7 +11,7 @@ def backend(request):
     return request.param
 
 
-@pytest.fixture(scope="function", params=["cpu", "cuda"])
+@pytest.fixture(scope="function", params=["cpu", "cuda", "rocm"])
 def device(request):
     return request.param
 
