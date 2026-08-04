@@ -149,6 +149,7 @@ kind_to_target = dict(
     # upcast=upcast_func,
     # downcast=downcast_func,
     is_finite="jnp.isfinite({0})",
+    is_negzero="jnp.logical_and(jnp.equal({0}, 0), jnp.signbit({0}))",
     list=list_func,
     item="{0}[{1}]",
     dtype_index=dtype_index_func,

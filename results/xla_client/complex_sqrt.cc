@@ -5,6 +5,7 @@
 
 
 #include "xla/client/lib/constants.h"
+#include "xla/client/lib/math.h"
 #include "xla/client/xla_builder.h"
 #include <limits>
 
@@ -67,10 +68,10 @@ XlaOp complex_sqrt_0(XlaOp z) {
                         Mul(sq_1h, sq_2)),
                     Div(sq_ay, Mul(sq_rh, sq_2))),
              Div(ay, Mul(u_general, two))));
-  XlaOp lt_y_constant_constant_0 = Lt(y, constant_constant_0);
+  XlaOp negative_y = Or(IsNegZero(y), Lt(y, constant_constant_0));
   return Complex(
       Select(Ge(x, constant_constant_0), u, ay_div_u),
       Select(Lt(x, constant_constant_0),
-             Select(lt_y_constant_constant_0, Neg(u), u),
-             Select(lt_y_constant_constant_0, Neg(ay_div_u), ay_div_u)));
+             Select(negative_y, Neg(u), u),
+             Select(negative_y, Neg(ay_div_u), ay_div_u)));
 }

@@ -110,6 +110,7 @@ kind_to_target = dict(
     eq="({0}) == ({1})",
     ne="({0}) != ({1})",
     is_finite="math.isfinite({0})",
+    is_negzero="({0}) == 0 and math.copysign(1.0, {0}) < 0",
 )
 
 constant_to_target = dict(

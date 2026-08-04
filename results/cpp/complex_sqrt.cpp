@@ -74,10 +74,10 @@ std::complex<double> complex_sqrt_0(std::complex<double> z) {
                               ((sq_1h) * (sq_2)))
                            : ((sq_ay) / ((sq_rh) * (sq_2)))))
                    : ((ay) / ((u_general) * (two))))));
-  bool lt_y_constant_f0 = (y) < (constant_f0);
+  bool negative_y = (((y) == 0 && std::signbit(y))) || ((y) < (constant_f0));
   return std::complex<double>(
       (((x) >= (constant_f0)) ? (u) : (ay_div_u)),
       (((x) < (constant_f0))
-           ? (((lt_y_constant_f0) ? (-(u)) : (u)))
-           : (((lt_y_constant_f0) ? (-(ay_div_u)) : (ay_div_u)))));
+           ? (((negative_y) ? (-(u)) : (u)))
+           : (((negative_y) ? (-(ay_div_u)) : (ay_div_u)))));
 }

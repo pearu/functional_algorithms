@@ -64,13 +64,15 @@ def sqrt_0(z: numpy.complex128) -> numpy.complex128:
                 else ((ay) / ((u_general) * (two)))
             )
         )
-        lt_y_constant_f0: numpy.bool_ = (y) < (constant_f0)
+        negative_y: numpy.bool_ = numpy.logical_or(
+            numpy.logical_and(numpy.equal(y, 0), numpy.signbit(y)), numpy.less(y, constant_f0)
+        )
         result = make_complex(
             (u) if ((x) >= (constant_f0)) else (ay_div_u),
             (
-                ((-(u)) if (lt_y_constant_f0) else (u))
+                ((-(u)) if (negative_y) else (u))
                 if ((x) < (constant_f0))
-                else ((-(ay_div_u)) if (lt_y_constant_f0) else (ay_div_u))
+                else ((-(ay_div_u)) if (negative_y) else (ay_div_u))
             ),
         )
         return result
@@ -125,13 +127,15 @@ def sqrt_1(z: numpy.complex64) -> numpy.complex64:
                 else ((ay) / ((u_general) * (two)))
             )
         )
-        lt_y_constant_f0: numpy.bool_ = (y) < (constant_f0)
+        negative_y: numpy.bool_ = numpy.logical_or(
+            numpy.logical_and(numpy.equal(y, 0), numpy.signbit(y)), numpy.less(y, constant_f0)
+        )
         result = make_complex(
             (u) if ((x) >= (constant_f0)) else (ay_div_u),
             (
-                ((-(u)) if (lt_y_constant_f0) else (u))
+                ((-(u)) if (negative_y) else (u))
                 if ((x) < (constant_f0))
-                else ((-(ay_div_u)) if (lt_y_constant_f0) else (ay_div_u))
+                else ((-(ay_div_u)) if (negative_y) else (ay_div_u))
             ),
         )
         return result

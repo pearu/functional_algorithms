@@ -81,12 +81,12 @@ def sqrt_0(z: complex) -> complex:
             else ((ay) / ((u_general) * (two)))
         )
     )
-    lt_y_constant_f0: bool = (y) < (constant_f0)
+    negative_y: bool = ((y) == 0 and math.copysign(1.0, y) < 0) or ((y) < (constant_f0))
     return complex(
         (u) if ((x) >= (constant_f0)) else (ay_div_u),
         (
-            ((-(u)) if (lt_y_constant_f0) else (u))
+            ((-(u)) if (negative_y) else (u))
             if ((x) < (constant_f0))
-            else ((-(ay_div_u)) if (lt_y_constant_f0) else (ay_div_u))
+            else ((-(ay_div_u)) if (negative_y) else (ay_div_u))
         ),
     )

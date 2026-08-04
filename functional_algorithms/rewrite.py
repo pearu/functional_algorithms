@@ -976,6 +976,9 @@ class Rewriter:
     def is_finite(self, expr):
         pass
 
+    def is_negzero(self, expr):
+        pass
+
     def list(self, expr):
         pass
 
