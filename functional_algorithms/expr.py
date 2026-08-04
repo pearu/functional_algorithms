@@ -1057,7 +1057,19 @@ class Expr:
     @property
     @_cache_in_props
     def _is_boolean(self):
-        if self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "logical_not"}:
+        if self.kind in {
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "eq",
+            "ne",
+            "logical_and",
+            "logical_or",
+            "logical_xor",
+            "logical_not",
+            "is_negzero",
+        }:
             return True
         elif self.kind == "symbol":
             return self.operands[1].is_boolean
@@ -1084,6 +1096,7 @@ class Expr:
             "logical_or",
             "logical_xor",
             "logical_not",
+            "is_negzero",
             "bitwise_invert",
             "bitwise_and",
             "bitwise_or",
@@ -1152,7 +1165,19 @@ class Expr:
             return self.operands[1]
         elif self.kind == "constant":
             return self.operands[1].get_type()
-        elif self.kind in {"lt", "le", "gt", "ge", "eq", "ne", "logical_and", "logical_or", "logical_xor", "is_finite"}:
+        elif self.kind in {
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "eq",
+            "ne",
+            "logical_and",
+            "logical_or",
+            "logical_xor",
+            "is_finite",
+            "is_negzero",
+        }:
             return Type.fromobject(self.context, "boolean")
         elif self.kind in {
             "positive",

@@ -182,6 +182,7 @@ kind_to_target = dict(
     upcast=upcast_func,
     downcast=downcast_func,
     is_finite="numpy.isfinite({0})",
+    is_negzero="numpy.logical_and(numpy.equal({0}, 0), numpy.signbit({0}))",
     list=list_func,
     item="{0}[{1}]",
 )

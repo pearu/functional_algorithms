@@ -75,6 +75,86 @@ def flush_subnormals(request):
     return {"no-ftz": False, "ftz": True}[request.param]
 
 
+@pytest.mark.parametrize("dtype", [numpy.complex64, numpy.complex128])
+def test_complex_sqrt_preserves_signed_zero_on_branch_cut(dtype):
+    ctx = Context(paths=[algorithms])
+    graph = ctx.trace(algorithms.sqrt, dtype).rewrite(targets.numpy, rewrite)
+    func = targets.numpy.as_function(graph, debug=0)
+
+    values = numpy.array([complex(-4.0, 0.0), complex(-4.0, -0.0)], dtype=dtype)
+    expected = numpy.array([complex(0.0, 2.0), complex(0.0, -2.0)], dtype=dtype)
+
+    result = numpy.array([func(value) for value in values], dtype=dtype)
+
+    numpy.testing.assert_equal(result, expected)
+    numpy.testing.assert_array_equal(numpy.signbit(result.imag), [False, True])
+    numpy.testing.assert_equal(result[1], numpy.conjugate(result[0]))
+
+
+def test_complex_sqrt_preserves_signed_zero_with_python_target():
+    ctx = Context(paths=[algorithms])
+    graph = ctx.trace(algorithms.sqrt, complex).rewrite(targets.python, rewrite)
+    func = targets.python.as_function(graph)
+
+    positive = func(complex(-4.0, 0.0))
+    negative = func(complex(-4.0, -0.0))
+
+    assert positive == complex(0.0, 2.0)
+    assert negative == complex(0.0, -2.0)
+    assert negative == positive.conjugate()
+
+
+@pytest.mark.parametrize(("target_name", "dtype"), [("python", float), ("numpy", numpy.float64)])
+def test_is_negzero_predicate(target_name, dtype):
+    def is_negzero(ctx, x):
+        return ctx(ctx.is_negzero(x))
+
+    target = getattr(targets, target_name)
+    ctx = Context(paths=[algorithms])
+    graph = ctx.trace(is_negzero, dtype).rewrite(target, rewrite)
+    func = target.as_function(graph)
+
+    values = [0.0, -0.0, 1.0, -1.0, numpy.inf, -numpy.inf, numpy.nan]
+
+    assert [bool(func(dtype(value))) for value in values] == [False, True, False, False, False, False, False]
+
+
+@pytest.mark.parametrize(("target_name", "dtype"), [("lax", numpy.float64), ("symbolic", float)])
+def test_is_negzero_generates_for_target(target_name, dtype):
+    def is_negzero(ctx, x):
+        return ctx(ctx.is_negzero(x))
+
+    target = getattr(targets, target_name)
+    graph = Context().trace(is_negzero, dtype).rewrite(target, rewrite)
+
+    assert isinstance(graph.tostring(target), str)
+
+
+@pytest.mark.parametrize(
+    ("target_name", "func_name"),
+    [
+        ("python", "sqrt"),
+        ("numpy", "sqrt"),
+        ("stablehlo", "sqrt"),
+        ("xla_client", "complex_sqrt"),
+        ("cpp", "complex_sqrt"),
+    ],
+)
+def test_complex_sqrt_generates_for_target(target_name, func_name):
+    target = getattr(targets, target_name)
+    enable_alt = target_name == "xla_client"
+    default_constant_type = "FloatType" if enable_alt else None
+    ctx = Context(paths=[algorithms], enable_alt=enable_alt, default_constant_type=default_constant_type)
+    trace_arguments = target.trace_arguments[func_name][0]
+    graph = ctx.trace(getattr(algorithms, func_name), *trace_arguments).rewrite(target, rewrite)
+
+    source = graph.tostring(target)
+    assert isinstance(source, str)
+    if target_name == "xla_client":
+        assert "IsNegZero" in source
+        assert '#include "xla/client/lib/math.h"' in target.source_file_header
+
+
 def test_unary(dtype_name, unary_func_name, flush_subnormals):
     if dtype_name.startswith("float") and unary_func_name in {"angle"}:
         pytest.skip(reason=f"{unary_func_name} does not support {dtype_name} inputs")

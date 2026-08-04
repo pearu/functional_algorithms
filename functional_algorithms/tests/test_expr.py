@@ -94,6 +94,18 @@ def test_symbol_numpy():
     assert x.get_type().bits is None
 
 
+def test_is_negzero_expression_properties():
+    ctx = fa.Context()
+    x = ctx.symbol("x", float)
+    predicate = ctx.is_negzero(x)
+
+    assert predicate.get_type().kind == "boolean"
+    assert predicate._is_boolean
+    assert not predicate.is_complex
+    assert (predicate | (x < 0)).kind == "logical_or"
+    assert (~predicate).kind == "logical_not"
+
+
 def test_rewrite():
     ctx = fa.Context()
     x = ctx.symbol("x")

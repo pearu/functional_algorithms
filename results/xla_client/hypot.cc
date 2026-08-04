@@ -5,6 +5,7 @@
 
 
 #include "xla/client/lib/constants.h"
+#include "xla/client/lib/math.h"
 #include "xla/client/xla_builder.h"
 #include <limits>
 

@@ -165,6 +165,12 @@ def square(ctx, z: complex | float):
     assert 0  # unreachable
 
 
+def is_negzero(ctx, x: float):
+    """Return whether x is negative zero."""
+    assert not x.is_complex, x
+    return ctx.And(x == 0, ctx.constant(1, x) / x < 0)
+
+
 def hypot(ctx, x: float, y: float):
     """Square root of the sum of the squares of x and y
 
@@ -1519,7 +1525,8 @@ def complex_sqrt(ctx, z: complex):
 
       sqrt(z) = sqrt((hypot(x, y) + x)/2) + I * sgn(y) * sqrt((hypot(x, y) - x) / 2)
 
-    where z = x + I * y, sgn(y) = 1 if y >= 0, and sgn(y) = -1 otherwise.
+    where z = x + I * y, sgn(y) = -1 when y is negative or negative zero,
+    and sgn(y) = 1 otherwise.
 
     Algorithm
     ---------
@@ -1619,8 +1626,9 @@ def complex_sqrt(ctx, z: complex):
         ),
     )
 
+    negative_y = ctx.Or(y < 0, ctx.is_negzero(y))
     re = ctx.select(x >= 0, u, ay_div_u)
-    im = ctx.select(x < 0, ctx.select(y < 0, -u, u), ctx.select(y < 0, -ay_div_u, ay_div_u))
+    im = ctx.select(x < 0, ctx.select(negative_y, -u, u), ctx.select(negative_y, -ay_div_u, ay_div_u))
     return ctx(ctx.complex(re, im))
 
 

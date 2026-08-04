@@ -580,6 +580,9 @@ class Context:
     def is_finite(self, x):
         return Expr(self, "is_finite", (x,))
 
+    def is_negzero(self, x):
+        return Expr(self, "is_negzero", (x,))
+
     def _is_nonzero(self, x):
         if x.kind == "constant":
             if isinstance(x.operands[0], Expr):

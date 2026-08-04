@@ -167,14 +167,28 @@ def : Pat<(sqrt_0 ComplexElementType:$z),
         StableHLO_ComparisonDirectionValue<"LT">,
         (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
       (StableHLO_SelectOp
-        (StableHLO_CompareOp:$lt_y_constant_f0
-         $y,
-         $constant_f0,
-          StableHLO_ComparisonDirectionValue<"LT">,
-          (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+        (StableHLO_OrOp:$negative_y
+          (StableHLO_AndOp
+            (StableHLO_CompareOp
+             $y,
+             $constant_f0,
+              StableHLO_ComparisonDirectionValue<"EQ">,
+              (STABLEHLO_DEFAULT_COMPARISON_TYPE)),
+            (StableHLO_CompareOp
+             (StableHLO_DivOp
+               (StableHLO_ConstantLike<"1.0"> $y),
+               $y),
+             $constant_f0,
+              StableHLO_ComparisonDirectionValue<"LT">,
+              (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
+          (StableHLO_CompareOp
+           $y,
+           $constant_f0,
+            StableHLO_ComparisonDirectionValue<"LT">,
+            (STABLEHLO_DEFAULT_COMPARISON_TYPE))),
         (StableHLO_NegOp $u),
         $u),
       (StableHLO_SelectOp
-        $lt_y_constant_f0,
+        $negative_y,
         (StableHLO_NegOp $ay_div_u),
         $ay_div_u)))>;
