@@ -1667,6 +1667,12 @@ def complex_exp(ctx, z: complex):
 
     Notice that for `y != 0`, neither `cos(y)` nor `sin(y)` is never
     zero on the set of floating point numbers.
+
+    Third, when `x` is infinite and `y` is infinite or nan, the above
+    evaluates to nan. Following C99 Annex G, we'll define
+
+      exp(-inf + I * y) = 0 + I * 0
+      exp(+inf + I * y) = inf + I * nan
     """
     x = z.real
     y = z.imag
@@ -1681,7 +1687,11 @@ def complex_exp(ctx, z: complex):
 
     re = ctx.select(e.is_posinf, e2 * cs * e2, e * cs)
     im = ctx.select(e.is_posinf, e2 * sn * e2, e * sn)
-    return ctx(ctx.complex(re, ctx.select(y == zero, zero, im)))
+    im = ctx.select(y == zero, zero, im)
+    y_is_not_finite = ctx.Not(ctx.is_finite(y))
+    re = ctx.select(ctx.And(x.is_inf, y_is_not_finite), e, re)
+    im = ctx.select(ctx.And(x.is_neginf, y_is_not_finite), zero, im)
+    return ctx(ctx.complex(re, im))
 
 
 @definition("exp", domain="real")
