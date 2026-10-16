@@ -1065,7 +1065,13 @@ class mpmath_array_api:
         return x.context.absmin(x)
 
     def exp(self, x):
-        return x.context.exp(x)
+        ctx = x.context
+        if isinstance(x, ctx.mpc) and ctx.isinf(x.real) and not ctx.isfinite(x.imag):
+            # C99 Annex G values, mpmath returns nan + nan*I before mpmath/mpmath#1177
+            if x.real > 0:
+                return ctx.make_mpc((ctx.inf._mpf_, ctx.nan._mpf_))
+            return ctx.make_mpc((ctx.zero._mpf_, ctx.zero._mpf_))
+        return ctx.exp(x)
 
     def sin(self, x):
         return x.context.sin(x)
